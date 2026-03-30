@@ -1,0 +1,18 @@
+{
+  "files.associations": {
+    "*.yaml": "yaml",
+    "*.yml": "yaml"
+  },
+  "yaml.schemas": {},
+  "editor.quickSuggestions": {
+    "strings": true
+  },
+  "[yaml]": {
+    "editor.tabSize": 2,
+    "editor.insertSpaces": true,
+    "editor.autoIndent": "advanced"
+  },
+  "files.exclude": {
+    "**/.git": true
+  }
+}
