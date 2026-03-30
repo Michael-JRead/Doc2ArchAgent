@@ -11,6 +11,7 @@ A multi-agent architecture modeling system for VS Code, powered by GitHub Copilo
 - [Installation](#installation)
 - [How It Works — The Agent System](#how-it-works--the-agent-system)
 - [Complete Step-by-Step Workflow](#complete-step-by-step-workflow)
+  - [Phase 0: Document Ingestion (@doc-ingester)](#phase-0-document-ingestion-doc-ingester)
   - [Phase 1: Architecture Modeling (@architect)](#phase-1-architecture-modeling-architect)
   - [Phase 2: Deployment Mapping (@deployer)](#phase-2-deployment-mapping-deployer)
   - [Phase 3: Security Review (@security-reviewer)](#phase-3-security-review-security-reviewer)
@@ -95,7 +96,8 @@ The system is composed of **5 specialized agents**, each owning a specific conce
 
 | Agent | What It Does | When to Use It |
 |-------|-------------|----------------|
-| **@architect** | Walks you through defining contexts, containers, components, listeners, and relationships. Writes `system.yaml` and `networks.yaml` incrementally. | **Start here.** This is your entry point for modeling any system. |
+| **@doc-ingester** | Ingests existing architecture documents (PDF, Word, text, images), extracts entities with source citations, validates with you, then writes YAML. Zero hallucinations. | **Start here if you have existing docs.** Import documentation before manual modeling. |
+| **@architect** | Walks you through defining contexts, containers, components, listeners, and relationships. Writes `system.yaml` and `networks.yaml` incrementally. | **Start here if starting fresh.** Or continue after `@doc-ingester` to refine. |
 | **@deployer** | Places your containers and components into network zones for specific environments (production, staging, regional deployments). Writes deployment YAML files. | After `@architect` completes your system model, or when you need to add a new deployment. |
 | **@security-reviewer** | Reads all your YAML and produces a security findings report. Checks for unauthenticated listeners, unencrypted flows, trust boundary gaps, and more. | After deployments are defined, or anytime you want a security audit. |
 | **@diagram-generator** | Generates C4 architecture diagrams in 3 formats: Mermaid C4, PlantUML C4, and Mermaid graph/subgraph. Covers all 4 C4 levels. | After your architecture is modeled. Use anytime to visualize the current state. |
@@ -125,6 +127,132 @@ Below is the full end-to-end workflow, showing exactly what happens at each step
 
 ---
 
+### Phase 0: Document Ingestion (@doc-ingester)
+
+**Skip this phase if you don't have existing documentation.** Go straight to Phase 1.
+
+The `@doc-ingester` agent reads your existing architecture documents and extracts structured entities with source citations. Every fact it extracts must be traceable to a specific document and section. You approve everything before it writes any YAML.
+
+#### Starting the Session
+
+**You type:**
+```
+@doc-ingester Ingest my architecture docs
+```
+
+**The agent responds with:**
+1. A welcome message explaining the 5-step process
+2. Asks how your documents are formatted (3 options)
+
+#### Input Mode Selection
+
+The agent offers three ways to provide documents:
+
+| Option | What You Do | What the Agent Does | Requirements |
+|--------|------------|-------------------|--------------|
+| **1. Text files (Recommended)** | Convert docs to `.txt` or `.md` yourself, place in `context/` folder | Reads files directly with `read` tool | None — works everywhere |
+| **2. Auto-convert** | Point to a folder with PDFs, Word docs, HTML | Detects tools on your machine, converts via `execute` | pandoc, pdftotext, or Python |
+| **3. Paste directly** | Paste text or images into Copilot Chat | Saves pasted content, analyzes images via Vision | None |
+
+> **For architecture diagram images:** In any mode, you can paste images directly into Copilot Chat. The agent uses GPT-4o Vision to identify system boundaries, components, relationships, and technology labels visible in the diagram — then presents its understanding for you to validate.
+
+#### Step-by-Step Flow
+
+**Step 1 — Document Collection**
+
+The agent loads your documents (method depends on your chosen input mode) and presents a summary:
+```
+DOCUMENTS LOADED
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Files read: 4
+  ✓ architecture-overview.txt    → Read directly
+  ✓ network-design.md            → Read directly
+  ✓ api-specs.md                 → Read directly
+  ✓ system-design.txt            → Read directly
+
+Shall I proceed with analysis, or add more files?
+```
+
+**Step 2 — Document Inventory**
+
+The agent reads each document and summarizes what architecture topics it detected:
+```
+DOCUMENT INVENTORY
+1. architecture-overview.txt — System description, contexts, high-level components
+2. network-design.md — Network zones, trust levels, firewall rules
+3. api-specs.md — REST endpoints, protocols, authentication mechanisms
+4. system-design.txt — Containers, component types, technology stack
+
+Does this match your expectations? Any documents to focus on or ignore?
+```
+
+**Step 3 — Layer-by-Layer Extraction (the core)**
+
+The agent extracts entities one layer at a time, presenting each with **confidence scores** and **source citations**:
+
+```
+EXTRACTED: System Metadata
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+| Field                 | Value                           | Confidence | Source                                 |
+|-----------------------|---------------------------------|------------|----------------------------------------|
+| name                  | Payment Processing Platform     | HIGH       | architecture-overview.txt, paragraph 1 |
+| description           | Handles card payment processing | HIGH       | architecture-overview.txt, paragraph 1 |
+| owner                 | NOT_STATED                      | —          | Not found in any document              |
+| compliance_frameworks | PCI-DSS, SOC2                   | MEDIUM     | network-design.md, "Compliance" section|
+| status                | NOT_STATED                      | —          | Not found in any document              |
+```
+
+**Confidence levels:**
+| Level | Meaning | What Happens |
+|-------|---------|-------------|
+| **HIGH** | Exact match found in document | Presented as-is |
+| **MEDIUM** | Stated but requires minor interpretation | Marked `[verify]` — please confirm |
+| **LOW** | Weak implication, ambiguous wording | Warning shown — please confirm or correct |
+| **UNCERTAIN** | Conflicting info across documents | Question shown — please clarify |
+| **NOT_STATED** | Not found in any document | You must provide the value |
+
+The agent extracts in this order:
+1. **System Metadata** — name, description, owner, compliance, status
+2. **Contexts** — internal/external systems
+3. **Containers** — per internal context
+4. **Components + Listeners** — per container
+5. **Relationships** — context, container, component level
+6. **Networks, External Systems, Data Entities, Trust Boundaries**
+
+**You must approve each layer** before the agent proceeds to the next.
+
+**Step 4 — Consolidated Review**
+
+After all layers, the agent shows a complete summary with confidence breakdown:
+```
+EXTRACTION COMPLETE — SUMMARY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Contexts: 3 | Containers: 5 | Components: 8 | Relationships: 12
+Confidence: 28 HIGH | 9 MEDIUM | 3 LOW | 5 user-provided
+
+Ready to write YAML? (1) Yes  (2) Review a layer  (3) Make changes
+```
+
+**Step 5 — Write YAML**
+
+Only after your explicit approval. The agent writes `system.yaml` and `networks.yaml`, then offers to hand off to `@architect` for refinement or `@validator` for checking.
+
+#### Optional Tools for Auto-Convert Mode
+
+These tools improve the auto-convert experience but are **NOT required**:
+
+| Tool | What It Converts | Install Command |
+|------|-----------------|-----------------|
+| **pandoc** | DOCX, HTML, many formats | `choco install pandoc` (Win) / `brew install pandoc` (Mac) / `apt install pandoc` (Linux) |
+| **pdftotext** | PDF files | Part of `poppler-utils` package |
+| **tesseract** | Images (OCR) | `choco install tesseract` (Win) / `brew install tesseract` (Mac) / `apt install tesseract-ocr` (Linux) |
+| **Python 3** | PDF (via pdfplumber) | `pip install pdfplumber` |
+
+If none are installed, the agent falls back to Option 1 (manual text) or Option 3 (paste).
+
+---
+
 ### Phase 1: Architecture Modeling (@architect)
 
 This is the main phase. The `@architect` agent walks you through **6 layers** in order. It will not skip ahead or let you jump layers (though you can say "skip" or "later" to defer optional items).
@@ -140,11 +268,16 @@ This is the main phase. The `@architect` agent walks you through **6 layers** in
 1. A brief greeting
 2. Asks for your **system name** and **one-sentence description**
 3. Explains the file structure it will create
-4. Asks: "Do you want to load an existing `architecture/` folder to extend, or start fresh?"
+4. Asks: "How would you like to start?"
+   1. **Ingest from documents** — import existing architecture docs (hands off to `@doc-ingester`)
+   2. **Start fresh** — guided questions layer by layer
+   3. **Load existing folder** — extend what's already been modeled
 
-> **If extending:** The agent reads all existing YAML files, shows you what it found, and picks up where you left off.
+> **If option 1:** Hands off to `@doc-ingester` with your system name.
 >
-> **If starting fresh:** The agent begins with Layer 1.
+> **If option 2 (start fresh):** The agent begins with Layer 1 below.
+>
+> **If option 3 (load existing):** The agent reads all existing YAML files, shows you what it found, and picks up where it left off.
 
 ---
 
@@ -1024,7 +1157,12 @@ These commands can be typed in any agent's chat session. The agent will either h
 
 ### Common Workflows
 
-**New system from scratch:**
+**New system from existing docs (recommended):**
+```
+@doc-ingester → @architect → @deployer → @security-reviewer → @diagram-generator → @validator
+```
+
+**New system from scratch (no docs):**
 ```
 @architect → @deployer → @security-reviewer → @diagram-generator → @validator
 ```
@@ -1061,6 +1199,11 @@ Each system gets its own subfolder under `architecture/`. The `networks.yaml` fi
 |-------|---------|
 | Agents don't appear in Copilot Chat dropdown | Ensure `.github/agents/` is at the workspace root. Reload VS Code (`Ctrl+Shift+P` → "Reload Window"). |
 | Agent says "No architecture files found" | Run `@architect` first to create `system.yaml` and `networks.yaml`. |
+| `@doc-ingester` can't convert PDF/DOCX | Install pandoc (`choco install pandoc`) or switch to Option 1 (manual text conversion). |
+| `@doc-ingester` says "pdftotext not found" | Install poppler-utils, or copy-paste the PDF content into chat (Option 3). |
+| Image in docs folder not readable | Paste the image directly into Copilot Chat. The agent uses GPT-4o Vision to analyze it. |
+| Extraction shows LOW confidence for many fields | Your documents may be ambiguous. Review the cited sources and provide corrections at each layer. |
+| `@doc-ingester` extracted something wrong | Say the field number to correct it, or "reject" to remove the extraction entirely. |
 | Validation shows "non-existent context" errors | A container references a `context_id` that doesn't exist. Check your contexts list. |
 | Diagrams have empty Deployment_Nodes | Known Mermaid limitation. The agent adds comments explaining the omission. |
 | Agent skips a question | Required fields are never skipped. If something was skipped, it was optional. Say "go back" to revisit. |
