@@ -76,6 +76,34 @@ Every file MUST start with `@startuml` and end with `@enduml`.
 ### 7. SHOW_LEGEND() must be the LAST line before @enduml
 Nothing except comments may appear between `SHOW_LEGEND()` and `@enduml`.
 
+### 8. Escape Creole special characters in labels
+PlantUML uses Creole markup. These characters trigger formatting if unescaped:
+
+| Characters | Effect | Escape with `~` |
+|---|---|---|
+| `**` | Bold | `~*~*` |
+| `//` | Italic | `~/~/` |
+| `__` | Underline | `~_~_` |
+| `~~` | Strikethrough | `~~~~` |
+| `--` | Horizontal line | `~-~-` |
+
+Common issue: `//` in URLs or protocols (e.g., `"HTTPS://api.example.com"`) triggers italic. Fix: `"HTTPS:~/~/api.example.com"`
+
+### 9. Never connect two boundaries with Rel — connect leaf nodes
+```
+' WRONG — renders garbage "===calls" label:
+Rel(system_a, system_b, "calls")
+
+' CORRECT — connect the leaf containers/components:
+Rel(container_in_a, container_in_b, "calls")
+```
+
+### 10. Use correct include level for macros
+If you use `Component()` macros, you MUST include `C4_Component` (not just `C4_Container`). Each include level only defines its own macros plus lower levels.
+
+### 11. Minimum PlantUML version
+C4-PlantUML stdlib requires **PlantUML >= 1.2021.1**. Older versions will fail on `!procedure` syntax. The VS Code extension (jebbs.plantuml) bundles a compatible version.
+
 ---
 
 ## INCLUDE SYNTAX
@@ -136,7 +164,7 @@ Include by diagram level:
 
 <preamble skinparams>
 
-LAYOUT_LEFT_RIGHT()
+LAYOUT_LANDSCAPE()
 HIDE_STEREOTYPE()
 
 <element tag definitions>
@@ -184,11 +212,15 @@ Note: Use `polyline` not `ortho` — ortho has a known PlantUML bug where labels
 
 ## LAYOUT DIRECTION
 
-Use `LAYOUT_LEFT_RIGHT()` for ALL diagrams.
+Use `LAYOUT_LANDSCAPE()` for ALL diagrams.
 
-This produces left-to-right flow. Use directional relationship macros (`Rel_R`, `Rel_D`) to control specific edge routing.
+**Why LANDSCAPE (not LEFT_RIGHT):**
+- Both produce left-to-right flow
+- `LAYOUT_LEFT_RIGHT()` **rotates** `Rel_*` directions: `Rel_Down` renders as rightward, `Rel_Right` renders as downward — extremely confusing
+- `LAYOUT_LANDSCAPE()` keeps `Rel_*` directions **literal**: `Rel_R` = rightward, `Rel_D` = downward
+- `LAYOUT_LANDSCAPE()` does rotate `Lay_*` directions, but this was fixed in C4-PlantUML v2.12.0+ (stdlib v2.13.0 includes the fix)
 
-**Note on `Lay_*` helpers with `LAYOUT_LEFT_RIGHT()`**: The `Lay_*` directions are NOT rotated with `LAYOUT_LEFT_RIGHT()`. `Lay_R()` still means "place right", `Lay_D()` still means "place down". This is the expected behavior.
+**Never use `LAYOUT_LEFT_RIGHT()`** — it makes directional `Rel_R`/`Rel_D` macros unpredictable.
 
 ---
 
@@ -434,9 +466,12 @@ Before finishing each diagram file, verify ALL of these:
 9. No empty boundaries
 10. Every opening `{` for boundaries has a matching `}`
 11. `SHOW_LEGEND()` is the last line before `@enduml`
-12. No `LAYOUT_LANDSCAPE()` used (use `LAYOUT_LEFT_RIGHT()`)
+12. `LAYOUT_LANDSCAPE()` is used (NOT `LAYOUT_LEFT_RIGHT()`)
 13. No `!pragma layout elk` used
 14. No `skinparam nodesep` or `skinparam ranksep` used
+15. No `Rel()` calls between two boundaries — only between leaf elements
+16. `!include` level matches the macros used (Component needs C4_Component, etc.)
+17. No Creole special chars unescaped in labels (`//`, `**`, `__`, `~~`)
 
 Report warnings:
 ```
@@ -457,7 +492,7 @@ Report warnings:
 skinparam wrapWidth 200
 skinparam linetype polyline
 
-LAYOUT_LEFT_RIGHT()
+LAYOUT_LANDSCAPE()
 HIDE_STEREOTYPE()
 
 AddElementTag("person", $bgColor="#08427b", $fontColor="#ffffff", $borderColor="#052e56")
@@ -493,13 +528,20 @@ SHOW_LEGEND()
 | Issue | Workaround |
 |---|---|
 | `Syntax Error?` on hyphens in alias | Convert all aliases to snake_case |
+| `//` in URLs/protocols renders italic | Escape with `~`: `~/~/` |
+| `**` in labels renders bold | Escape with `~`: `~*~*` |
 | `linetype ortho` misplaces labels | Use `polyline` instead |
-| Empty boundary causes crash | Omit boundary, add comment |
-| Bidirectional labels overlap | Use `Rel_R` + `Rel_L` on different sides |
+| Empty boundary crashes Graphviz | Omit boundary, add comment |
+| `Rel()` between boundaries renders `===` | Always connect leaf nodes, not boundaries |
 | Single-boundary wrapping breaks layout | Use multiple targeted boundaries |
 | `Lay_` ignored in complex diagrams | Apply to elements, not boundaries |
+| `LAYOUT_LEFT_RIGHT()` rotates `Rel_*` | Use `LAYOUT_LANDSCAPE()` instead |
 | ELK not available everywhere | Do not use `!pragma layout elk` |
 | `!include <C4_Context>` fails | Must use `!include <C4/C4_Context>` with prefix |
+| Wrong include level for macros | `Component()` needs `C4_Component`, not `C4_Container` |
 | Macro call split across lines | Keep every macro call on ONE line |
 | Single quotes in arguments | Always use double quotes |
+| `$tags` with comma separator | Use `+` not `,` to combine: `$tags="tag1+tag2"` |
+| `$technology` param not found | Use `$techn` (abbreviated) |
 | `ComponentQueue` not found | Update PlantUML — needs v1.2021+ |
+| Server timeout on large diagrams | Keep under ~30 elements per diagram |
