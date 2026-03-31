@@ -5,12 +5,16 @@ tools: ['read', 'search', 'edit']
 handoffs:
   - label: "Fix in architecture"
     agent: architect
+    prompt: "Return to the architect agent to fix identified security issues."
   - label: "Fix in deployment"
     agent: deployer
+    prompt: "Return to the deployer agent to fix deployment security issues."
   - label: "Generate diagrams"
     agent: diagram-generator
+    prompt: "Generate architecture diagrams including security overlays."
   - label: "Validate"
     agent: validator
+    prompt: "Validate architecture YAML for structural correctness."
 ---
 
 # Security Reviewer Agent

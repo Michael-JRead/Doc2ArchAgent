@@ -5,12 +5,16 @@ tools: ['read', 'edit', 'search']
 handoffs:
   - label: "Back to architecture"
     agent: architect
+    prompt: "Return to the architect agent to modify the architecture model."
   - label: "Generate diagrams"
     agent: diagram-generator
+    prompt: "Generate architecture diagrams from the YAML model."
   - label: "Review security"
     agent: security-reviewer
+    prompt: "Analyze the architecture for security vulnerabilities and trust boundary issues."
   - label: "Validate"
     agent: validator
+    prompt: "Validate architecture YAML for structural correctness and referential integrity."
 ---
 
 # Deployment Agent

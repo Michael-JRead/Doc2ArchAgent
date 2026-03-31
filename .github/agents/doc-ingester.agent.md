@@ -5,10 +5,16 @@ tools: ['read', 'edit', 'execute', 'search']
 handoffs:
   - label: "Continue architecture modeling"
     agent: architect
+    prompt: "Continue building the architecture model interactively."
   - label: "Validate extracted architecture"
     agent: validator
+    prompt: "Validate the extracted architecture YAML for correctness."
   - label: "Generate diagrams"
     agent: diagram-generator
+    prompt: "Generate architecture diagrams from the extracted YAML."
+  - label: "Generate documentation"
+    agent: doc-writer
+    prompt: "Generate HLDD and stakeholder documentation from the architecture."
 ---
 
 # Document Ingester Agent

@@ -4,12 +4,16 @@ tools: ['read', 'edit']
 handoffs:
   - label: "Generate Mermaid diagrams"
     agent: diagram-mermaid
+    prompt: "Generate Mermaid diagram files from the layout plan."
   - label: "Generate Lucidchart diagrams"
     agent: diagram-drawio
+    prompt: "Generate Draw.io/Lucidchart diagram files from the layout plan."
   - label: "Back to diagram generator"
     agent: diagram-generator
+    prompt: "Return to the diagram orchestrator for layout plan changes."
   - label: "Validate"
     agent: validator
+    prompt: "Validate the generated diagrams and architecture artifacts."
 ---
 
 # PlantUML C4 Diagram Renderer

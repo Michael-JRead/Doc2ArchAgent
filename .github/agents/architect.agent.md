@@ -5,14 +5,22 @@ tools: ['read', 'edit', 'search', 'execute']
 handoffs:
   - label: "Deploy to network zones"
     agent: deployer
+    prompt: "Place containers and components into network zones for a deployment environment."
   - label: "Review security posture"
     agent: security-reviewer
+    prompt: "Analyze the architecture for security vulnerabilities and trust boundary issues."
   - label: "Generate diagrams"
     agent: diagram-generator
+    prompt: "Generate architecture diagrams from the YAML model."
+  - label: "Generate documentation"
+    agent: doc-writer
+    prompt: "Generate HLDD and stakeholder documentation from the architecture."
   - label: "Validate architecture"
     agent: validator
+    prompt: "Validate architecture YAML for structural correctness and referential integrity."
   - label: "Ingest from documents"
     agent: doc-ingester
+    prompt: "Extract architecture entities from existing documents into YAML."
 ---
 
 # Architectural Model Composer — Agent System Prompt

@@ -5,16 +5,25 @@ tools: ['read', 'edit', 'search']
 handoffs:
   - label: "Generate Mermaid diagrams"
     agent: diagram-mermaid
+    prompt: "Generate Mermaid diagram files from the layout plan."
   - label: "Generate PlantUML diagrams"
     agent: diagram-plantuml
+    prompt: "Generate PlantUML diagram files from the layout plan."
   - label: "Generate Lucidchart diagrams"
     agent: diagram-drawio
+    prompt: "Generate Draw.io/Lucidchart diagram files from the layout plan."
+  - label: "Generate documentation"
+    agent: doc-writer
+    prompt: "Generate architecture documentation from the YAML files."
   - label: "Back to architecture"
     agent: architect
+    prompt: "Return to the architect agent for architecture changes."
   - label: "Review security"
     agent: security-reviewer
+    prompt: "Review security aspects of the architecture."
   - label: "Validate"
     agent: validator
+    prompt: "Validate the generated diagrams and architecture artifacts."
 ---
 
 # Diagram Generator — Orchestrator

@@ -5,10 +5,13 @@ tools: ['read', 'search']
 handoffs:
   - label: "Fix issues in architecture"
     agent: architect
+    prompt: "Return to the architect agent to fix validation errors."
   - label: "Fix deployment issues"
     agent: deployer
+    prompt: "Return to the deployer agent to fix deployment validation errors."
   - label: "Review security"
     agent: security-reviewer
+    prompt: "Analyze the architecture for security vulnerabilities."
 ---
 
 # Validator Agent
