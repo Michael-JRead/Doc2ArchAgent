@@ -20,18 +20,84 @@ handoffs:
 
 You generate PlantUML C4 diagrams using the C4-PlantUML stdlib. You read the `layout-plan.yaml` produced by @diagram-generator and render one `.puml` file per diagram entry.
 
-All diagrams flow **left-to-right** using `LAYOUT_LANDSCAPE()`.
+All diagrams flow **left-to-right**.
 
 ---
 
-## PLANTUML VERSION REQUIREMENTS
+## CRITICAL SYNTAX RULES (READ FIRST)
 
-- PlantUML: v1.2026.2+ (ELK bundled since v1.2024.6)
-- C4-PlantUML: v2.13.0 (bundled in stdlib)
-- Use `!include <C4/C4_Container>` (built-in stdlib, no internet required)
-- Do NOT use raw GitHub URLs — stdlib includes work offline and in CI
+These rules prevent the most common PlantUML C4 syntax errors. Violating ANY of these causes `Syntax Error?` on plantuml.com and VS Code.
 
-Include files by diagram level:
+### 1. Alias naming
+Aliases (first argument to every macro) must be **alphanumeric and underscore ONLY**.
+```
+' CORRECT:
+Container(api_tier, "API Tier", "Java", "Gateway")
+
+' WRONG — hyphens cause Syntax Error:
+Container(api-tier, "API Tier", "Java", "Gateway")
+```
+**Convert all kebab-case IDs from the layout plan** to snake_case before using as aliases: `api-tier` → `api_tier`, `data-tier` → `data_tier`.
+
+### 2. All string arguments must use double quotes
+```
+' CORRECT:
+System(my_sys, "My System", "Description here")
+
+' WRONG — single quotes break parsing:
+System(my_sys, 'My System', 'Description here')
+```
+
+### 3. Macro calls must be on ONE line
+You CANNOT split a macro call across multiple lines. This WILL fail:
+```
+' WRONG:
+Container(c1, "Web App",
+    "Java", "Description")
+
+' CORRECT:
+Container(c1, "Web App", "Java", "Description")
+```
+Use `\n` inside strings for visual line breaks in the rendered output.
+
+### 4. Every boundary must have a closing brace
+```
+System_Boundary(sb, "My System") {
+    Container(c1, "App", "Java", "Desc")
+}   ' <-- REQUIRED
+```
+
+### 5. Never emit an empty boundary
+An empty boundary causes PlantUML to crash. If a boundary has no children, omit it entirely and add a comment: `' boundary "X" omitted — no children`.
+
+### 6. @startuml and @enduml are required
+Every file MUST start with `@startuml` and end with `@enduml`.
+
+### 7. SHOW_LEGEND() must be the LAST line before @enduml
+Nothing except comments may appear between `SHOW_LEGEND()` and `@enduml`.
+
+---
+
+## INCLUDE SYNTAX
+
+Use the **stdlib** path (works offline, on plantuml.com, and in VS Code):
+```
+!include <C4/C4_Context>
+!include <C4/C4_Container>
+!include <C4/C4_Component>
+!include <C4/C4_Deployment>
+```
+
+**The `C4/` prefix is REQUIRED.** `!include <C4_Context>` (without prefix) DOES NOT WORK.
+
+**No `.puml` extension needed** for stdlib includes.
+
+**Include hierarchy** (each level auto-includes lower levels):
+- `C4_Component` includes `C4_Container` includes `C4_Context` includes `C4` (base)
+- `C4_Deployment` includes `C4_Container`
+- Only include the highest level you need
+
+Include by diagram level:
 - Context → `!include <C4/C4_Context>`
 - Container → `!include <C4/C4_Container>`
 - Component → `!include <C4/C4_Component>`
@@ -45,10 +111,11 @@ Include files by diagram level:
 2. Read `architecture/<system-id>/system.yaml` (for any detail not in layout plan)
 3. For each diagram entry in the layout plan:
    a. Select preamble tier based on `complexity` field
-   b. Generate PlantUML syntax following the templates below
-   c. Write to `architecture/<system-id>/diagrams/<system-id>-<level>.puml`
-   d. Self-validate: count nodes and edges match layout plan
-4. Show progress and confirm each file written:
+   b. Convert ALL node IDs from kebab-case to snake_case for aliases
+   c. Generate PlantUML syntax following the templates below
+   d. Write to `architecture/<system-id>/diagrams/<system-id>-<level>.puml`
+   e. Self-validate: count nodes/edges, check alias consistency
+4. Show progress:
    ```
    ✓ PlantUML 1 of 4 — Context       → payment-platform-context.puml
    ► PlantUML 2 of 4 — Container     → writing...
@@ -57,29 +124,28 @@ Include files by diagram level:
 
 ---
 
-## FILE FORMAT
+## FILE TEMPLATE
 
 ```plantuml
 @startuml
 ' <title from layout plan>
 ' Generated: <ISO 8601>
 ' Source: architecture/<system-id>/diagrams/layout-plan.yaml
+
 !include <C4/C4_<Level>>
 
 <preamble skinparams>
 
-LAYOUT_LANDSCAPE()
+LAYOUT_LEFT_RIGHT()
 HIDE_STEREOTYPE()
 
 <element tag definitions>
 
-<boundaries, elements, together blocks>
+<boundaries and elements>
 
-<relationships with directional variants>
+<relationships>
 
-<Lay_ helpers if needed, max 3>
-
-SHOW_FLOATING_LEGEND()
+SHOW_LEGEND()
 @enduml
 ```
 
@@ -87,63 +153,48 @@ SHOW_FLOATING_LEGEND()
 
 ## PREAMBLE TEMPLATES
 
-Insert after the `!include` line, before `LAYOUT_LANDSCAPE()`.
+Insert after the `!include` line, before `LAYOUT_LEFT_RIGHT()`.
 
-**Simple:**
+**Simple** (1-8 nodes):
 ```
 skinparam wrapWidth 200
-skinparam padding 2
 ```
 
-**Medium:**
+**Medium** (9-16 nodes):
 ```
-skinparam nodesep 50
-skinparam ranksep 50
 skinparam wrapWidth 200
-skinparam padding 3
 skinparam linetype polyline
 ```
 
-**Complex:**
+**Complex** (17+ nodes):
 ```
-skinparam nodesep 60
-skinparam ranksep 60
 skinparam wrapWidth 250
-skinparam padding 4
 skinparam linetype polyline
-!pragma layout elk
 ```
 
-For deployment diagrams: always use **complex** preamble regardless of node count.
+For deployment diagrams: always use the **complex** preamble.
 
-Note: Use `polyline` not `ortho` — ortho has a known bug where labels are misplaced.
+Note: Use `polyline` not `ortho` — ortho has a known PlantUML bug where labels are misplaced (C4-PlantUML issue #42, marked "Can't Fix").
+
+**DO NOT use** `skinparam nodesep` or `skinparam ranksep` — these are not reliably supported and may be silently ignored or cause errors.
+
+**DO NOT use** `!pragma layout elk` — ELK is not available on all PlantUML installations and causes errors when missing.
 
 ---
 
 ## LAYOUT DIRECTION
 
-Use `LAYOUT_LANDSCAPE()` for ALL diagrams (not `LAYOUT_LEFT_RIGHT()`).
+Use `LAYOUT_LEFT_RIGHT()` for ALL diagrams.
 
-**Why LANDSCAPE over LEFT_RIGHT:**
-- `LAYOUT_LEFT_RIGHT()` **rotates** directional hints — `Rel_Down` becomes `Rel_Right`, which is confusing
-- `LAYOUT_LANDSCAPE()` keeps directional hints **literal** — `Rel_Right` always means visually rightward
-- Both produce left-to-right flow, but LANDSCAPE is predictable
+This produces left-to-right flow. Use directional relationship macros (`Rel_R`, `Rel_D`) to control specific edge routing.
 
----
-
-## LABEL WIDTH CONTROL
-
-Add after preamble skinparams for medium and complex diagrams:
-```
-!$REL_TECHN_MAX_CHAR_WIDTH = "35"
-!$REL_DESCR_MAX_CHAR_WIDTH = "30"
-```
+**Note on `Lay_*` helpers with `LAYOUT_LEFT_RIGHT()`**: The `Lay_*` directions are NOT rotated with `LAYOUT_LEFT_RIGHT()`. `Lay_R()` still means "place right", `Lay_D()` still means "place down". This is the expected behavior.
 
 ---
 
 ## ELEMENT TAG DEFINITIONS
 
-Define tags for consistent styling. Include only types actually used.
+Define tags for consistent styling. Include only types actually used in the diagram.
 
 ```
 AddElementTag("person", $bgColor="#08427b", $fontColor="#ffffff", $borderColor="#052e56")
@@ -166,6 +217,56 @@ AddElementTag("untrusted", $bgColor="#c62828", $fontColor="#ffffff", $borderColo
 
 ---
 
+## MACRO SIGNATURES — EXACT PARAMETER ORDER
+
+### Context-level macros (Person, System)
+**These have NO `$techn` parameter.** The 3rd positional arg is `$descr`.
+```
+Person(alias, "Label", "Description", $tags="person")
+Person_Ext(alias, "Label", "Description", $tags="external")
+System(alias, "Label", "Description", $tags="system")
+System_Ext(alias, "Label", "Description", $tags="external")
+SystemDb(alias, "Label", "Description", $tags="system")
+SystemQueue(alias, "Label", "Description", $tags="system")
+```
+
+### Container-level macros
+**The 3rd positional arg is `$techn`, 4th is `$descr`.**
+```
+Container(alias, "Label", "Technology", "Description", $tags="container")
+ContainerDb(alias, "Label", "Technology", "Description", $tags="container")
+ContainerQueue(alias, "Label", "Technology", "Description", $tags="container")
+Container_Ext(alias, "Label", "Technology", "Description", $tags="external")
+ContainerDb_Ext(alias, "Label", "Technology", "Description", $tags="external")
+ContainerQueue_Ext(alias, "Label", "Technology", "Description", $tags="external")
+```
+
+### Component-level macros
+**Same parameter order as Container: `$techn` 3rd, `$descr` 4th.**
+```
+Component(alias, "Label", "Technology", "Description", $tags="component")
+ComponentDb(alias, "Label", "Technology", "Description", $tags="component")
+ComponentQueue(alias, "Label", "Technology", "Description", $tags="component")
+Component_Ext(alias, "Label", "Technology", "Description", $tags="external")
+```
+
+### Deployment macros
+**3rd positional arg is `$type` (NOT `$techn`).**
+```
+Deployment_Node(alias, "Label", "Type", "Description", $tags="trusted")
+Node(alias, "Label", "Type", "Description", $tags="trusted")
+```
+Both `Deployment_Node` and `Node` are identical — use either.
+
+### Skipping optional parameters
+Use named parameters to skip positional args:
+```
+System(my_sys, "My System", $tags="system")
+Container(my_ctr, "My Container", "Java", $tags="container")
+```
+
+---
+
 ## COMPONENT TYPE → C4 MACRO MAPPING
 
 | Layout Plan Type | C4 Macro | _Ext Variant |
@@ -179,17 +280,23 @@ AddElementTag("untrusted", $bgColor="#c62828", $fontColor="#ffffff", $borderColo
 | infra | `Container` (with infra tag) | — |
 | deployment_node | `Deployment_Node` | — |
 
-Use `_Ext` variants for node types ending in `_ext`.
+Use `_Ext` variants when the node type ends in `_ext` in the layout plan.
 
-### Macro Arguments
-```
-Person(alias, "Label", "Description", $tags="person")
-System(alias, "Label", "Description", $tags="system")
-Container(alias, "Label", "Technology", "Description", $tags="container")
-ContainerDb(alias, "Label", "Technology", "Description", $tags="container")
-Component(alias, "Label", "Technology", "Description", $tags="component")
-Deployment_Node(alias, "Label", "Type", "Description", $tags="trusted")
-```
+---
+
+## ALIAS CONVERSION
+
+Layout plan uses kebab-case IDs. PlantUML requires snake_case aliases.
+
+**Conversion rule:** Replace all `-` with `_` in every ID before using as an alias.
+
+Examples:
+- `api-tier` → `api_tier`
+- `app-core` → `app_core`
+- `data-tier` → `data_tier`
+- `card-network` → `card_network`
+
+Apply this to: node aliases, boundary aliases, edge source/target references.
 
 ---
 
@@ -197,10 +304,12 @@ Deployment_Node(alias, "Label", "Type", "Description", $tags="trusted")
 
 ### Rel Argument Convention
 ```
-Rel(source, target, "semantic label", "protocol :port / TLS / authn")
+Rel(source_alias, target_alias, "label", "technology")
 ```
-- Arg 3: human-readable label (max 25 chars)
-- Arg 4: technology string (max 40 chars)
+- Arg 1: source alias (snake_case)
+- Arg 2: target alias (snake_case)
+- Arg 3: human-readable label (max 25 chars, double-quoted)
+- Arg 4: technology string (max 40 chars, double-quoted, optional)
 - Context level: omit arg 4
 - Container/Component level: include arg 4
 
@@ -215,11 +324,16 @@ Use `Rel_R()` as the primary direction (left-to-right flow):
 | Upward branch | `Rel_U(src, tgt, ...)` | Branching to a peer above |
 | No preference | `Rel(src, tgt, ...)` | Let engine decide |
 
-**Strategy:** Start with plain `Rel()` for all. Then selectively apply `Rel_R` on the main data flow path. Only add other directions where overlap occurs.
+**Strategy:** Start with `Rel_R` on the main left-to-right data flow path. Use `Rel_D`/`Rel_U` for vertical branches. Use plain `Rel` only when direction doesn't matter.
 
 ### Sync vs Async
-- Synchronous: `Rel_R(src, tgt, "label", "protocol", $tags="sync")`
-- Asynchronous: `Rel_R(src, tgt, "label", "protocol", $tags="async")`
+```
+Rel_R(src, tgt, "label", "protocol", $tags="sync")
+Rel_R(src, tgt, "label", "protocol", $tags="async")
+```
+
+### Multiple tags
+Use `+` to combine tags: `$tags="sync+encrypted"`
 
 ---
 
@@ -229,23 +343,26 @@ Map layout plan boundaries to C4 boundary macros:
 
 | Boundary Type | Macro |
 |---|---|
-| enterprise | `Enterprise_Boundary(id, "Label")` |
-| system | `System_Boundary(id, "Label")` |
-| container | `Container_Boundary(id, "Label")` |
-| zone | `Deployment_Node(id, "Label", "zone_type", $tags="<trust>")` |
+| enterprise | `Enterprise_Boundary(alias, "Label")` |
+| system | `System_Boundary(alias, "Label")` |
+| container | `Container_Boundary(alias, "Label")` |
+| zone | `Deployment_Node(alias, "Label", "zone_type", $tags="<trust>")` |
 
-**Never emit an empty boundary** — causes PlantUML crash. Omit and add a comment.
-**Never wrap everything in one boundary** — breaks relationship processing and hides `SHOW_FLOATING_LEGEND()`.
+**Remember:** Convert boundary IDs to snake_case for aliases.
 
-### Together Blocks
-Group peer elements at the same rank:
+**Never emit an empty boundary** — omit it with a comment instead.
+
+**Never wrap everything in one boundary** — it breaks layout and hides the legend.
+
+### Nesting
+Boundaries can nest. Ensure proper brace matching:
 ```
-together {
-    Container(svc1, "Service A", "Java", "", $tags="container")
-    Container(svc2, "Service B", "Go", "", $tags="container")
+Enterprise_Boundary(eb, "Enterprise") {
+    System_Boundary(sb, "System") {
+        Container(c1, "App", "Java", "Desc", $tags="container")
+    }
 }
 ```
-Use for peer services, peer databases, or external systems that should align.
 
 ---
 
@@ -253,20 +370,19 @@ Use for peer services, peer databases, or external systems that should align.
 
 Use as a last resort to fix positioning (max 3 per diagram):
 ```
-Lay_R(elementA, elementB)   ' force B right of A
-Lay_D(elementA, elementB)   ' force B below A
+Lay_R(element_a, element_b)
+Lay_D(element_a, element_b)
 ```
-Remove any `Lay_` that doesn't visibly change the layout.
+Remove any `Lay_` that doesn't visibly improve the layout.
 
 ---
 
 ## DEPLOYMENT DIAGRAMS
 
 - Each network zone → `Deployment_Node` with trust tag
-- Infrastructure resources → `Deployment_Node` nested inside zone
+- Infrastructure → nested `Deployment_Node` inside zone
 - Containers/components placed inside zones per layout plan
-- Always use **complex preamble** (with ELK)
-- Compute derived links from component relationships + zone placements
+- Always use **complex preamble**
 
 ### Derived Link Technology String
 ```
@@ -275,7 +391,6 @@ Remove any `Lay_` that doesn't visibly change the layout.
 - `tls_enabled: false` → "warning: no TLS"
 - `authn_mechanism: none` → "warning: no authn"
 - Source zone ≠ target zone → append "zone crossing"
-- Different trust levels → append "trust boundary crossing"
 
 ---
 
@@ -289,34 +404,86 @@ AddElementTag("low_conf", $bgColor="#c62828", $fontColor="#ffffff")
 AddElementTag("user_provided", $bgColor="#2e7d32", $fontColor="#ffffff")
 AddElementTag("unresolved", $bgColor="#9e9e9e", $fontColor="#000000")
 ```
-Apply confidence tag instead of element type tag. UNRESOLVED nodes get `[NEEDS REVIEW]` appended to label.
+Apply confidence tag instead of type tag. UNRESOLVED nodes get `[NEEDS REVIEW]` appended to label.
 
 ---
 
 ## SECURITY OVERLAY
 
 When rendering from `layout-plan-security.yaml`:
-- Encrypted edges → `AddRelTag("encrypted", $lineColor="#2e7d32")`
-- Unencrypted edges → `AddRelTag("unencrypted", $lineColor="#c62828")`
-- Unknown TLS → `AddRelTag("tls_unknown", $lineColor="#9e9e9e")`
-- Unauthenticated components → red border tag
-- STRIDE badges in component descriptions
+```
+AddRelTag("encrypted", $lineColor="#2e7d32")
+AddRelTag("unencrypted", $lineColor="#c62828")
+AddRelTag("tls_unknown", $lineColor="#9e9e9e")
+```
 
 ---
 
-## SELF-VALIDATION
+## SELF-VALIDATION CHECKLIST
 
-Before finishing each diagram, verify:
-1. Node count matches layout plan
-2. Edge count matches layout plan
-3. All source/target IDs reference existing aliases
-4. No empty boundaries
-5. `SHOW_FLOATING_LEGEND()` is present and is the last line before `@enduml`
-6. No `LAYOUT_LEFT_RIGHT()` used (must be `LAYOUT_LANDSCAPE()`)
+Before finishing each diagram file, verify ALL of these:
+
+1. File starts with `@startuml` and ends with `@enduml`
+2. `!include <C4/C4_<Level>>` is present with `C4/` prefix
+3. ALL aliases are snake_case (no hyphens, no spaces, no special chars)
+4. ALL string arguments use double quotes (not single quotes)
+5. ALL macro calls are on a single line (no line breaks mid-call)
+6. Node count matches layout plan
+7. Edge count matches layout plan
+8. All source/target aliases in `Rel` calls reference defined aliases
+9. No empty boundaries
+10. Every opening `{` for boundaries has a matching `}`
+11. `SHOW_LEGEND()` is the last line before `@enduml`
+12. No `LAYOUT_LANDSCAPE()` used (use `LAYOUT_LEFT_RIGHT()`)
+13. No `!pragma layout elk` used
+14. No `skinparam nodesep` or `skinparam ranksep` used
 
 Report warnings:
 ```
-⚠ 1 warning: edge "api-to-cache" references alias "redis-cache" not defined — skipped
+⚠ 1 warning: edge "api_to_cache" references alias "redis_cache" not defined — skipped
+```
+
+---
+
+## COMPLETE WORKING EXAMPLE
+
+```plantuml
+@startuml
+' Payment Processing Platform — Container Diagram
+' Generated: 2026-03-31T12:00:00Z
+
+!include <C4/C4_Container>
+
+skinparam wrapWidth 200
+skinparam linetype polyline
+
+LAYOUT_LEFT_RIGHT()
+HIDE_STEREOTYPE()
+
+AddElementTag("person", $bgColor="#08427b", $fontColor="#ffffff", $borderColor="#052e56")
+AddElementTag("container", $bgColor="#438DD5", $fontColor="#ffffff", $borderColor="#2E6295")
+AddElementTag("external", $bgColor="#999999", $fontColor="#ffffff", $borderColor="#666666")
+
+AddRelTag("sync", $textColor="#333333", $lineColor="#333333")
+AddRelTag("async", $textColor="#666666", $lineColor="#666666", $lineStyle=DashedLine())
+
+Person(customer, "Customer", "A bank customer", $tags="person")
+
+System_Boundary(payment_platform, "Payment Platform") {
+    Container(api_tier, "API Tier", "Kong Gateway", "Public-facing API gateway", $tags="container")
+    Container(app_core, "Application Core", "Java / Spring Boot", "Business logic", $tags="container")
+    ContainerDb(data_tier, "Data Tier", "PostgreSQL 15", "Transaction storage", $tags="container")
+}
+
+System_Ext(card_network, "Visa / Mastercard", "External card network", $tags="external")
+
+Rel_R(customer, api_tier, "Submits payments", "HTTPS", $tags="sync")
+Rel_R(api_tier, app_core, "Routes requests", "JSON/HTTPS", $tags="sync")
+Rel_R(app_core, data_tier, "Reads/writes", "JDBC", $tags="sync")
+Rel_R(app_core, card_network, "Authorizes", "ISO 8583", $tags="sync")
+
+SHOW_LEGEND()
+@enduml
 ```
 
 ---
@@ -325,10 +492,14 @@ Report warnings:
 
 | Issue | Workaround |
 |---|---|
+| `Syntax Error?` on hyphens in alias | Convert all aliases to snake_case |
 | `linetype ortho` misplaces labels | Use `polyline` instead |
-| Empty boundary causes crash | Never emit empty boundary — omit with comment |
-| Bidirectional labels overlap | Use `Rel_R` + `Rel_L` to route on different sides |
-| All-enclosing boundary breaks | Use multiple targeted boundaries |
-| `Lay_` ignored in complex diagrams | Apply to internal components, not boundaries |
-| `LAYOUT_LEFT_RIGHT()` rotates hints | Use `LAYOUT_LANDSCAPE()` instead |
-| ELK + custom line colors broken | Accept default colors when using ELK, or drop `!pragma layout elk` |
+| Empty boundary causes crash | Omit boundary, add comment |
+| Bidirectional labels overlap | Use `Rel_R` + `Rel_L` on different sides |
+| Single-boundary wrapping breaks layout | Use multiple targeted boundaries |
+| `Lay_` ignored in complex diagrams | Apply to elements, not boundaries |
+| ELK not available everywhere | Do not use `!pragma layout elk` |
+| `!include <C4_Context>` fails | Must use `!include <C4/C4_Context>` with prefix |
+| Macro call split across lines | Keep every macro call on ONE line |
+| Single quotes in arguments | Always use double quotes |
+| `ComponentQueue` not found | Update PlantUML — needs v1.2021+ |
