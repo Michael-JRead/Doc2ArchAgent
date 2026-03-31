@@ -255,10 +255,19 @@ Valid colours: `Grey`, `Yellow`, `Green`, `Blue`, `Red`.
 ```
 
 ### Diagram Embedding
-Reference generated diagram files:
+Attach generated diagram files to the Confluence page, then reference them:
 ```html
-<p><strong>See:</strong> <code>&lt;system-id&gt;-context.drawio</code> (attach to Confluence page and use Draw.io macro to embed)</p>
+<!-- Attached image (PNG export of diagram) -->
+<ac:image ac:width="900">
+  <ri:attachment ri:filename="<system-id>-context.png" />
+</ac:image>
+
+<!-- Draw.io macro (if draw.io plugin is installed) -->
+<ac:structured-macro ac:name="drawio">
+  <ac:parameter ac:name="diagramName"><system-id>-context</ac:parameter>
+</ac:structured-macro>
 ```
+If the draw.io plugin is not available, fall back to embedded PNG images.
 
 ---
 
