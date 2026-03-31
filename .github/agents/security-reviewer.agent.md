@@ -159,6 +159,115 @@ Severity: MEDIUM.
 
 ---
 
+## STRIDE THREAT ANALYSIS
+
+Every data flow crossing a trust boundary is automatically flagged for STRIDE analysis.
+This is deterministic: based on schema fields, not AI inference.
+
+### Per-Relationship STRIDE Checks
+
+For each `component_relationship` with a `target_listener_ref`, evaluate all six STRIDE categories:
+
+**SPOOFING:**
+- `authn_mechanism == "none"` → `✗ [HIGH]` No authentication — identity not verified
+- `authn_mechanism == "api_key"` on internet-facing listener → `⚠ [MEDIUM]` Weak auth for boundary
+- Has strong authn (`oauth2`, `mtls`, `certificate`) → `✓` Documented
+
+**TAMPERING:**
+- `data_classification == "confidential"` AND `tls_enabled == false` → `✗ [HIGH]` Sensitive data without transport integrity
+- `tls_enabled == true` → `✓` Transport integrity protected
+
+**REPUDIATION:**
+- Crosses trust boundary AND no logging infrastructure in target zone → `⚠ [MEDIUM]` No audit trail at boundary crossing
+- Logging infrastructure exists in zone (check `infrastructure_resources` for `resource_type: logging`) → `✓` Audit capability present
+
+**INFORMATION DISCLOSURE:**
+- `tls_enabled == false` on internet-facing → `✗ [HIGH]` Data exposed in transit
+- `tls_enabled == false` on internal → `⚠ [MEDIUM]` Internal data unencrypted
+- `data_classification == "confidential"` over unencrypted channel → `✗ [HIGH]` Data exposure risk
+
+**DENIAL OF SERVICE:**
+- Internet-facing listener without WAF in same zone → `⚠ [MEDIUM]` Potential DoS target
+- Check `infrastructure_resources` for `resource_type: waf` in the listener's zone
+
+**ELEVATION OF PRIVILEGE:**
+- `authz_required == false` → `⚠ [MEDIUM]` No authorization check
+- `authz_required == false` AND internet-facing → `✗ [HIGH]` Unauthz access from internet
+
+### DFD Element Mapping
+
+Map architecture entities to Data Flow Diagram elements for STRIDE applicability:
+
+| DFD Element | Schema Mapping | STRIDE Applicability |
+|---|---|---|
+| External Entity | `external_systems[]` | Spoofing |
+| Process | `components` (type: api, service, web_app, background_service) | All six categories |
+| Data Store | `components` (type: database, cache, message_queue) | Tampering, Repudiation, Info Disclosure, DoS |
+| Data Flow | `component_relationships[]` | Tampering, Info Disclosure, DoS |
+| Trust Boundary | `trust_boundaries[]` + network zone boundary crossings | All categories at crossings |
+
+### STRIDE Report Format
+
+```
+STRIDE THREAT ANALYSIS — <System Name>
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+| Relationship        | S | T | R | I | D | E | Risk Level |
+|---------------------|---|---|---|---|---|---|------------|
+| user → api-gateway  | ✓ | ✓ | ⚠ | ✓ | ⚠ | ✓ | MEDIUM     |
+| api-gw → auth-svc   | ✓ | ✗ | ⚠ | ✗ | ✗ | ⚠ | HIGH       |
+| auth-svc → user-db  | ✓ | ✓ | ✓ | ✓ | ⚠ | ✓ | LOW        |
+
+Summary:
+  Total relationships analyzed: X
+  HIGH risk: X | MEDIUM risk: X | LOW risk: X
+  Gaps requiring mitigation: X
+```
+
+Write to: `architecture/<system-id>/diagrams/stride-analysis.md`
+
+---
+
+## FIREWALL ACL GENERATION
+
+For data flows where protocol and port are explicitly stated in component listeners:
+
+```
+component_relationship: api-gateway → auth-service
+target_listener: HTTPS :443 / TLS 1.3 / oauth2
+source_zone: dmz (from deployment placement)
+dest_zone: private-app-tier (from deployment placement)
+
+Generated ACL:
+  PERMIT TCP FROM dmz/api-gateway TO private-app-tier/auth-service PORT 443
+```
+
+For data flows where protocol/port are NOT stated:
+```
+  NEEDS_SPECIFICATION — protocol and port required for ACL generation
+```
+NEVER guess a port or protocol.
+
+### ACL Report Format
+
+```
+FIREWALL ACL RULES — <System Name> / <Deployment Name>
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+| # | Action | Proto | Source Zone / Component | Dest Zone / Component | Port | Notes |
+|---|--------|-------|------------------------|----------------------|------|-------|
+| 1 | PERMIT | TCP   | dmz / api-gateway      | app-tier / auth-svc  | 443  | TLS 1.3, OAuth2 |
+| 2 | PERMIT | TCP   | app-tier / auth-svc    | data-tier / user-db  | 5432 | TLS 1.2, cert auth |
+| 3 | NEEDS_SPEC | ? | app-tier / order-svc   | data-tier / cache    | ?    | Protocol not specified |
+
+Summary:
+  Total rules: X | Fully specified: X | Needs specification: X
+```
+
+Write to: `architecture/<system-id>/diagrams/firewall-acls.md`
+
+---
+
 ## BLAST RADIUS ANALYSIS
 
 When asked "Show blast radius for <container-id>":

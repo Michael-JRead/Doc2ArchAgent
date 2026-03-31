@@ -21,6 +21,12 @@ A multi-agent architecture modeling system for VS Code, powered by GitHub Copilo
 - [YAML Schema Reference](#yaml-schema-reference)
 - [Commands You Can Use Anytime](#commands-you-can-use-anytime)
 - [Tips and Best Practices](#tips-and-best-practices)
+- [Zero-Hallucination Pipeline](#zero-hallucination-pipeline)
+- [Deterministic Validation](#deterministic-validation)
+- [STRIDE Threat Analysis](#stride-threat-analysis)
+- [Persona-Specific Diagram Views](#persona-specific-diagram-views)
+- [How This Compares](#how-this-compares)
+- [Known Limitations](#known-limitations)
 - [Troubleshooting](#troubleshooting)
 - [Templates](#templates)
 
@@ -34,9 +40,14 @@ Doc2ArchAgent turns your architecture knowledge into a structured, validated C4 
 - A complete `system.yaml` describing your contexts, containers, components, listeners, and relationships
 - A `networks.yaml` defining your network zones and infrastructure resources
 - Deployment YAML files mapping containers/components to specific network zones per environment
+- A `provenance.yaml` tracing every extracted field back to its source document, section, and quote
 - C4 diagrams at every level (Context, Container, Component, Deployment) in Mermaid and PlantUML
+- Confidence-colored diagrams showing which elements are well-supported vs. need verification
+- Persona-specific diagram views (Executive, Architect, Security, Network, Compliance)
+- A STRIDE threat analysis per data flow crossing trust boundaries
+- Firewall ACL rules auto-generated from listener data (protocol, port, zone)
 - A security findings report identifying vulnerabilities, trust boundary issues, and blast radius
-- A validation report confirming structural correctness and referential integrity
+- A deterministic validation report (Python) + semantic validation confirming correctness
 
 **You get all of this by answering guided questions in VS Code chat.**
 
@@ -52,6 +63,11 @@ Doc2ArchAgent turns your architecture knowledge into a structured, validated C4 
 | **Active GitHub Copilot subscription** | Individual, Business, or Enterprise | [github.com/settings/copilot](https://github.com/settings/copilot) |
 
 > **Note:** Custom agents (`.agent.md`) require GitHub Copilot Chat. The agents use built-in tools (`read`, `edit`, `search`, `execute`) — no MCP servers or external dependencies needed.
+
+| **Python 3** *(optional)* | 3.8+ | `python --version` |
+| **PyYAML** *(optional)* | 6.0+ | `pip install pyyaml` |
+
+> **Optional:** Python + PyYAML enables deterministic validation via `tools/validate.py`. Without it, the `@validator` agent uses LLM-only validation.
 
 ---
 
@@ -99,9 +115,9 @@ The system is composed of **5 specialized agents**, each owning a specific conce
 | **@doc-ingester** | Ingests existing architecture documents (PDF, Word, text, images), extracts entities with source citations, validates with you, then writes YAML. Zero hallucinations. | **Start here if you have existing docs.** Import documentation before manual modeling. |
 | **@architect** | Walks you through defining contexts, containers, components, listeners, and relationships. Writes `system.yaml` and `networks.yaml` incrementally. | **Start here if starting fresh.** Or continue after `@doc-ingester` to refine. |
 | **@deployer** | Places your containers and components into network zones for specific environments (production, staging, regional deployments). Writes deployment YAML files. | After `@architect` completes your system model, or when you need to add a new deployment. |
-| **@security-reviewer** | Reads all your YAML and produces a security findings report. Checks for unauthenticated listeners, unencrypted flows, trust boundary gaps, and more. | After deployments are defined, or anytime you want a security audit. |
-| **@diagram-generator** | Generates C4 architecture diagrams in 3 formats: Mermaid C4, PlantUML C4, and Mermaid graph/subgraph. Covers all 4 C4 levels. | After your architecture is modeled. Use anytime to visualize the current state. |
-| **@validator** | Validates all YAML for structural correctness, referential integrity, naming conventions, and consistency. Reports errors, warnings, and info. | Anytime. Run it after making changes to catch issues early. |
+| **@security-reviewer** | Reads all YAML and produces security findings, STRIDE threat analysis per data flow, and firewall ACL rules. Checks for unauthenticated listeners, unencrypted flows, trust boundary gaps, and more. | After deployments are defined, or anytime you want a security audit. |
+| **@diagram-generator** | Generates C4 architecture diagrams in 3 formats: Mermaid C4, PlantUML C4, and Mermaid graph/subgraph. Covers all 4 C4 levels. Supports confidence color-coding, security overlays, and persona-specific views. | After your architecture is modeled. Use anytime to visualize the current state. |
+| **@validator** | Dual-pass validation: deterministic Python script for structural/referential checks, then LLM semantic review for business logic. Reports errors, warnings, and info. | Anytime. Run it after making changes to catch issues early. |
 
 ### How Handoffs Work
 
@@ -757,6 +773,29 @@ Each finding includes:
 - **Why it matters** — the risk
 - **Recommended fix** — specific action to take
 
+#### STRIDE Threat Analysis
+
+After the basic security checks, the agent performs a per-relationship STRIDE analysis for every data flow crossing a trust boundary. Each relationship is evaluated for:
+
+| STRIDE Category | What It Checks |
+|---|---|
+| **Spoofing** | Authentication mechanism strength (none, api_key, oauth2, mtls) |
+| **Tampering** | Transport integrity (TLS enabled/disabled on sensitive data) |
+| **Repudiation** | Audit trail presence (logging infrastructure in target zone) |
+| **Information Disclosure** | Data exposure risk (TLS status, data classification) |
+| **Denial of Service** | DoS protection (WAF presence for internet-facing listeners) |
+| **Elevation of Privilege** | Authorization checks (authz_required on listeners) |
+
+Output: `architecture/<system>/diagrams/stride-analysis.md` — a table with S/T/R/I/D/E columns per relationship.
+
+#### Firewall ACL Generation
+
+The agent auto-generates firewall rules from listener data:
+- For flows with explicit protocol and port: `PERMIT TCP FROM zone/component TO zone/component PORT <port>`
+- For flows missing protocol/port: `NEEDS_SPECIFICATION` (never guesses)
+
+Output: `architecture/<system>/diagrams/firewall-acls.md`
+
 #### Additional Security Commands
 
 | Command | What It Does |
@@ -764,6 +803,7 @@ Each finding includes:
 | `Show blast radius for <container-id>` | Shows all affected systems, zones, and data flows if a container is compromised |
 | `Show network crossings for <deployment-id>` | Generates a table of all zone crossings with protocol, TLS, and auth details |
 | `Summarize risks` | Executive summary of highest-severity findings |
+| `Generate firewall rules` / `Show ACLs` | Generates firewall ACL rules from listener data |
 
 ---
 
@@ -837,13 +877,43 @@ Files written: 12
 Location: architecture/payment-platform/diagrams/
 ```
 
+#### Confidence-Colored Diagrams
+
+When `provenance.yaml` exists (generated by `@doc-ingester`), diagrams are automatically color-coded by extraction confidence:
+
+| Color | Meaning |
+|-------|---------|
+| Blue (`#1565c0`) | HIGH confidence — well-supported by source documents |
+| Amber (`#ff8f00`) | MEDIUM confidence — needs verification |
+| Red (`#c62828`) | LOW confidence — weak support in sources |
+| Green (`#2e7d32`) | User-provided — human-confirmed value |
+| Grey (`#9e9e9e`) | UNRESOLVED — requires review before finalizing |
+
+A legend is included in every confidence-colored diagram.
+
+#### Security Overlay Diagrams
+
+Request security-focused diagrams with: `@diagram-generator Generate security overlay`
+
+These overlay encryption status (green/red edges), trust boundary crossings, unauthenticated listener markers, data classification labels, and STRIDE risk badges on components.
+
+#### Persona-Specific Views
+
+| View | Command | What It Shows |
+|------|---------|--------------|
+| Executive | `Generate executive view` | Context diagram only, compliance frameworks, no protocol detail |
+| Architect | `Generate architect view` | Container diagram with technology labels and data classifications |
+| Security Engineer | `Generate security view` | Full DFD with STRIDE annotations, auth/authz on every flow |
+| Network Engineer | `Generate network view` | Deployment zones, protocol/port on every edge, firewall ACL annotations |
+| Compliance Officer | `Generate compliance view` | Data classification map, trust boundary controls, compliance coverage |
+
 > **Tip:** Open any `.md` file in VS Code and use the built-in Markdown Preview (`Ctrl+Shift+V`) to see Mermaid diagrams rendered live.
 
 ---
 
 ### Phase 5: Validation (@validator)
 
-The `@validator` checks all your YAML for correctness. It reports errors but does NOT fix them — it hands off to the appropriate agent.
+The `@validator` uses a **dual-pass approach** for maximum accuracy. It reports errors but does NOT fix them — it hands off to the appropriate agent.
 
 #### Starting the Session
 
@@ -854,15 +924,16 @@ The `@validator` checks all your YAML for correctness. It reports errors but doe
 
 **The agent responds:**
 1. Reads all architecture files
-2. Shows: *"Found: 1 system, 2 deployments, 1 networks.yaml. Running validation..."*
-3. Runs checks with progress:
-   ```
-   Checking required fields...          [done]
-   Checking referential integrity...    [done]
-   Checking naming conventions...       [done]
-   Checking relationship consistency... [done]
-   Checking deployment consistency...   [done]
-   ```
+2. **Pass 1 — Deterministic validation** (Python script `tools/validate.py`):
+   - Runs reproducible structural and referential integrity checks
+   - Same input always produces the same result — no LLM variability
+   - If Python is unavailable, this pass is skipped with a warning
+3. **Pass 2 — Semantic validation** (LLM review):
+   - Checks business logic that code cannot catch
+   - Are security controls proportionate to data classifications?
+   - Are there obvious missing components for compliance frameworks?
+   - Are trust boundaries placed logically?
+4. Results from both passes are presented separately
 
 #### What Gets Validated
 
@@ -956,6 +1027,8 @@ architecture/
     │   ├── data_entities[]                          ← Named data types for flow annotation
     │   └── trust_boundaries[]                       ← Zone boundary definitions
     │
+    ├── provenance.yaml                              ← Per-field source citations + confidence scores
+    │
     ├── deployments/
     │   ├── prod-us-east.yaml                        ← Production US-East placement
     │   ├── staging-eu.yaml                          ← Staging EU placement
@@ -977,7 +1050,22 @@ architecture/
         ├── prod-us-east-deployment-component.puml
         ├── prod-us-east-deployment-graph.md         ← Mermaid graph Deployment
         ├── prod-us-east-network-crossings.md        ← Network crossing report
-        └── security-findings.md                     ← Security analysis report
+        ├── security-findings.md                     ← Security analysis report
+        ├── stride-analysis.md                       ← STRIDE threat analysis per relationship
+        ├── firewall-acls.md                         ← Auto-generated firewall ACL rules
+        ├── blast-radius-*.md                        ← Blast radius analysis per container
+        ├── payment-platform-security-overlay.md     ← Security overlay diagram (Mermaid C4)
+        ├── payment-platform-security-overlay.puml   ← Security overlay diagram (PlantUML)
+        ├── payment-platform-security-overlay-graph.md ← Security overlay (Mermaid graph)
+        ├── payment-platform-executive.md            ← Executive persona view
+        ├── payment-platform-architect.md            ← Architect persona view
+        ├── payment-platform-security.md             ← Security engineer persona view
+        ├── payment-platform-network.md              ← Network engineer persona view
+        └── payment-platform-compliance.md           ← Compliance officer persona view
+
+tools/
+├── validate.py                                      ← Deterministic validation script
+└── requirements.txt                                 ← Python dependencies (pyyaml)
 ```
 
 ---
@@ -1127,6 +1215,10 @@ These commands can be typed in any agent's chat session. The agent will either h
 | `Generate diagrams` | Generates all C4 diagrams | @diagram-generator |
 | `Generate context diagram` | Generates only Level 1 | @diagram-generator |
 | `Generate deployment diagrams for <id>` | Generates deployment diagrams | @diagram-generator |
+| `Generate security overlay` | Security-focused diagrams with encryption colors and STRIDE badges | @diagram-generator |
+| `Generate executive view` | Context-only diagram for executives | @diagram-generator |
+| `Generate security view` | Full DFD with STRIDE annotations | @diagram-generator |
+| `Generate network view` | Zone-focused diagram with protocol/port detail | @diagram-generator |
 | `Regenerate` | Re-reads YAML and regenerates all diagrams | @diagram-generator |
 | `Show security findings` | Runs full security analysis | @security-reviewer |
 | `Show blast radius for <container-id>` | Impact analysis for a container | @security-reviewer |
@@ -1159,7 +1251,7 @@ These commands can be typed in any agent's chat session. The agent will either h
 
 **New system from existing docs (recommended):**
 ```
-@doc-ingester → @architect → @deployer → @security-reviewer → @diagram-generator → @validator
+@doc-ingester → @validator → @architect → @deployer → @diagram-generator → @security-reviewer
 ```
 
 **New system from scratch (no docs):**
@@ -1190,6 +1282,164 @@ These commands can be typed in any agent's chat session. The agent will either h
 ### Working with Multiple Systems
 
 Each system gets its own subfolder under `architecture/`. The `networks.yaml` file is shared across all systems. You can model multiple systems by running `@architect` multiple times with different system names.
+
+---
+
+## Zero-Hallucination Pipeline
+
+When using `@doc-ingester` to extract architecture from existing documents, the system enforces a **zero-hallucination invariant**:
+
+> For every element E in the output YAML, there exists a source reference S in the input documents where E is a direct extraction (not inference) from S, and S is verifiable by human review.
+
+The output is a faithful, verifiable **subset** of what the source documents state. It may be incomplete (because the docs are incomplete), but it is never wrong about what it does include.
+
+### How It Works
+
+The pipeline uses a 5-stage approach:
+
+1. **Multi-Pass Extraction** — Each document is processed in separate focused passes: prose (narrative text), tables (structured data), diagrams (Vision analysis), then cross-reference (consistency check across passes and documents).
+
+2. **Chunked Extraction** — Each document section is processed independently to prevent context cross-contamination. Entities from one section never leak into another section's extraction.
+
+3. **Self-Verification** — After extraction, the agent re-reads each cited source passage and asks: "Does this source explicitly state what I extracted?" If it can't produce a direct quote, confidence is downgraded from HIGH to MEDIUM.
+
+4. **Cross-Document Consistency** — When the same entity appears in multiple documents with different values, both values are presented side-by-side for the user to resolve. The agent never silently picks one value over another.
+
+5. **Provenance Tracking** — Every extracted field is traced to its source document, section, extraction pass, and supporting quote in `provenance.yaml`. This enables full traceability and human verification.
+
+### Confidence Scoring
+
+Each field's confidence is the minimum of four factors:
+
+| Factor | HIGH | MEDIUM | LOW | UNCERTAIN |
+|--------|------|--------|-----|-----------|
+| Source clarity | Exact match | Requires interpretation | Ambiguous | Conflicting |
+| Extraction method | Direct text/table | — | OCR/Vision | — |
+| Cross-document | Confirmed in 2+ docs | Single source | — | Contradicted |
+| Self-verification | Re-confirmed with quote | Could not re-confirm | — | — |
+
+Confidence determines routing: HIGH elements auto-present, MEDIUM elements get `[verify]` tags, LOW elements get warnings, UNCERTAIN elements block until the user resolves them, and NOT_STATED elements require the user to provide the value.
+
+### Provenance File
+
+After extraction, `@doc-ingester` writes `architecture/<system-id>/provenance.yaml` containing:
+- Per-field source citations with document, section, and extraction pass
+- Supporting quotes from source documents
+- Conflict resolution history
+- Unresolved items with impact analysis and suggested questions
+- Extraction statistics (total fields, confidence breakdown)
+
+---
+
+## Deterministic Validation
+
+The `@validator` agent uses a **separation principle**: extraction is done by the LLM, but validation is done by deterministic code. This ensures the same input always produces the same validation result.
+
+### Python Validation Script
+
+```bash
+python tools/validate.py architecture/<system-id>/system.yaml
+```
+
+The script auto-detects `networks.yaml` in the parent directory. Output is JSON:
+
+```json
+{
+  "valid": true,
+  "errors": [],
+  "warnings": ["component 'redis-cache' has no relationships (orphaned)"]
+}
+```
+
+**What it checks:**
+- Required fields for all entity types (metadata, contexts, containers, components, listeners, zones)
+- Unique ID enforcement per entity type
+- Referential integrity (context_id, container_id, target_listener_ref, zone_id)
+- Kebab-case naming convention
+- Security posture warnings (unauthenticated listeners, missing TLS)
+- Orphaned components (no relationships)
+
+**Dependencies:** Python 3 + PyYAML (`pip install pyyaml`). Install from `tools/requirements.txt`.
+
+If Python is unavailable, the validator falls back to LLM-only validation with a warning.
+
+---
+
+## STRIDE Threat Analysis
+
+The `@security-reviewer` performs automated STRIDE threat analysis on every data flow crossing a trust boundary. This is deterministic — based on schema fields, not AI inference.
+
+### DFD Element Mapping
+
+Architecture entities are mapped to Data Flow Diagram (DFD) elements for STRIDE applicability:
+
+| DFD Element | Schema Mapping | STRIDE Applicability |
+|---|---|---|
+| External Entity | `external_systems[]` | Spoofing |
+| Process | `components` (type: api, service, web_app) | All six categories |
+| Data Store | `components` (type: database, cache, queue) | Tampering, Repudiation, Info Disclosure, DoS |
+| Data Flow | `component_relationships[]` | Tampering, Info Disclosure, DoS |
+| Trust Boundary | `trust_boundaries[]` + network zone crossings | All categories at crossings |
+
+### Output
+
+The STRIDE report is a per-relationship table:
+
+```
+| Relationship        | S | T | R | I | D | E | Risk Level |
+|---------------------|---|---|---|---|---|---|------------|
+| user → api-gateway  | ✓ | ✓ | ⚠ | ✓ | ⚠ | ✓ | MEDIUM     |
+| api-gw → auth-svc   | ✓ | ✗ | ⚠ | ✗ | ✗ | ⚠ | HIGH       |
+```
+
+Written to: `architecture/<system>/diagrams/stride-analysis.md`
+
+---
+
+## Persona-Specific Diagram Views
+
+The `@diagram-generator` can render filtered views of the same architecture YAML tailored to different audiences. No re-extraction or re-modeling needed — just different rendering rules.
+
+| Persona | Focus | Detail Level |
+|---------|-------|-------------|
+| **Executive** | Business relationships, compliance frameworks | Context (Level 1) only, no protocol detail |
+| **Architect** | Technology stack, data classifications, trust boundaries | Container (Level 2) with tech labels |
+| **Security Engineer** | STRIDE annotations, auth/authz, data classification | Full component DFD with threat badges |
+| **Network Engineer** | Zones, protocols, ports, firewall rules | Deployment with raw specs, ACL annotations |
+| **Compliance Officer** | Data classification map, boundary controls, framework coverage | Container with compliance overlay |
+
+Each view generates 3 files (Mermaid C4, PlantUML C4, Mermaid graph).
+
+---
+
+## How This Compares
+
+| Tool | Approach | Key Difference |
+|------|----------|---------------|
+| **STRIDE GPT** | Chat-based threat modeling | Single-pass, no schema validation, no provenance tracking |
+| **Threagile** | YAML-in, risk-out | Requires manual YAML authoring; Doc2ArchAgent extracts it from documents |
+| **Visual Paradigm AI** | AI-generated diagrams | No zero-hallucination controls, no source traceability |
+| **pytm** | Python code defines threats | Code-first (not document-first), no multi-pass extraction |
+| **Doc2ArchAgent** | Document → validated C4 model → diagrams + STRIDE + ACLs | Full pipeline: extraction with provenance, deterministic validation, multi-persona rendering |
+
+Doc2ArchAgent's key differentiator is the **zero-hallucination pipeline**: every element is traceable to a source document, validated by deterministic code, and rendered with confidence indicators. The output is a verifiable subset, never a plausible guess.
+
+---
+
+## Known Limitations
+
+| Limitation | Mitigation |
+|-----------|------------|
+| OCR errors on poor-quality scanned PDFs | Confidence capped at MEDIUM for all OCR-derived text; user prompted to paste pages as images |
+| Ambiguous terms ("server" = physical or virtual?) | Marked as ambiguous with resolution options presented to user |
+| Implicit architecture (components everyone knows exist but nobody documented) | Flagged: "commonly expected component not found in docs" — never silently added |
+| Cross-document contradictions | Conflict handler presents both values side-by-side; blocks until user resolves |
+| Overlapping elements in diagram images | Multi-stage Vision analysis + human verification step |
+| Handwritten whiteboard photos | All confidence set to LOW; aggressive human routing for every extraction |
+| Non-English documents | Vision analysis may have reduced accuracy; noted in provenance |
+| Large document sets (100+ pages) | Chunked processing per section with cross-chunk resolution pass |
+| Tracked changes in DOCX files | Agent asks whether to include tracked changes (may contain migration context) |
+| Embedded Visio diagrams in DOCX | Extracted via pandoc; user prompted to paste as images if extraction fails |
 
 ---
 

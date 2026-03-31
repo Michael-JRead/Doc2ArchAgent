@@ -339,3 +339,197 @@ For each component_relationship in the system model:
 
 "Regenerate"
   -> Re-read YAML and regenerate all previously created diagrams.
+
+"Generate security overlay"
+  -> Generate security-focused diagrams with encryption colors, STRIDE badges, and boundary markers.
+
+"Generate executive view" / "Generate architect view" / "Generate security view" / "Generate network view" / "Generate compliance view"
+  -> Generate persona-specific filtered diagrams.
+
+---
+
+## DIAGRAM LEVEL RESTRICTION
+
+CRITICAL: If the source documents only provide Level 1 (Context) detail, ONLY generate a Level 1 diagram. NEVER "fill in" lower levels with assumptions about what containers or components MIGHT exist.
+
+When `provenance.yaml` exists, check what detail levels were extracted:
+- If only contexts extracted → generate Context diagram ONLY
+- If contexts + containers → generate Context + Container diagrams
+- If full detail → generate all levels
+- NEVER offer to generate a diagram level that has no source data
+
+If the user requests a level beyond what was extracted:
+```
+⚠ Your source documents only provided [Context/Container] level detail.
+I can only generate diagrams at levels supported by extracted data.
+
+Options:
+1. Generate with available data only
+2. Add more documents with detailed specs → @doc-ingester
+3. Fill in details manually → @architect
+```
+
+When `provenance.yaml` does NOT exist (e.g., architecture was built manually via @architect):
+- All levels are available — no restriction applies
+- The restriction only activates when provenance tracking is present,
+  indicating the YAML was extracted from source documents
+
+---
+
+## CONFIDENCE VISUALIZATION
+
+When `architecture/<system-id>/provenance.yaml` exists, apply confidence-based styling to generated diagrams. This allows reviewers to immediately see which parts of the architecture are well-supported vs. uncertain.
+
+### Confidence Color Scheme
+
+| Confidence | Mermaid graph fill | PlantUML tag | Meaning |
+|---|---|---|---|
+| HIGH | `fill:#1565c0` | `$bgColor="#1565c0"` | Standard blue — well-supported by sources |
+| MEDIUM | `fill:#ff8f00, stroke-dasharray: 5 5` | `$bgColor="#ff8f00"` | Amber, dashed border — needs verification |
+| LOW | `fill:#c62828, stroke-dasharray: 2 2` | `$bgColor="#c62828"` | Red, dotted border — weak support |
+| User-provided | `fill:#2e7d32` | `$bgColor="#2e7d32"` | Green — human-confirmed value |
+| UNRESOLVED | `fill:#9e9e9e, stroke-dasharray: 3 3` | `$bgColor="#9e9e9e"` | Grey — "NEEDS REVIEW" label appended |
+
+### PlantUML Tag Definitions
+
+```
+AddElementTag("high_conf", $bgColor="#1565c0", $fontColor="#ffffff")
+AddElementTag("medium_conf", $bgColor="#ff8f00", $fontColor="#000000")
+AddElementTag("low_conf", $bgColor="#c62828", $fontColor="#ffffff")
+AddElementTag("user_provided", $bgColor="#2e7d32", $fontColor="#ffffff")
+AddElementTag("unresolved", $bgColor="#9e9e9e", $fontColor="#000000")
+```
+
+### How to Apply
+
+1. Read `provenance.yaml` and build a lookup: `entity_id → min confidence across fields`
+2. For each entity in the diagram, look up its confidence level
+3. Apply the corresponding style tag or fill color
+4. For UNRESOLVED entities, append `[NEEDS REVIEW]` to the display label
+5. Add a **legend node** to every confidence-colored diagram explaining the color meanings:
+   ```
+   subgraph Legend
+       high["HIGH — Source confirmed"]:::high_conf
+       medium["MEDIUM — Needs verification"]:::medium_conf
+       low["LOW — Weak support"]:::low_conf
+       user["USER — Human confirmed"]:::user_provided
+       unresolved["UNRESOLVED — Needs review"]:::unresolved
+   end
+   ```
+
+### Source Reference Annotations
+
+For Mermaid graph/subgraph: Add note blocks listing top sources for visible entities
+For PlantUML: Use `note right of` annotations with source references
+
+These annotations enable reviewers to trace every diagram element back to its source document without opening the provenance file.
+
+When `provenance.yaml` does NOT exist:
+- Use standard colors (no confidence overlay)
+- Do not add legend or source annotations
+
+---
+
+## SECURITY OVERLAY
+
+When asked "Generate security overlay" or "Show security diagrams":
+
+Generate security-focused versions of the container and component diagrams with the following visual enhancements:
+
+### Dataflow Edge Colors (by encryption)
+- `tls_enabled: true` → green edge (`stroke:#2e7d32`)
+- `tls_enabled: false` → red edge (`stroke:#c62828`)
+- TLS status unknown → grey edge (`stroke:#9e9e9e`), label: `[TLS unknown]`
+
+### Trust Boundary Crossings
+- Annotate edges crossing trust boundaries with `⚠` markers
+- Add `[ZONE CROSSING]` label when source zone ≠ target zone
+- Add `[TRUST BOUNDARY]` label when zones have different trust levels
+
+### Unauthenticated Listeners
+- Components with any `authn_mechanism: none` listener → red border (`stroke:#c62828, stroke-width:3px`)
+- Append `[NO AUTH]` to the component label
+
+### Data Classification Labels
+- Show `data_classification` value on dataflow edge labels
+- Highlight `confidential` or higher with bold: `**confidential**`
+
+### STRIDE Summary Badges
+- If `stride-analysis.md` exists, read it for per-relationship risk levels
+- Add compact STRIDE badges on HIGH-risk components:
+  ```
+  api-gateway["API Gateway<br/><small>S:✓ T:✗ R:⚠ I:✗ D:⚠ E:✓</small>"]
+  ```
+- Only show badges for relationships with at least one ✗ finding
+
+### Unresolved Items
+- If `provenance.yaml` has unresolved items relevant to security (auth, TLS, data classification):
+  Render with grey dotted border and `[NEEDS REVIEW]` label
+
+### Output Files
+Write to:
+- `architecture/<system-id>/diagrams/<system-id>-security-overlay.md` (Mermaid C4)
+- `architecture/<system-id>/diagrams/<system-id>-security-overlay.puml` (PlantUML C4)
+- `architecture/<system-id>/diagrams/<system-id>-security-overlay-graph.md` (Mermaid graph)
+
+---
+
+## PERSONA-SPECIFIC VIEWS
+
+Each persona view is a FILTERED rendering of the same underlying YAML. No re-extraction needed — just different rendering rules applied to the same data.
+
+When asked "Generate [persona] view":
+
+### 1. EXECUTIVE VIEW
+- Context diagram (Level 1) only
+- High-level trust boundaries shown as labeled subgraphs
+- NO protocol/port detail on edges — only semantic labels
+- Compliance frameworks listed in a note block
+- Minimal visual complexity — focus on business relationships
+- Written to:
+  - `<system-id>-executive.md`
+  - `<system-id>-executive.puml`
+  - `<system-id>-executive-graph.md`
+
+### 2. ARCHITECT VIEW
+- Container diagram (Level 2) with data classifications on edges
+- Technology labels on all containers
+- Relationship labels with data flow descriptions
+- Trust boundaries shown with zone names
+- Written to:
+  - `<system-id>-architect.md`
+  - `<system-id>-architect.puml`
+  - `<system-id>-architect-graph.md`
+
+### 3. SECURITY ENGINEER VIEW
+- Full component-level DFD with STRIDE annotations
+- Trust boundary crossings highlighted (bold edges with ⚠)
+- Authentication and authorization mechanism on every flow
+- Data classification on every flow
+- Unauthenticated listeners marked with red borders
+- STRIDE badges on components with HIGH-risk findings
+- Written to:
+  - `<system-id>-security.md`
+  - `<system-id>-security.puml`
+  - `<system-id>-security-graph.md`
+
+### 4. NETWORK ENGINEER VIEW
+- Deployment diagram focused on zones and infrastructure
+- Protocol and port on every edge (no semantic labels — raw specs only)
+- Firewall ACL rules as note annotations (if `firewall-acls.md` exists)
+- Zone-to-zone traffic summary in a side note
+- Internet boundary marked prominently
+- Written to:
+  - `<system-id>-network.md`
+  - `<system-id>-network.puml`
+  - `<system-id>-network-graph.md`
+
+### 5. COMPLIANCE OFFICER VIEW
+- Container diagram with data classification overlay
+- Trust boundary controls listed per boundary
+- Compliance framework coverage per component (note blocks)
+- Data flows carrying `confidential` or higher classification highlighted
+- Written to:
+  - `<system-id>-compliance.md`
+  - `<system-id>-compliance.puml`
+  - `<system-id>-compliance-graph.md`

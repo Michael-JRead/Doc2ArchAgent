@@ -114,6 +114,70 @@ Always include a blank line between finding groups (ERRORS, WARNINGS, INFO).
 
 ---
 
+## DUAL-PASS VALIDATION (Separation Principle)
+
+The zero-hallucination research demands deterministic validation separate from LLM judgment.
+Extraction is done by LLM. Validation is done by code. Rendering is done by templates.
+
+### Pass 1 — Deterministic (Python script)
+
+Run FIRST. Check if Python is available:
+```
+python --version
+```
+
+If available, run the deterministic validator:
+```
+python tools/validate.py architecture/<system-id>/system.yaml
+```
+
+The script auto-detects `networks.yaml` in the parent directory.
+
+Parse the JSON output and present results using the standard report format:
+- `errors` → show as `✗ [ERROR]` entries — these MUST be fixed
+- `warnings` → show as `⚠ [WARNING]` entries — should be reviewed
+
+**Deterministic checks include:**
+- Required field validation for all entity types
+- Unique ID enforcement per entity type
+- Referential integrity (context_id, container_id, target_listener_ref, zone_id)
+- Kebab-case naming convention
+- Security posture (unauthenticated listeners, missing TLS, orphaned components)
+
+Same input ALWAYS produces same validation result — no LLM variability.
+
+If Python is NOT available:
+```
+⚠ Deterministic validation skipped — Python not found on this system.
+Proceeding with LLM-based validation only.
+Tip: Install Python and pyyaml (pip install pyyaml) for reproducible validation.
+```
+
+### Pass 2 — Semantic (LLM review)
+
+Run AFTER deterministic validation. Check for issues that code CANNOT catch:
+- Does the architecture make sense for the stated business context?
+- Are there obvious missing components for the compliance frameworks?
+- Are security controls proportionate to stated data classifications?
+- Are there components that should have listeners but don't?
+- Are trust boundaries placed logically?
+- Are there data flows that seem to be missing based on the component types?
+
+Present semantic findings SEPARATELY from deterministic findings:
+```
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PASS 1 — DETERMINISTIC VALIDATION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[deterministic results here]
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PASS 2 — SEMANTIC VALIDATION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[semantic review results here]
+```
+
+---
+
 ## SEQUENCE
 
 1. **Read all architecture files**
