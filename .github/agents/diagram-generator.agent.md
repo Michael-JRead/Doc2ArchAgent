@@ -148,7 +148,15 @@ Always include a blank line between diagram sets.
 <!-- Source: <yaml path> [. qualifier] -->
 
 ```mermaid
-<C4 diagram content>
+%%{init: {"c4": {<preamble values per LAYOUT PREAMBLE TEMPLATES>}} }%%
+<C4 diagram type keyword>
+
+<elements and boundaries>
+
+<relationships>
+
+<UpdateRelStyle calls to offset overlapping labels>
+<UpdateElementStyle calls>
 ```
 ```
 
@@ -160,7 +168,17 @@ Always include a blank line between diagram sets.
 ' Source: <yaml path> [. qualifier]
 !include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_<Type>.puml
 
-<C4 diagram content>
+<skinparam and layout preamble per LAYOUT PREAMBLE TEMPLATES>
+<LAYOUT_TOP_DOWN() or LAYOUT_LEFT_RIGHT() per PLANTUML LAYOUT CONTROL>
+HIDE_STEREOTYPE()
+
+<elements, boundaries, together blocks>
+
+<relationships with directional variants per PLANTUML LAYOUT CONTROL>
+
+<Lay_ helpers if needed>
+
+SHOW_FLOATING_LEGEND()
 @enduml
 ```
 
@@ -177,16 +195,148 @@ Include file by diagram type:
 <!-- Source: <yaml path> [. qualifier] -->
 
 ```mermaid
-graph LR
+%%{init: {"flowchart": {<preamble values per LAYOUT PREAMBLE TEMPLATES>}} }%%
+graph <direction per GRAPH DIRECTION SELECTION table>
     <subgraphs, nodes, edges, styles>
 ```
 ```
 
 ---
 
+## LAYOUT PREAMBLE TEMPLATES
+
+Every generated diagram MUST begin with a layout preamble immediately after the opening syntax marker. Never omit the preamble. Select the appropriate template based on format and diagram complexity.
+
+### Complexity Assessment
+
+Before generating any diagram, count the total number of nodes (systems, containers, components, deployment nodes) and relationships:
+
+| Complexity | Nodes | Relationships | Strategy |
+|---|---|---|---|
+| Simple | 1–8 | 1–10 | Standard preamble |
+| Medium | 9–16 | 11–25 | Enhanced preamble with wider spacing |
+| Complex | 17+ | 26+ | Enhanced preamble + ELK engine + consider splitting |
+
+If a diagram exceeds 25 nodes, split it into multiple focused sub-diagrams (one per boundary/context) plus an **index diagram** showing only top-level boundaries with cross-boundary relationships. Each sub-diagram receives its own preamble.
+
+### Mermaid C4 Preamble
+
+Insert as the first line inside the mermaid code fence, before any C4 keyword.
+
+**Simple (1–8 nodes):**
+```
+%%{init: {"c4": {"diagramMarginX": 20, "diagramMarginY": 20, "c4ShapeMargin": 20, "c4ShapePadding": 16, "wrapEnabled": true, "c4ShapeInRow": 3, "c4BoundaryInRow": 2}} }%%
+```
+
+**Medium (9–16 nodes):**
+```
+%%{init: {"c4": {"diagramMarginX": 30, "diagramMarginY": 30, "c4ShapeMargin": 30, "c4ShapePadding": 20, "wrapEnabled": true, "c4ShapeInRow": 3, "c4BoundaryInRow": 1}} }%%
+```
+
+**Complex (17+ nodes):**
+```
+%%{init: {"c4": {"diagramMarginX": 40, "diagramMarginY": 40, "c4ShapeMargin": 40, "c4ShapePadding": 24, "wrapEnabled": true, "c4ShapeInRow": 2, "c4BoundaryInRow": 1}} }%%
+```
+
+After all elements and relationships, place `UpdateRelStyle` calls to offset any labels that overlap nodes. Use `$offsetX` and `$offsetY` to shift labels away from node boundaries (e.g., `UpdateRelStyle(src, tgt, $offsetY="-20")`).
+
+### Mermaid Graph/Subgraph Preamble
+
+Insert as the first line inside the mermaid code fence, before the `graph` keyword.
+
+**Simple (1–8 nodes):**
+```
+%%{init: {"flowchart": {"nodeSpacing": 40, "rankSpacing": 60, "curve": "basis", "padding": 20, "wrappingWidth": 200}} }%%
+```
+
+**Medium (9–16 nodes):**
+```
+%%{init: {"flowchart": {"nodeSpacing": 50, "rankSpacing": 80, "curve": "basis", "padding": 24, "wrappingWidth": 200, "defaultRenderer": "elk"}} }%%
+```
+
+**Complex (17+ nodes):**
+```
+%%{init: {"flowchart": {"nodeSpacing": 60, "rankSpacing": 100, "curve": "basis", "padding": 30, "wrappingWidth": 200, "defaultRenderer": "elk"}} }%%
+```
+
+Note: ELK may not be available in all renderers (GitHub, Obsidian). The spacing values are tuned to also work with the default dagre engine as a fallback.
+
+### PlantUML C4 Preamble
+
+Insert these lines immediately after the `!include` statement, before any layout macro or element definition.
+
+**Simple (1–8 nodes):**
+```
+skinparam wrapWidth 200
+skinparam padding 2
+```
+
+**Medium (9–16 nodes):**
+```
+skinparam nodesep 50
+skinparam ranksep 50
+skinparam wrapWidth 200
+skinparam padding 3
+skinparam linetype polyline
+```
+
+**Complex (17+ nodes):**
+```
+skinparam nodesep 60
+skinparam ranksep 60
+skinparam wrapWidth 250
+skinparam padding 4
+skinparam linetype polyline
+!pragma layout elk
+```
+
+Note: `skinparam linetype polyline` is preferred over `ortho` because the ortho engine has a known bug where edge labels are positioned for non-ortho lines, causing label misplacement.
+
+---
+
+## LABEL AND TEXT MANAGEMENT
+
+### Maximum Label Lengths
+
+Apply these limits to ALL generated diagrams. Truncate with `...` when exceeded.
+
+| Element | Max Characters | Example |
+|---|---|---|
+| Node name / title | 30 | "Payment Processing Svc" not "Payment Processing Microservice Application" |
+| Node description | 60 | Wrap at word boundary if longer |
+| Relationship label (Rel arg 3) | 25 | "Processes payments" not "Processes credit card and debit card payment transactions" |
+| Technology string (Rel arg 4) | 40 | "HTTPS :443 / TLS 1.3 / OAuth2" |
+| Boundary / subgraph title | 35 | Keep concise — drop redundant qualifiers |
+
+### PlantUML Label Width Control
+
+Add these variables after the preamble skinparams for medium and complex diagrams:
+```
+!$REL_TECHN_MAX_CHAR_WIDTH = "35"
+!$REL_DESCR_MAX_CHAR_WIDTH = "30"
+```
+
+### Mermaid Label Formatting
+
+- Node labels with technology metadata MUST use line breaks:
+  `node["Short Name<br/><small>Technology</small>"]` — never put name + technology on one line
+- Edge labels: keep to a maximum of 2 lines and 25 characters per line. Use `<br/>` to split the semantic label from the protocol portion:
+  `-->|"Auth request<br/>HTTPS / TLS 1.3"|`
+- Never put more than 2 lines in an edge label
+
+### Description Abbreviation Rules
+
+When truncating to meet character limits, prefer these standard abbreviations:
+- Service → Svc, Application → App, Database → DB
+- Management → Mgmt, Authentication → Auth, Authorization → Authz
+- Configuration → Config, Infrastructure → Infra, Environment → Env
+- Drop articles ("the", "a", "an") and filler words from descriptions
+
+---
+
 ## GRAPH/SUBGRAPH CONVENTIONS
 
-- Use `graph LR` (left-to-right) by default to reduce line crossings
+- Select graph direction per the **Direction Selection** table below (do NOT always use `graph LR`)
 - Subgraphs for boundaries (system, context, container, zone)
 - Node labels use `<br/><small>...</small>` for technology/metadata
 - Edge labels: `-->|"label<br/>protocol details"|`
@@ -199,6 +349,63 @@ graph LR
     trusted:       fill:#f1f8e9, stroke:#2e7d32, stroke-width:3px, color:#1b5e20
     semi-trusted:  fill:#fffde7, stroke:#f9a825, stroke-width:3px, color:#f57f17
     untrusted:     fill:#fce4ec, stroke:#c62828, stroke-width:3px, color:#b71c1c
+
+### Graph Direction Selection
+
+Do NOT always use `graph LR`. Select direction based on diagram type:
+
+| Diagram Level | Default Direction | Rationale |
+|---|---|---|
+| Context (Level 1) | `graph TB` | Actors at top, systems below — natural reading order |
+| Container (Level 2) | `graph LR` | Left-to-right data flow between containers |
+| Component (Level 3) | `graph TB` | Hierarchical component dependencies read top-down |
+| Deployment (Level 4) | `graph TB` | Zone nesting reads top-down (internet → DMZ → internal) |
+| Security overlay | `graph LR` | Data flow direction matches threat analysis reading |
+
+**Override rule:** if a diagram at any level has more than 4 nodes at the same rank (same horizontal or vertical tier), switch to the opposite direction to reduce width/height overflow.
+
+### Subgraph Direction Override
+
+When a subgraph contains nodes that should flow in a different direction than the parent graph, use the `direction` keyword inside the subgraph:
+
+```
+subgraph SystemBoundary["System Name"]
+    direction TB
+    node1 --> node2 --> node3
+end
+```
+
+**Critical limitation:** if any node inside a subgraph is linked to a node outside the subgraph, the subgraph's `direction` statement is ignored and it inherits the parent graph direction. To preserve a subgraph's direction, link **to the subgraph itself** rather than to internal nodes.
+
+### Node Declaration Order
+
+Declaration order determines layout priority in both dagre and ELK. Follow this order:
+
+1. **Entry points first** — nodes that receive external traffic (API gateways, load balancers, user-facing services)
+2. **Core processing** — business logic services, application servers
+3. **Data stores last** — databases, caches, message queues, storage
+4. **External systems** — declare after all internal nodes
+
+Within each group, declare nodes in the order they appear in the data flow path (source before target). This produces more natural left-to-right or top-to-bottom flow.
+
+### Invisible Spacing Elements
+
+When two nodes are too close despite preamble spacing, use invisible links to force separation:
+
+```
+nodeA ~~~ nodeB
+```
+
+The `~~~` syntax creates an invisible link that affects layout without rendering a visible arrow.
+
+For larger gaps, insert a spacer node:
+```
+spacer[" "]:::hidden
+classDef hidden display:none;
+nodeA ~~~ spacer ~~~ nodeB
+```
+
+Use sparingly — maximum 2 spacers per diagram. If more are needed, increase the preamble spacing values instead.
 
 ---
 
@@ -229,6 +436,81 @@ Rel(source, target, "semantic label", "protocol :port / TLS version / authn mech
 
 ---
 
+## PLANTUML LAYOUT CONTROL
+
+### Layout Direction
+
+Select the layout direction macro based on diagram type. Insert immediately after the preamble skinparams, before any element definitions.
+
+| Diagram Level | Layout Macro |
+|---|---|
+| Context (Level 1) | `LAYOUT_TOP_DOWN()` |
+| Container (Level 2) | `LAYOUT_LEFT_RIGHT()` |
+| Component (Level 3) | `LAYOUT_TOP_DOWN()` |
+| Deployment (Level 4) | `LAYOUT_TOP_DOWN()` |
+
+**Override:** for diagrams with more width than height (many peer containers, few layers), use `LAYOUT_LEFT_RIGHT()`. For deep hierarchies, use `LAYOUT_TOP_DOWN()`.
+
+### Directional Relationship Macros
+
+Instead of always using `Rel()`, use directional variants to guide the layout engine:
+
+| Variant | When to Use |
+|---|---|
+| `Rel_D(source, target, ...)` | Source is above target (gateway → service, actor → system) |
+| `Rel_R(source, target, ...)` | Source is left of target (service → database in LR layout) |
+| `Rel_U(source, target, ...)` | Source is below target (callback, response flow) |
+| `Rel_L(source, target, ...)` | Source is right of target (reverse flow) |
+| `Rel(source, target, ...)` | No layout preference — let the engine decide |
+
+**Strategy:**
+1. Start with plain `Rel()` for all relationships
+2. Apply `Rel_D` to entry-point relationships (traffic flows downward from actors/gateways)
+3. Apply `Rel_R` to peer-to-peer relationships (horizontal flow between services)
+4. Apply `Rel_U` or `Rel_L` only for response/callback flows
+5. Only add directional variants where the default layout produces overlap
+
+### Layout Helper Macros
+
+Use `Lay_` macros as a **last resort** to force element positioning without drawing a visible arrow:
+
+```
+Lay_D(elementA, elementB)   ' force A above B
+Lay_R(elementA, elementB)   ' force A left of B
+Lay_L(elementA, elementB)   ' force A right of B
+Lay_U(elementA, elementB)   ' force A below B
+```
+
+Rules:
+- Use only when two unrelated elements overlap or drift into the wrong boundary
+- Never use more than 3 `Lay_` macros per diagram
+- Remove any `Lay_` that does not visibly change the layout
+
+### Together Blocks
+
+Force related elements to the same rank (row in TD, column in LR):
+
+```
+together {
+    Container(svc1, "Service A", "Java")
+    Container(svc2, "Service B", "Go")
+    Container(svc3, "Service C", "Python")
+}
+```
+
+Use for:
+- Peer microservices that should align horizontally
+- Multiple databases that should sit at the same level
+- External systems that should align outside the boundary
+
+### Clean Rendering Directives
+
+Add these to **every** PlantUML diagram:
+- `HIDE_STEREOTYPE()` — removes `<<stereotype>>` labels that add visual clutter. Place after the layout macro.
+- `SHOW_FLOATING_LEGEND()` — places the legend in whitespace instead of pushing layout. Place as the **last line** before `@enduml`. Do NOT use inside an all-enclosing boundary.
+
+---
+
 ## C4 CONTEXT DIAGRAM — Level 1
 
 Mermaid: C4Context | PlantUML: !include C4_Context.puml
@@ -238,6 +520,12 @@ Mermaid: C4Context | PlantUML: !include C4_Context.puml
 - Rels from context_relationships: label only (no technology string at this level)
   - bidirectional: true -> BiRel(source, target, "label")
   - bidirectional: false -> Rel(source, target, "label")
+
+### Layout — Context Level
+- **Node declaration order:** Person/Person_Ext first, then System (internal, centered), then System_Ext nodes
+- **PlantUML:** use `LAYOUT_TOP_DOWN()`, `Rel_D` for person-to-system, `Rel_R` for system-to-external
+- **Mermaid graph:** use `graph TB`
+- **Mermaid C4:** place Person declarations before System declarations — they render top-to-bottom in declaration order
 
 ---
 
@@ -250,6 +538,12 @@ Mermaid: C4Container | PlantUML: !include C4_Container.puml
 - Rels from container_relationships: Rel(source, target, "label", "protocol :port")
 - External context relationships are NOT shown — they only appear at Context level
 
+### Layout — Container Level
+- **Node declaration order** within each System_Boundary: entry-point containers first (API gateways, web apps), then application services, then data stores (databases, caches, queues)
+- **PlantUML:** use `LAYOUT_LEFT_RIGHT()`, group peer services with `together { }`
+- **Mermaid graph:** use `graph LR`
+- **Split threshold:** if more than 12 containers across all boundaries, generate one diagram per System_Boundary plus an index diagram showing only boundaries and cross-boundary relationships
+
 ---
 
 ## C4 COMPONENT DIAGRAM — Level 3
@@ -261,6 +555,12 @@ Mermaid: C4Component | PlantUML: !include C4_Component.puml
 - Rels from component_relationships with full technology string
 - Cross-boundary rels -> Rel(source, target, "label", "protocol :port / TLS / authn")
 
+### Layout — Component Level
+- **Node declaration order** within each Container_Boundary: controllers/handlers first, then services/business logic, then repositories/adapters
+- **PlantUML:** use `LAYOUT_TOP_DOWN()`, `Rel_D` for handler-to-service, `Rel_R` for service-to-repository
+- **Mermaid graph:** use `graph TB`
+- **Split threshold:** if more than 15 components in a single container, split into sub-diagrams per functional group
+
 ---
 
 ## C4 DEPLOYMENT DIAGRAMS — Level 4 (two per deployment)
@@ -270,6 +570,13 @@ Mermaid: C4Deployment | PlantUML: !include C4_Deployment.puml
 Generate TWO C4 deployment diagrams per deployment:
 1. Container level — zones with containers placed
 2. Component level — zones with components placed inside containers
+
+### Layout — Deployment Level
+- **Node declaration order:** outermost zones first (internet / DMZ), then internal zones ordered by trust level (untrusted → semi-trusted → trusted)
+- **PlantUML:** use `LAYOUT_TOP_DOWN()`, `Rel_D` for traffic flowing inward through zones
+- **Mermaid graph:** use `graph TB` — deployment diagrams always flow top-to-bottom (internet at top, internal at bottom)
+- **Always use the Complex preamble** (ELK engine for Mermaid graph, `!pragma layout elk` for PlantUML) regardless of node count — deployment diagrams are the most overlap-prone due to deep nesting
+- **Never emit an empty Deployment_Node** — it causes parse errors in Mermaid C4. Omit infrastructure resources that have no placed containers and add a comment documenting the omission.
 
 ### Containment Hierarchy
 ```
@@ -533,3 +840,47 @@ When asked "Generate [persona] view":
   - `<system-id>-compliance.md`
   - `<system-id>-compliance.puml`
   - `<system-id>-compliance-graph.md`
+
+---
+
+## KNOWN RENDERING ISSUES AND WORKAROUNDS
+
+These are confirmed bugs and limitations in the rendering engines. The agent MUST avoid triggering them.
+
+### Mermaid C4
+
+| Issue | Impact | Workaround |
+|---|---|---|
+| Relationship labels overlap nodes ([mermaid-js #7492](https://github.com/mermaid-js/mermaid/issues/7492)) | Labels cover node text, diagram unreadable | Keep relationship labels under 25 chars; use `UpdateRelStyle` with `$offsetX`/`$offsetY` to shift labels |
+| Boundary padding insufficient ([mermaid-js #7358](https://github.com/mermaid-js/mermaid/issues/7358)) | Boundary titles clash with children, boxes too small | Set `c4ShapePadding` >= 16 and `c4ShapeMargin` >= 20 in preamble |
+| bgColor on Deployment_Node covers children | Zone coloring hides contained nodes | Use border-only coloring for Mermaid C4 (already in Trust Colorization section above) |
+| Empty Deployment_Node causes parse error | Diagram fails to render | Never emit an empty Deployment_Node — omit and add a comment |
+| C4 renderer ignores `defaultRenderer` setting | Cannot use ELK for C4 syntax diagrams | For complex C4 diagrams, prefer the **Mermaid graph/subgraph** format which supports ELK |
+| Themes do not work for C4 ([mermaid-js #4906](https://github.com/mermaid-js/mermaid/issues/4906)) | Unreadable in dark themes | Use explicit `UpdateElementStyle` colors instead of relying on theme |
+
+### Mermaid Graph/Subgraph
+
+| Issue | Impact | Workaround |
+|---|---|---|
+| ELK renderer not available in all environments | Diagrams may fall back to dagre on GitHub, Obsidian, etc. | Always set spacing values that work with dagre too — ELK is an enhancement, not a requirement |
+| `nodeSpacing` does not apply inside subgraphs ([mermaid-js #3258](https://github.com/mermaid-js/mermaid/issues/3258)) | Nodes inside subgraphs may still be tightly packed | Use the preamble `padding` value and invisible spacers (`~~~`) inside subgraphs |
+| Subgraph `direction` ignored when child linked externally | Internal layout reverts to parent direction | Link to the subgraph container, not to internal nodes, to preserve direction |
+| Long edge labels shift node positions | Nodes pushed apart or overlapping | Keep edge labels to max 25 chars per line, max 2 lines |
+
+### PlantUML C4
+
+| Issue | Impact | Workaround |
+|---|---|---|
+| `skinparam linetype ortho` misplaces labels ([plantuml #149](https://github.com/plantuml/plantuml/issues/149)) | Edge labels appear in wrong position | Use `skinparam linetype polyline` instead of `ortho` |
+| Empty Boundary blocks cause crash ([C4-PlantUML #133](https://github.com/plantuml-stdlib/C4-PlantUML/issues/133)) | Diagram fails to render | Never emit an empty boundary — omit and add a comment |
+| Bidirectional relationships overlap labels ([C4-PlantUML #76](https://github.com/plantuml-stdlib/C4-PlantUML/issues/76)) | Two labels on same edge unreadable | Use directional variants (`Rel_D` + `Rel_U`) to route arrows on different sides |
+| All-enclosing boundary breaks processing | Diagram fails or misrenders; `SHOW_FLOATING_LEGEND()` hidden | Use multiple targeted boundaries, never one wrapper boundary around everything |
+| `Lay_` directives ignored in complex diagrams ([C4-PlantUML #283](https://github.com/plantuml-stdlib/C4-PlantUML/issues/283)) | Layout hints not respected | Apply `Lay_R` to internal components within boundaries instead of to the boundaries themselves |
+
+### When Overlap Persists
+
+If after applying all layout rules a diagram still has overlapping elements:
+1. **Split** the diagram into smaller focused sub-diagrams (one per boundary/context)
+2. **Generate an index diagram** showing only boundaries and cross-boundary relationships
+3. Add a comment in each generated file: `' Note: This diagram was split due to complexity. See sibling files for detail views.`
+4. Inform the user which diagrams were split and why
