@@ -1,6 +1,6 @@
 # Doc2ArchAgent — Individual Contributor License Agreement (CLA)
 
-**Version 1.0 — Effective April 1, 2026**
+**Version 1.0 — Effective March 30, 2026**
 
 Thank you for your interest in contributing to Doc2ArchAgent (the "Licensed Work"), owned by Michael J. Read (the "Licensor"). This Contributor License Agreement ("Agreement") documents the rights granted by contributors to the Licensor. This is a legally binding document, so please read it carefully before agreeing.
 

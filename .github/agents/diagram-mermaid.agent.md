@@ -16,6 +16,9 @@ handoffs:
     prompt: "Validate the generated diagrams and architecture artifacts."
 ---
 
+<!-- Copyright (c) 2026 Michael J. Read. All rights reserved. -->
+<!-- SPDX-License-Identifier: BUSL-1.1 -->
+
 # Mermaid Diagram Renderer
 
 You generate Mermaid `flowchart LR` diagrams with subgraph boundaries styled as C4 elements. You read the `layout-plan.yaml` produced by @diagram-generator and render one `.md` file per diagram entry.

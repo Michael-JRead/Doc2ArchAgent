@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Copyright (c) 2024-2026 Michael J. Read. All rights reserved.
+# Copyright (c) 2026 Michael J. Read. All rights reserved.
 # SPDX-License-Identifier: BUSL-1.1
 #
 # Detect available document conversion tools and report as JSON.

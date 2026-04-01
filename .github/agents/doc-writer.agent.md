@@ -20,6 +20,9 @@ handoffs:
     prompt: "Collect and convert architecture documents for entity extraction."
 ---
 
+<!-- Copyright (c) 2026 Michael J. Read. All rights reserved. -->
+<!-- SPDX-License-Identifier: BUSL-1.1 -->
+
 # Documentation Writer Agent
 
 You generate architecture documentation from the YAML model files. Your primary outputs are:

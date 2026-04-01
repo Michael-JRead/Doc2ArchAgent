@@ -11,16 +11,15 @@ Doc2ArchAgent is licensed under the [Business Source License 1.1](LICENSE) (BSL 
 | Educational use (teaching, coursework) | Yes |
 | Evaluation and testing (non-production) | Yes |
 | Contributing improvements back to the project | Yes |
+| Internal use within your organization (not offered to third parties) | Yes |
 
 ## What Requires a Commercial License
 
 | Use Case | License Required? |
 |----------|-------------------|
-| Using in production systems that generate revenue | Yes |
-| Offering as a paid product or hosted service | Yes |
+| Offering as a paid product or hosted service to third parties | Yes |
 | Incorporating into a commercial SaaS offering | Yes |
 | Building or selling a competing product | Yes |
-| Processing commercial transactions | Yes |
 
 ## Open Source Conversion
 
@@ -47,14 +46,17 @@ We aim to respond to all licensing inquiries within 5 business days.
 
 ## Frequently Asked Questions
 
-**Q: Can I use Doc2ArchAgent internally at my company for evaluation?**
-A: Yes. Non-production evaluation and testing is permitted under the BSL 1.1.
+**Q: Can I use Doc2ArchAgent internally at my company?**
+A: Yes. Internal use within your organization is permitted, as long as you are not offering the tool (or a product/service built on it) to third parties outside your organization.
+
+**Q: Can my team use Doc2ArchAgent to document our own architecture?**
+A: Yes. Using the tool for your organization's own internal architecture documentation, modeling, and planning is permitted at no cost.
 
 **Q: Can I use Doc2ArchAgent in my CI/CD pipeline?**
-A: If the pipeline supports revenue-generating production systems, a commercial license is required. Testing and staging pipelines for evaluation purposes are permitted.
+A: Yes, for your organization's own internal use. If the pipeline is part of a product or service you offer to third parties, a commercial license is required.
 
 **Q: I'm a consultant. Can I use Doc2ArchAgent for client work?**
-A: If you are using Doc2ArchAgent in a production capacity to deliver paid services, a commercial license is required.
+A: If you are using Doc2ArchAgent as part of a paid service delivered to clients (i.e., offering it to third parties), a commercial license is required. Using it internally to prepare your own deliverables is permitted.
 
 **Q: Can I fork and modify the code?**
 A: Yes, you can copy and modify the code. However, any use of the modified code is still subject to the BSL 1.1 terms. You cannot use modified versions for Commercial Purposes without a commercial license.

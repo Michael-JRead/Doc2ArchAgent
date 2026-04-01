@@ -1682,7 +1682,7 @@ These are reference files only. The agents generate your actual YAML in the `arc
 
 ## License
 
-Copyright (c) 2024-2026 Michael J. Read. All rights reserved.
+Copyright (c) 2026 Michael J. Read. All rights reserved.
 
 This project is licensed under the [Business Source License 1.1](LICENSE) (BSL 1.1).
 
@@ -1691,7 +1691,8 @@ This project is licensed under the [Business Source License 1.1](LICENSE) (BSL 1
 | Personal / non-commercial use | Yes |
 | Academic / research / educational use | Yes |
 | Evaluation and testing (non-production) | Yes |
-| Production commercial use | Requires [commercial license](LICENSE-COMMERCIAL.md) |
+| Internal use within your organization | Yes |
+| Offering as a product or service to third parties | Requires [commercial license](LICENSE-COMMERCIAL.md) |
 | Building a competing product or service | Requires [commercial license](LICENSE-COMMERCIAL.md) |
 
 On **April 1, 2030**, the current version converts to the [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0).

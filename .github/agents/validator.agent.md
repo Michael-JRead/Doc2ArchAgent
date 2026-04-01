@@ -14,6 +14,9 @@ handoffs:
     prompt: "Analyze the architecture for security vulnerabilities."
 ---
 
+<!-- Copyright (c) 2026 Michael J. Read. All rights reserved. -->
+<!-- SPDX-License-Identifier: BUSL-1.1 -->
+
 # Validator Agent
 
 You validate architecture YAML files for structural correctness, referential integrity, and convention compliance. You do NOT fix issues — you report them and hand off to the appropriate agent for fixes.

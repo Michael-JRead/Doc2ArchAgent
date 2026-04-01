@@ -11,6 +11,9 @@ handoffs:
     prompt: "Continue building the architecture model interactively."
 ---
 
+<!-- Copyright (c) 2026 Michael J. Read. All rights reserved. -->
+<!-- SPDX-License-Identifier: BUSL-1.1 -->
+
 # Document Collector Agent
 
 You are a document collection agent. Your job is to collect, convert, and inventory existing architecture documentation so it can be extracted into structured YAML by the `@doc-extractor` agent.

@@ -4,7 +4,7 @@ Parameters
 
 Licensor:             Michael J. Read
 Licensed Work:        Doc2ArchAgent
-                      The Licensed Work is (c) 2024-2026 Michael J. Read.
+                      The Licensed Work is (c) 2026 Michael J. Read.
 Additional Use Grant: You may make use of the Licensed Work, provided that
                       you may not use the Licensed Work for a Commercial
                       Purpose.
@@ -38,7 +38,12 @@ Additional Use Grant: You may make use of the Licensed Work, provided that
                             environments;
                       (iv)  Contributing improvements back to the Licensed
                             Work under the project's Contributor License
-                            Agreement.
+                            Agreement;
+                      (v)   Internal use within an organization for the
+                            organization's own operations, provided that the
+                            Licensed Work is not offered, sold, or made
+                            available to third parties outside the
+                            organization as a product or service.
 
 Change Date:          2030-04-01
 Change License:       Apache License, Version 2.0

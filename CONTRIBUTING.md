@@ -77,7 +77,7 @@ Contributions containing undisclosed third-party code will be rejected.
 
 - Include the SPDX copyright header at the top of new files:
   ```
-  # Copyright (c) 2024-2026 Michael J. Read. All rights reserved.
+  # Copyright (c) 2026 Michael J. Read. All rights reserved.
   # SPDX-License-Identifier: BUSL-1.1
   ```
 - Use lazy imports for optional dependencies

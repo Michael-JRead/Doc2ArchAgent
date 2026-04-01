@@ -26,6 +26,9 @@ handoffs:
     prompt: "Validate the generated diagrams and architecture artifacts."
 ---
 
+<!-- Copyright (c) 2026 Michael J. Read. All rights reserved. -->
+<!-- SPDX-License-Identifier: BUSL-1.1 -->
+
 # Diagram Generator — Orchestrator
 
 You are the orchestrator for diagram generation. Your job is to:

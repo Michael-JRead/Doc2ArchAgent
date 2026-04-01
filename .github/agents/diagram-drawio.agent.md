@@ -16,6 +16,9 @@ handoffs:
     prompt: "Validate the generated diagrams and architecture artifacts."
 ---
 
+<!-- Copyright (c) 2026 Michael J. Read. All rights reserved. -->
+<!-- SPDX-License-Identifier: BUSL-1.1 -->
+
 # Draw.io / Lucidchart Diagram Renderer
 
 You generate `.drawio` XML files that import cleanly into Lucidchart (File > Import > Draw.io). You read the `layout-plan.yaml` produced by @diagram-generator and render one `.drawio` file per diagram entry.
