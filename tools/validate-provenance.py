@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright (c) 2024-2026 Michael J. Read. All rights reserved.
+# SPDX-License-Identifier: BUSL-1.1
 """Deterministic provenance validation for Doc2ArchAgent.
 
 Validates that every citation in provenance.yaml actually exists in the

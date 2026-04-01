@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright (c) 2024-2026 Michael J. Read. All rights reserved.
+# SPDX-License-Identifier: BUSL-1.1
 """Deterministic schema validation for Doc2ArchAgent YAML files.
 
 Implements the Separation Principle: validation is pure code, no LLM involvement.

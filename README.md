@@ -1,5 +1,7 @@
 # Doc2ArchAgent
 
+[![License: BSL 1.1](https://img.shields.io/badge/License-BSL%201.1-blue.svg)](LICENSE)
+
 A multi-agent architecture modeling system for VS Code, powered by GitHub Copilot custom agents. Walk through a structured, conversational workflow to transform your software architecture knowledge into well-formed C4 model YAML, deployment maps, security analyses, and auto-generated diagrams — all without leaving your editor.
 
 ---
@@ -30,6 +32,8 @@ A multi-agent architecture modeling system for VS Code, powered by GitHub Copilo
 - [Known Limitations](#known-limitations)
 - [Troubleshooting](#troubleshooting)
 - [Templates](#templates)
+- [License](#license)
+- [Contributing](#contributing)
 
 ---
 
@@ -1678,4 +1682,22 @@ These are reference files only. The agents generate your actual YAML in the `arc
 
 ## License
 
-MIT
+Copyright (c) 2024-2026 Michael J. Read. All rights reserved.
+
+This project is licensed under the [Business Source License 1.1](LICENSE) (BSL 1.1).
+
+| Use Case | Permitted? |
+|----------|------------|
+| Personal / non-commercial use | Yes |
+| Academic / research / educational use | Yes |
+| Evaluation and testing (non-production) | Yes |
+| Production commercial use | Requires [commercial license](LICENSE-COMMERCIAL.md) |
+| Building a competing product or service | Requires [commercial license](LICENSE-COMMERCIAL.md) |
+
+On **April 1, 2030**, the current version converts to the [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0).
+
+For commercial licensing inquiries, see [LICENSE-COMMERCIAL.md](LICENSE-COMMERCIAL.md).
+
+## Contributing
+
+Contributions are welcome! Please read our [Contributing Guide](CONTRIBUTING.md) before submitting a pull request. All contributions require agreement to the Contributor License Agreement (CLA).

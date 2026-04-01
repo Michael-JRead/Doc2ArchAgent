@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright (c) 2024-2026 Michael J. Read. All rights reserved.
+# SPDX-License-Identifier: BUSL-1.1
 """Unified document conversion for Doc2ArchAgent.
 
 Converts PDF, DOCX, HTML, and image files to plain text with table

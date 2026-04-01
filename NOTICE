@@ -1,0 +1,39 @@
+Doc2ArchAgent
+Copyright (c) 2024-2026 Michael J. Read. All rights reserved.
+
+Licensed under the Business Source License 1.1 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License in the LICENSE file at the
+root of this repository.
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+On the Change Date (2030-04-01), the Licensed Work will become available
+under the Apache License, Version 2.0.
+
+For commercial licensing inquiries, see LICENSE-COMMERCIAL.md or contact
+the Licensor.
+
+---
+
+This product includes the following third-party open source components:
+
+- PyMuPDF (AGPL-3.0) — PDF text extraction
+- pdfplumber (MIT) — PDF table extraction
+- pytesseract (Apache-2.0) — OCR wrapper for Tesseract
+- python-docx (MIT) — DOCX parsing
+- beautifulsoup4 (MIT) — HTML parsing
+- html2text (GPL-3.0) — HTML to text conversion
+- rapidfuzz (MIT) — Fuzzy string matching
+- pydantic (MIT) — Data validation
+- vsdx (MIT) — Visio file parsing
+- Pillow (HPND) — Image processing
+- pdf2image (MIT) — PDF to image conversion
+- PyYAML (MIT) — YAML parsing
+
+Tesseract OCR (Apache-2.0) and Pandoc (GPL-2.0) are optional system
+dependencies and are not bundled with this software.

@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright (c) 2024-2026 Michael J. Read. All rights reserved.
+# SPDX-License-Identifier: BUSL-1.1
 """Extract structured component/relationship data from Draw.io and Visio files.
 
 Usage:
