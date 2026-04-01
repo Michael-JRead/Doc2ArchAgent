@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/Logo-whitev1.png" alt="Doc2Arch — Documentation to Architecture" width="600">
+  <img src="assets/logo.png" alt="Doc2Arch — Documentation to Architecture" width="600">
 </p>
 
 <p align="center">
