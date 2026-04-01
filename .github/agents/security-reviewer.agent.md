@@ -275,13 +275,44 @@ Write to: `architecture/<system-id>/diagrams/firewall-acls.md`
 
 ---
 
-## BLAST RADIUS ANALYSIS
+## BLAST RADIUS & LATERAL MOVEMENT ANALYSIS
 
 When asked "Show blast radius for <container-id>":
-1. Find all container_relationships and component_relationships where the container (or its components) is source OR target
-2. Find all deployments where this container is placed
-3. List all affected systems, zones, and data flows
-4. Write to: `architecture/<system-id>/diagrams/blast-radius-<container-id>.md`
+
+### Step 1: Direct Reach
+Find all container_relationships and component_relationships where the container (or its components) is source OR target.
+
+### Step 2: Lateral Movement Paths
+From the compromised container, follow relationship edges transitively to find all reachable components:
+- **Depth 1:** Components directly connected via relationships
+- **Depth 2:** Components reachable through one intermediate hop
+- **Depth N:** Continue until no new components are discovered or depth limit (5) reached
+
+### Step 3: Data Exposure Scope
+For each reachable component, list all data entities accessible via the relationship chain and their classifications.
+
+### Step 4: Maximum Privilege Escalation
+Determine the highest trust zone reachable from the compromised container by following relationship paths through deployment placements.
+
+### Step 5: Affected Deployments
+Find all deployments where this container is placed.
+
+### Output Format
+```markdown
+# Blast Radius — <container-name>
+## Direct Reach (Depth 1)
+| Target | Relationship | Data Classification | Trust Zone |
+## Lateral Movement Paths (Depth 2+)
+| Path | Max Depth | Final Target | Data Exposed | Max Trust Zone |
+## Data Exposure Summary
+| Data Entity | Classification | Reachable Via |
+## Privilege Escalation
+- Starting zone: <zone> (<trust-level>)
+- Maximum reachable zone: <zone> (<trust-level>)
+- Escalation: <yes/no>
+```
+
+Write to: `architecture/<system-id>/diagrams/blast-radius-<container-id>.md`
 
 ---
 
@@ -341,3 +372,33 @@ Generated: <ISO 8601 timestamp>
 
 "Summarize risks"
   -> Provide a brief executive summary of the highest-severity findings.
+
+---
+
+## ENRICHMENT CONTEXT FILES
+
+The following context files provide enrichment data for security findings. Read them when generating reports.
+
+### CWE Mappings (`context/cwe-mappings.yaml`)
+Maps finding categories to CWE identifiers. Include the CWE-ID and name in each finding:
+```
+- **CWE:** CWE-306 (Missing Authentication for Critical Function)
+```
+
+### STRIDE → CAPEC → ATT&CK Mapping (`context/stride-to-attack.yaml`)
+Maps STRIDE categories through CAPEC to MITRE ATT&CK techniques. Include relevant ATT&CK techniques in the STRIDE analysis:
+```
+| Relationship | S | T | R | I | D | E | ATT&CK Techniques |
+```
+
+### Compliance Control Mapping (`context/compliance-mappings.yaml`)
+Maps compliance frameworks (PCI-DSS, SOC2, GDPR, HIPAA) to specific architecture controls. If `metadata.compliance_frameworks` lists any frameworks, validate findings against their controls:
+```
+- **Compliance Impact:** PCI DSS Req 4.1 — Encrypt cardholder data in transit
+```
+
+### Risk Scoring (`context/risk-scoring.yaml`)
+Quantifies risk using likelihood × impact (1-4 each, yielding 1-16 score). Include risk score and severity in each finding:
+```
+- **Risk Score:** 12/16 (CRITICAL) — Likelihood: 4 (Frequent) × Impact: 3 (High)
+```

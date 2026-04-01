@@ -1,0 +1,4 @@
+# Missing required metadata fields: owner and status
+metadata:
+  name: Incomplete System
+  description: Missing owner and status

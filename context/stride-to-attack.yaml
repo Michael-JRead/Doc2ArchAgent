@@ -1,0 +1,181 @@
+# STRIDE to CAPEC to MITRE ATT&CK Mapping
+# Copyright (c) 2026 Michael J. Read. All rights reserved.
+# SPDX-License-Identifier: BUSL-1.1
+#
+# Maps STRIDE threat categories to CAPEC attack patterns and MITRE ATT&CK techniques.
+# Used by @security-reviewer to enrich threat analysis with industry-standard identifiers.
+#
+# Methodology: STRIDE → CAPEC (bridge) → ATT&CK
+# This follows the pattern documented by:
+#   - MITRE CTID: https://ctid.mitre.org/projects/threat-modeling-with-attack/
+#   - IEEE 2025: "Integration of STRIDE and MITRE ATT&CK Frameworks"
+#   - Dana Epp: https://danaepp.com/mapping-attack-patterns-to-your-threat-model
+#   - Community mapping: https://github.com/strainerart/stride_mitre_att-ck_mapping
+#
+# NOTE: These mappings represent community consensus, not an official standard.
+# The STRIDE→ATT&CK relationship is many-to-many; this table shows the most
+# architecturally relevant techniques for each category.
+
+stride_categories:
+
+  - id: spoofing
+    name: Spoofing
+    description: Pretending to be something or someone other than yourself.
+    capec_patterns:
+      - id: CAPEC-151
+        name: Identity Spoofing
+        url: https://capec.mitre.org/data/definitions/151.html
+      - id: CAPEC-194
+        name: Fake the Source of Data
+        url: https://capec.mitre.org/data/definitions/194.html
+      - id: CAPEC-633
+        name: Token Impersonation
+        url: https://capec.mitre.org/data/definitions/633.html
+    attack_techniques:
+      - id: T1078
+        name: Valid Accounts
+        tactic: initial-access
+        url: https://attack.mitre.org/techniques/T1078/
+        relevance: Attacker uses stolen or default credentials to access a component.
+      - id: T1556
+        name: Modify Authentication Process
+        tactic: credential-access
+        url: https://attack.mitre.org/techniques/T1556/
+        relevance: Attacker modifies authentication mechanisms (e.g., plugin injection).
+      - id: T1134
+        name: Access Token Manipulation
+        tactic: defense-evasion
+        url: https://attack.mitre.org/techniques/T1134/
+        relevance: Attacker manipulates tokens to impersonate another identity.
+
+  - id: tampering
+    name: Tampering
+    description: Modifying data or code without authorization.
+    capec_patterns:
+      - id: CAPEC-148
+        name: Content Spoofing
+        url: https://capec.mitre.org/data/definitions/148.html
+      - id: CAPEC-438
+        name: Modification During Manufacture
+        url: https://capec.mitre.org/data/definitions/438.html
+    attack_techniques:
+      - id: T1565
+        name: Data Manipulation
+        tactic: impact
+        url: https://attack.mitre.org/techniques/T1565/
+        relevance: Attacker modifies data in transit or at rest (e.g., database records).
+      - id: T1195
+        name: Supply Chain Compromise
+        tactic: initial-access
+        url: https://attack.mitre.org/techniques/T1195/
+        relevance: Attacker tampers with software supply chain (dependencies, build artifacts).
+      - id: T1557
+        name: Adversary-in-the-Middle
+        tactic: credential-access
+        url: https://attack.mitre.org/techniques/T1557/
+        relevance: Attacker intercepts and modifies communications between components.
+
+  - id: repudiation
+    name: Repudiation
+    description: Claiming to have not performed an action.
+    capec_patterns:
+      - id: CAPEC-268
+        name: Audit Log Manipulation
+        url: https://capec.mitre.org/data/definitions/268.html
+    attack_techniques:
+      - id: T1070
+        name: Indicator Removal
+        tactic: defense-evasion
+        url: https://attack.mitre.org/techniques/T1070/
+        relevance: Attacker deletes or modifies audit logs to hide activity.
+      - id: T1562
+        name: Impair Defenses
+        tactic: defense-evasion
+        url: https://attack.mitre.org/techniques/T1562/
+        relevance: Attacker disables logging or monitoring to prevent detection.
+
+  - id: information_disclosure
+    name: Information Disclosure
+    description: Exposing information to unauthorized parties.
+    capec_patterns:
+      - id: CAPEC-116
+        name: Excavation
+        url: https://capec.mitre.org/data/definitions/116.html
+      - id: CAPEC-118
+        name: Collect and Analyze Information
+        url: https://capec.mitre.org/data/definitions/118.html
+    attack_techniques:
+      - id: T1005
+        name: Data from Local System
+        tactic: collection
+        url: https://attack.mitre.org/techniques/T1005/
+        relevance: Attacker extracts sensitive data from a compromised component.
+      - id: T1041
+        name: Exfiltration Over C2 Channel
+        tactic: exfiltration
+        url: https://attack.mitre.org/techniques/T1041/
+        relevance: Attacker exfiltrates data over an existing command-and-control channel.
+      - id: T1530
+        name: Data from Cloud Storage Object
+        tactic: collection
+        url: https://attack.mitre.org/techniques/T1530/
+        relevance: Attacker accesses data in misconfigured cloud storage.
+      - id: T1040
+        name: Network Sniffing
+        tactic: credential-access
+        url: https://attack.mitre.org/techniques/T1040/
+        relevance: Attacker captures unencrypted traffic between components.
+
+  - id: denial_of_service
+    name: Denial of Service
+    description: Making a system or component unavailable.
+    capec_patterns:
+      - id: CAPEC-125
+        name: Flooding
+        url: https://capec.mitre.org/data/definitions/125.html
+      - id: CAPEC-130
+        name: Excessive Allocation
+        url: https://capec.mitre.org/data/definitions/130.html
+    attack_techniques:
+      - id: T1498
+        name: Network Denial of Service
+        tactic: impact
+        url: https://attack.mitre.org/techniques/T1498/
+        relevance: Attacker floods network to overwhelm internet-facing components.
+      - id: T1499
+        name: Endpoint Denial of Service
+        tactic: impact
+        url: https://attack.mitre.org/techniques/T1499/
+        relevance: Attacker sends crafted requests to exhaust application resources.
+      - id: T1489
+        name: Service Stop
+        tactic: impact
+        url: https://attack.mitre.org/techniques/T1489/
+        relevance: Attacker stops critical services to disrupt operations.
+
+  - id: elevation_of_privilege
+    name: Elevation of Privilege
+    description: Gaining capabilities beyond what was authorized.
+    capec_patterns:
+      - id: CAPEC-233
+        name: Privilege Escalation
+        url: https://capec.mitre.org/data/definitions/233.html
+      - id: CAPEC-122
+        name: Privilege Abuse
+        url: https://capec.mitre.org/data/definitions/122.html
+    attack_techniques:
+      - id: T1068
+        name: Exploitation for Privilege Escalation
+        tactic: privilege-escalation
+        url: https://attack.mitre.org/techniques/T1068/
+        relevance: Attacker exploits a vulnerability to gain elevated access within a component.
+      - id: T1548
+        name: Abuse Elevation Control Mechanism
+        tactic: privilege-escalation
+        url: https://attack.mitre.org/techniques/T1548/
+        relevance: Attacker abuses elevation controls (e.g., sudo, UAC bypass).
+      - id: T1484
+        name: Domain/Tenant Policy Modification
+        tactic: defense-evasion
+        url: https://attack.mitre.org/techniques/T1484/
+        relevance: Attacker modifies domain policies to grant broader access.

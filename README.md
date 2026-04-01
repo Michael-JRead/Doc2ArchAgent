@@ -88,8 +88,8 @@ Doc2ArchAgent turns your architecture knowledge into a structured, validated C4 
 
 ### Step 1: Clone the Repository
 ```bash
-git clone https://github.com/Michael-JRead/Arch2DocAgent.git
-cd Arch2DocAgent
+git clone https://github.com/Michael-JRead/Doc2ArchAgent.git
+cd Doc2ArchAgent
 ```
 
 ### Step 2: Open in VS Code
@@ -100,7 +100,7 @@ code .
 ### Step 3: Verify Agents are Detected
 1. Open Copilot Chat: press `Ctrl+Shift+I` (Windows/Linux) or `Cmd+Shift+I` (Mac)
 2. Click the **agents dropdown** (the `@` icon or type `@`)
-3. You should see all **12 agents** listed:
+3. You should see all **15 agents** listed:
    - `@architect` — architecture modeling
    - `@doc-collector` — document collection and conversion
    - `@doc-extractor` — document entity extraction
@@ -110,6 +110,9 @@ code .
    - `@diagram-mermaid` — Mermaid renderer
    - `@diagram-plantuml` — PlantUML renderer
    - `@diagram-drawio` — Draw.io/Lucidchart renderer
+   - `@diagram-structurizr` — Structurizr DSL renderer
+   - `@diagram-d2` — D2 language renderer
+   - `@diagram-diff` — architecture version comparison
    - `@doc-writer` — documentation generation
    - `@validator` — validation
    - `@pattern-manager` — reusable network and product patterns

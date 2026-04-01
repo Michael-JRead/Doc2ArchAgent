@@ -1,0 +1,32 @@
+metadata:
+  name: Bad Port
+  description: System with invalid port numbers
+  owner: Test
+  status: active
+
+containers:
+  - id: web-tier
+    name: Web
+    context_id: main
+    container_type: web
+    technology: Nginx
+
+components:
+  - id: web-service
+    name: Web Service
+    container_id: web-tier
+    component_type: api
+    technology: Node.js
+    listeners:
+      - id: bad-port-listener
+        protocol: HTTPS
+        port: 70000
+        tls_enabled: true
+        authn_mechanism: oauth2
+        authz_required: true
+      - id: zero-port-listener
+        protocol: HTTP
+        port: 0
+        tls_enabled: false
+        authn_mechanism: none
+        authz_required: false

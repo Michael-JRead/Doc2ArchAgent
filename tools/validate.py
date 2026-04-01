@@ -7,12 +7,21 @@ Implements the Separation Principle: validation is pure code, no LLM involvement
 Same input always produces same output.
 
 Usage:
-    python tools/validate.py architecture/<system-id>/system.yaml [architecture/networks.yaml]
+    python tools/validate.py <system.yaml> [networks.yaml] [--format json|table|sarif] [--strict]
 
-Output:
-    JSON to stdout: {"valid": bool, "errors": [...], "warnings": [...]}
+Output formats:
+    json   — JSON to stdout (default): {"valid": bool, "errors": [...], "warnings": [...]}
+    table  — Human-readable table to stdout
+    sarif  — SARIF 2.1.0 JSON for GitHub Security tab integration
+
+Exit codes:
+    0 — No errors (warnings allowed unless --strict)
+    1 — Errors found
+    2 — Only warnings found (with --strict)
 """
 
+import argparse
+import hashlib
 import json
 import re
 import sys
@@ -28,26 +37,104 @@ VALID_STATUSES = {'proposed', 'active', 'deprecated', 'decommissioned'}
 VALID_DEPLOYMENT_STATUSES = {'proposed', 'approved', 'active', 'deprecated'}
 VALID_TRUST_LEVELS = {'trusted', 'semi_trusted', 'untrusted'}
 
+# SARIF rule definitions — each validation check maps to a rule ID
+SARIF_RULES = {
+    "ARCH001": {
+        "id": "ARCH001",
+        "shortDescription": {"text": "Missing required field"},
+        "fullDescription": {"text": "A required field is missing or empty in the architecture YAML."},
+        "help": {"text": "Add the required field with a non-empty value."},
+        "defaultConfiguration": {"level": "error"},
+    },
+    "ARCH002": {
+        "id": "ARCH002",
+        "shortDescription": {"text": "Referential integrity violation"},
+        "fullDescription": {"text": "A reference points to a non-existent entity."},
+        "help": {"text": "Ensure the referenced ID exists in the YAML model."},
+        "defaultConfiguration": {"level": "error"},
+    },
+    "ARCH003": {
+        "id": "ARCH003",
+        "shortDescription": {"text": "Duplicate ID"},
+        "fullDescription": {"text": "Two or more entities share the same ID within an entity type."},
+        "help": {"text": "Use unique IDs within each entity type."},
+        "defaultConfiguration": {"level": "error"},
+    },
+    "ARCH004": {
+        "id": "ARCH004",
+        "shortDescription": {"text": "Invalid enum value"},
+        "fullDescription": {"text": "A field contains a value not in the allowed set."},
+        "help": {"text": "Use one of the allowed enum values."},
+        "defaultConfiguration": {"level": "error"},
+    },
+    "ARCH005": {
+        "id": "ARCH005",
+        "shortDescription": {"text": "Naming convention violation"},
+        "fullDescription": {"text": "An ID does not follow kebab-case convention."},
+        "help": {"text": "Use lowercase-with-hyphens format (e.g., 'my-component')."},
+        "defaultConfiguration": {"level": "warning"},
+    },
+    "ARCH006": {
+        "id": "ARCH006",
+        "shortDescription": {"text": "Unauthenticated listener"},
+        "fullDescription": {"text": "A component listener has no authentication mechanism."},
+        "help": {"text": "Set authn_mechanism to a value other than 'none'."},
+        "defaultConfiguration": {"level": "warning"},
+    },
+    "ARCH007": {
+        "id": "ARCH007",
+        "shortDescription": {"text": "Unencrypted listener"},
+        "fullDescription": {"text": "A component listener has TLS disabled."},
+        "help": {"text": "Set tls_enabled to true and specify tls_version_min."},
+        "defaultConfiguration": {"level": "warning"},
+    },
+    "ARCH008": {
+        "id": "ARCH008",
+        "shortDescription": {"text": "Orphaned component"},
+        "fullDescription": {"text": "A component has no relationships connecting it to other components."},
+        "help": {"text": "Add at least one component_relationship involving this component."},
+        "defaultConfiguration": {"level": "warning"},
+    },
+    "ARCH009": {
+        "id": "ARCH009",
+        "shortDescription": {"text": "Invalid port number"},
+        "fullDescription": {"text": "A listener port is outside the valid range 1-65535."},
+        "help": {"text": "Use a port number between 1 and 65535."},
+        "defaultConfiguration": {"level": "error"},
+    },
+}
+
 
 def validate(system_path: str, networks_path: str | None = None) -> dict:
     """Run all validation checks and return results as dict."""
-    errors: list[str] = []
-    warnings: list[str] = []
+    errors: list[dict] = []
+    warnings: list[dict] = []
+
+    def add_error(msg: str, rule_id: str = "ARCH001", file: str | None = None):
+        errors.append({"message": msg, "rule_id": rule_id, "file": file or system_path})
+
+    def add_warning(msg: str, rule_id: str = "ARCH005", file: str | None = None):
+        warnings.append({"message": msg, "rule_id": rule_id, "file": file or system_path})
 
     # --- Load files ---
     try:
         with open(system_path) as f:
             system = yaml.safe_load(f) or {}
     except Exception as e:
-        return {"valid": False, "errors": [f"Cannot load system YAML: {e}"], "warnings": []}
+        return {
+            "valid": False,
+            "errors": [{"message": f"Cannot load system YAML: {e}", "rule_id": "ARCH001", "file": system_path}],
+            "warnings": [],
+        }
 
     networks = {}
+    nw_file = networks_path or ""
     if networks_path:
         try:
             with open(networks_path) as f:
                 networks = yaml.safe_load(f) or {}
         except Exception as e:
-            warnings.append(f"Cannot load networks YAML: {e}")
+            add_warning(f"Cannot load networks YAML: {e}", file=networks_path)
 
     # --- Build lookup tables ---
     contexts = {c['id']: c for c in system.get('contexts', []) if isinstance(c, dict) and 'id' in c}
@@ -67,125 +154,180 @@ def validate(system_path: str, networks_path: str | None = None) -> dict:
     # --- 1. Metadata required fields ---
     metadata = system.get('metadata', {})
     if not isinstance(metadata, dict):
-        errors.append("metadata: missing or not a mapping")
+        add_error("metadata: missing or not a mapping")
     else:
         for field in ('name', 'description', 'owner', 'status'):
             if not metadata.get(field):
-                errors.append(f"metadata.{field}: required field is missing or empty")
+                add_error(f"metadata.{field}: required field is missing or empty")
         if metadata.get('status') and metadata['status'] not in VALID_STATUSES:
-            errors.append(f"metadata.status: '{metadata['status']}' is not a valid status ({', '.join(sorted(VALID_STATUSES))})")
+            add_error(
+                f"metadata.status: '{metadata['status']}' is not a valid status ({', '.join(sorted(VALID_STATUSES))})",
+                rule_id="ARCH004",
+            )
 
     # --- 2. Context required fields + unique IDs ---
-    _check_unique_ids('context', system.get('contexts', []), errors)
+    _check_unique_ids('context', system.get('contexts', []), errors, system_path)
     for ctx in system.get('contexts', []):
         if not isinstance(ctx, dict):
             continue
         for field in ('id', 'name', 'description'):
             if not ctx.get(field):
-                errors.append(f"context '{ctx.get('id', '?')}': required field '{field}' is missing")
+                add_error(f"context '{ctx.get('id', '?')}': required field '{field}' is missing")
         if 'internal' not in ctx:
-            errors.append(f"context '{ctx.get('id', '?')}': required field 'internal' is missing")
-        _check_kebab_case(ctx.get('id', ''), 'context', warnings)
+            add_error(f"context '{ctx.get('id', '?')}': required field 'internal' is missing")
+        _check_kebab_case(ctx.get('id', ''), 'context', warnings, system_path)
 
     # --- 3. Container required fields + referential integrity ---
-    _check_unique_ids('container', system.get('containers', []), errors)
+    _check_unique_ids('container', system.get('containers', []), errors, system_path)
     for ctr in system.get('containers', []):
         if not isinstance(ctr, dict):
             continue
         for field in ('id', 'name', 'context_id', 'container_type', 'technology'):
             if not ctr.get(field):
-                errors.append(f"container '{ctr.get('id', '?')}': required field '{field}' is missing")
+                add_error(f"container '{ctr.get('id', '?')}': required field '{field}' is missing")
         if ctr.get('context_id') and ctr['context_id'] not in contexts:
-            errors.append(f"container '{ctr.get('id', '?')}': references non-existent context '{ctr['context_id']}'")
-        _check_kebab_case(ctr.get('id', ''), 'container', warnings)
+            add_error(
+                f"container '{ctr.get('id', '?')}': references non-existent context '{ctr['context_id']}'",
+                rule_id="ARCH002",
+            )
+        _check_kebab_case(ctr.get('id', ''), 'container', warnings, system_path)
 
     # --- 4. Component required fields + referential integrity ---
-    _check_unique_ids('component', system.get('components', []), errors)
+    _check_unique_ids('component', system.get('components', []), errors, system_path)
     for comp in system.get('components', []):
         if not isinstance(comp, dict):
             continue
         for field in ('id', 'name', 'container_id', 'component_type', 'technology'):
             if not comp.get(field):
-                errors.append(f"component '{comp.get('id', '?')}': required field '{field}' is missing")
+                add_error(f"component '{comp.get('id', '?')}': required field '{field}' is missing")
         if comp.get('container_id') and comp['container_id'] not in containers:
-            errors.append(f"component '{comp.get('id', '?')}': references non-existent container '{comp['container_id']}'")
-        _check_kebab_case(comp.get('id', ''), 'component', warnings)
+            add_error(
+                f"component '{comp.get('id', '?')}': references non-existent container '{comp['container_id']}'",
+                rule_id="ARCH002",
+            )
+        _check_kebab_case(comp.get('id', ''), 'component', warnings, system_path)
 
-        # Listener required fields
+        # Listener required fields + port validation
         for listener in comp.get('listeners', []):
             if not isinstance(listener, dict):
                 continue
             for field in ('id', 'protocol', 'port', 'tls_enabled', 'authn_mechanism', 'authz_required'):
                 if field not in listener:
-                    errors.append(f"listener '{listener.get('id', '?')}' on component '{comp.get('id', '?')}': required field '{field}' is missing")
+                    add_error(
+                        f"listener '{listener.get('id', '?')}' on component '{comp.get('id', '?')}': "
+                        f"required field '{field}' is missing"
+                    )
+            # Port range validation
+            port = listener.get('port')
+            if port is not None and (not isinstance(port, int) or port < 1 or port > 65535):
+                add_error(
+                    f"listener '{listener.get('id', '?')}' on component '{comp.get('id', '?')}': "
+                    f"port {port} is outside valid range 1-65535",
+                    rule_id="ARCH009",
+                )
 
     # --- 5. Context relationship referential integrity ---
     for rel in system.get('context_relationships', []):
         if not isinstance(rel, dict):
             continue
-        _check_kebab_case(rel.get('id', ''), 'context_relationship', warnings)
+        _check_kebab_case(rel.get('id', ''), 'context_relationship', warnings, system_path)
         if rel.get('source_context') and rel['source_context'] not in contexts:
-            errors.append(f"context_relationship '{rel.get('id', '?')}': source_context '{rel['source_context']}' does not exist")
+            add_error(
+                f"context_relationship '{rel.get('id', '?')}': source_context '{rel['source_context']}' does not exist",
+                rule_id="ARCH002",
+            )
         if rel.get('target_context') and rel['target_context'] not in contexts:
-            errors.append(f"context_relationship '{rel.get('id', '?')}': target_context '{rel['target_context']}' does not exist")
+            add_error(
+                f"context_relationship '{rel.get('id', '?')}': target_context '{rel['target_context']}' does not exist",
+                rule_id="ARCH002",
+            )
 
     # --- 6. Container relationship referential integrity ---
     for rel in system.get('container_relationships', []):
         if not isinstance(rel, dict):
             continue
-        _check_kebab_case(rel.get('id', ''), 'container_relationship', warnings)
+        _check_kebab_case(rel.get('id', ''), 'container_relationship', warnings, system_path)
         if rel.get('source_container') and rel['source_container'] not in containers:
-            errors.append(f"container_relationship '{rel.get('id', '?')}': source_container '{rel['source_container']}' does not exist")
+            add_error(
+                f"container_relationship '{rel.get('id', '?')}': source_container '{rel['source_container']}' does not exist",
+                rule_id="ARCH002",
+            )
         if rel.get('target_container') and rel['target_container'] not in containers:
-            errors.append(f"container_relationship '{rel.get('id', '?')}': target_container '{rel['target_container']}' does not exist")
+            add_error(
+                f"container_relationship '{rel.get('id', '?')}': target_container '{rel['target_container']}' does not exist",
+                rule_id="ARCH002",
+            )
 
     # --- 7. Component relationship referential integrity ---
     for rel in system.get('component_relationships', []):
         if not isinstance(rel, dict):
             continue
-        _check_kebab_case(rel.get('id', ''), 'component_relationship', warnings)
+        _check_kebab_case(rel.get('id', ''), 'component_relationship', warnings, system_path)
         src = rel.get('source_component', '')
         tgt = rel.get('target_component', '')
         if src and src not in components:
-            errors.append(f"component_relationship '{rel.get('id', '?')}': source_component '{src}' does not exist")
+            add_error(
+                f"component_relationship '{rel.get('id', '?')}': source_component '{src}' does not exist",
+                rule_id="ARCH002",
+            )
         if tgt and tgt not in components:
-            errors.append(f"component_relationship '{rel.get('id', '?')}': target_component '{tgt}' does not exist")
+            add_error(
+                f"component_relationship '{rel.get('id', '?')}': target_component '{tgt}' does not exist",
+                rule_id="ARCH002",
+            )
         # Check target_listener_ref
         listener_ref = rel.get('target_listener_ref', '')
         if listener_ref and tgt:
             target_listeners = listeners_by_component.get(tgt, {})
             if listener_ref not in target_listeners:
-                errors.append(
+                add_error(
                     f"component_relationship '{rel.get('id', '?')}': target_listener_ref '{listener_ref}' "
-                    f"does not exist on component '{tgt}'"
+                    f"does not exist on component '{tgt}'",
+                    rule_id="ARCH002",
                 )
 
     # --- 8. Network zone required fields (if networks.yaml provided) ---
     if networks:
-        _check_unique_ids('network_zone', networks.get('network_zones', []), errors)
+        _check_unique_ids('network_zone', networks.get('network_zones', []), errors, nw_file)
         for zone in networks.get('network_zones', []):
             if not isinstance(zone, dict):
                 continue
             for field in ('id', 'name', 'zone_type', 'internet_routable', 'trust'):
                 if field not in zone:
-                    errors.append(f"network_zone '{zone.get('id', '?')}': required field '{field}' is missing")
+                    add_error(
+                        f"network_zone '{zone.get('id', '?')}': required field '{field}' is missing",
+                        file=nw_file,
+                    )
             if zone.get('trust') and zone['trust'] not in VALID_TRUST_LEVELS:
-                errors.append(f"network_zone '{zone.get('id', '?')}': trust '{zone['trust']}' is not valid ({', '.join(sorted(VALID_TRUST_LEVELS))})")
-            _check_kebab_case(zone.get('id', ''), 'network_zone', warnings)
+                add_error(
+                    f"network_zone '{zone.get('id', '?')}': trust '{zone['trust']}' is not valid "
+                    f"({', '.join(sorted(VALID_TRUST_LEVELS))})",
+                    rule_id="ARCH004",
+                    file=nw_file,
+                )
+            _check_kebab_case(zone.get('id', ''), 'network_zone', warnings, nw_file)
 
     # --- 9. Infrastructure resource required fields + referential integrity ---
     if networks:
         infra_resources = networks.get('infrastructure_resources', [])
-        _check_unique_ids('infrastructure_resource', infra_resources, errors)
+        _check_unique_ids('infrastructure_resource', infra_resources, errors, nw_file)
         for res in infra_resources:
             if not isinstance(res, dict):
                 continue
             for field in ('id', 'name', 'resource_type', 'technology', 'zone_id'):
                 if not res.get(field):
-                    errors.append(f"infrastructure_resource '{res.get('id', '?')}': required field '{field}' is missing")
+                    add_error(
+                        f"infrastructure_resource '{res.get('id', '?')}': required field '{field}' is missing",
+                        file=nw_file,
+                    )
             if res.get('zone_id') and res['zone_id'] not in zones:
-                errors.append(f"infrastructure_resource '{res.get('id', '?')}': zone_id '{res['zone_id']}' does not exist in network_zones")
-            _check_kebab_case(res.get('id', ''), 'infrastructure_resource', warnings)
+                add_error(
+                    f"infrastructure_resource '{res.get('id', '?')}': zone_id '{res['zone_id']}' "
+                    f"does not exist in network_zones",
+                    rule_id="ARCH002",
+                    file=nw_file,
+                )
+            _check_kebab_case(res.get('id', ''), 'infrastructure_resource', warnings, nw_file)
 
     # --- 10. Security posture warnings ---
     for comp in system.get('components', []):
@@ -195,14 +337,16 @@ def validate(system_path: str, networks_path: str | None = None) -> dict:
             if not isinstance(listener, dict):
                 continue
             if listener.get('authn_mechanism') == 'none':
-                warnings.append(
+                add_warning(
                     f"component '{comp.get('id', '?')}' listener '{listener.get('id', '?')}': "
-                    f"authn_mechanism is 'none' — unauthenticated access"
+                    f"authn_mechanism is 'none' — unauthenticated access",
+                    rule_id="ARCH006",
                 )
             if listener.get('tls_enabled') is False:
-                warnings.append(
+                add_warning(
                     f"component '{comp.get('id', '?')}' listener '{listener.get('id', '?')}': "
-                    f"tls_enabled is false — unencrypted traffic"
+                    f"tls_enabled is false — unencrypted traffic",
+                    rule_id="ARCH007",
                 )
 
     # --- 11. Orphaned components ---
@@ -215,7 +359,7 @@ def validate(system_path: str, networks_path: str | None = None) -> dict:
                 connected.add(rel['target_component'])
     for comp_id in components:
         if comp_id not in connected:
-            warnings.append(f"component '{comp_id}' has no relationships (orphaned)")
+            add_warning(f"component '{comp_id}' has no relationships (orphaned)", rule_id="ARCH008")
 
     return {
         "valid": len(errors) == 0,
@@ -224,45 +368,176 @@ def validate(system_path: str, networks_path: str | None = None) -> dict:
     }
 
 
-def _check_unique_ids(entity_type: str, items: list, errors: list) -> None:
+def _check_unique_ids(entity_type: str, items: list, errors: list, file: str) -> None:
     """Check that all IDs are unique within their entity type."""
     seen: set[str] = set()
     for item in items:
         if not isinstance(item, dict) or 'id' not in item:
             continue
         if item['id'] in seen:
-            errors.append(f"Duplicate {entity_type} id: '{item['id']}'")
+            errors.append({
+                "message": f"Duplicate {entity_type} id: '{item['id']}'",
+                "rule_id": "ARCH003",
+                "file": file,
+            })
         seen.add(item['id'])
 
 
-def _check_kebab_case(id_value: str, entity_type: str, warnings: list) -> None:
+def _check_kebab_case(id_value: str, entity_type: str, warnings: list, file: str) -> None:
     """Check that an ID follows kebab-case convention."""
     if id_value and not KEBAB_CASE_RE.match(id_value):
-        warnings.append(f"{entity_type} id '{id_value}' is not kebab-case (expected: lowercase-with-hyphens)")
+        warnings.append({
+            "message": f"{entity_type} id '{id_value}' is not kebab-case (expected: lowercase-with-hyphens)",
+            "rule_id": "ARCH005",
+            "file": file,
+        })
+
+
+# --- Output formatters ---
+
+def format_json(result: dict) -> str:
+    """Format result as JSON (backward-compatible with original output)."""
+    compat = {
+        "valid": result["valid"],
+        "errors": [item["message"] for item in result["errors"]],
+        "warnings": [item["message"] for item in result["warnings"]],
+    }
+    return json.dumps(compat, indent=2)
+
+
+def format_table(result: dict) -> str:
+    """Format result as a human-readable table."""
+    lines = []
+    lines.append("=" * 72)
+    lines.append(f"  Doc2ArchAgent Validation Report")
+    lines.append(f"  Status: {'PASS' if result['valid'] else 'FAIL'}")
+    lines.append(f"  Errors: {len(result['errors'])}  |  Warnings: {len(result['warnings'])}")
+    lines.append("=" * 72)
+
+    if result["errors"]:
+        lines.append("")
+        lines.append("ERRORS:")
+        for i, item in enumerate(result["errors"], 1):
+            lines.append(f"  {i}. [{item['rule_id']}] {item['message']}")
+            if item.get("file"):
+                lines.append(f"     File: {item['file']}")
+
+    if result["warnings"]:
+        lines.append("")
+        lines.append("WARNINGS:")
+        for i, item in enumerate(result["warnings"], 1):
+            lines.append(f"  {i}. [{item['rule_id']}] {item['message']}")
+            if item.get("file"):
+                lines.append(f"     File: {item['file']}")
+
+    if not result["errors"] and not result["warnings"]:
+        lines.append("")
+        lines.append("  No issues found.")
+
+    lines.append("")
+    return "\n".join(lines)
+
+
+def format_sarif(result: dict) -> str:
+    """Format result as SARIF 2.1.0 JSON for GitHub Security tab."""
+    # Collect used rules
+    used_rule_ids = set()
+    for item in result["errors"] + result["warnings"]:
+        used_rule_ids.add(item["rule_id"])
+
+    rules = [SARIF_RULES[rid] for rid in sorted(used_rule_ids) if rid in SARIF_RULES]
+
+    sarif_results = []
+    for item in result["errors"] + result["warnings"]:
+        file_uri = item.get("file", "unknown")
+        # Make path relative if absolute
+        if file_uri.startswith("/"):
+            try:
+                file_uri = str(Path(file_uri).relative_to(Path.cwd()))
+            except ValueError:
+                pass
+
+        level = "error" if item in result["errors"] else "warning"
+        fingerprint = hashlib.md5(
+            f"{item['rule_id']}:{item['message']}:{file_uri}".encode()
+        ).hexdigest()
+
+        sarif_results.append({
+            "ruleId": item["rule_id"],
+            "level": level,
+            "message": {"text": item["message"]},
+            "locations": [{
+                "physicalLocation": {
+                    "artifactLocation": {"uri": file_uri},
+                    "region": {"startLine": 1, "startColumn": 1},
+                }
+            }],
+            "partialFingerprints": {
+                "primaryLocationLineHash": fingerprint
+            },
+        })
+
+    sarif = {
+        "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+        "version": "2.1.0",
+        "runs": [{
+            "tool": {
+                "driver": {
+                    "name": "Doc2ArchAgent-Validate",
+                    "version": "0.2.0",
+                    "informationUri": "https://github.com/Michael-JRead/Doc2ArchAgent",
+                    "rules": rules,
+                }
+            },
+            "results": sarif_results,
+        }],
+    }
+    return json.dumps(sarif, indent=2)
 
 
 def main():
-    if len(sys.argv) < 2:
-        print(json.dumps({
-            "valid": False,
-            "errors": ["Usage: python tools/validate.py <system.yaml> [networks.yaml]"],
-            "warnings": [],
-        }))
-        sys.exit(1)
+    parser = argparse.ArgumentParser(
+        description="Validate Doc2ArchAgent architecture YAML files.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument("system_yaml", help="Path to system.yaml file")
+    parser.add_argument("networks_yaml", nargs="?", default=None, help="Path to networks.yaml file (optional)")
+    parser.add_argument(
+        "--format", dest="output_format", choices=["json", "table", "sarif"],
+        default="json", help="Output format (default: json)",
+    )
+    parser.add_argument(
+        "--strict", action="store_true",
+        help="Treat warnings as errors (exit code 2 if only warnings)",
+    )
 
-    system_path = sys.argv[1]
-    networks_path = sys.argv[2] if len(sys.argv) > 2 else None
+    args = parser.parse_args()
 
     # Auto-detect networks.yaml if not provided
+    networks_path = args.networks_yaml
     if not networks_path:
-        system_dir = Path(system_path).parent
+        system_dir = Path(args.system_yaml).parent
         candidate = system_dir.parent / 'networks.yaml'
         if candidate.exists():
             networks_path = str(candidate)
 
-    result = validate(system_path, networks_path)
-    print(json.dumps(result, indent=2))
-    sys.exit(0 if result['valid'] else 1)
+    result = validate(args.system_yaml, networks_path)
+
+    # Format output
+    formatters = {
+        "json": format_json,
+        "table": format_table,
+        "sarif": format_sarif,
+    }
+    print(formatters[args.output_format](result))
+
+    # Exit code logic
+    if result["errors"]:
+        sys.exit(1)
+    elif args.strict and result["warnings"]:
+        sys.exit(2)
+    else:
+        sys.exit(0)
 
 
 if __name__ == '__main__':

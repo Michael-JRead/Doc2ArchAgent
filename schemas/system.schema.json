@@ -1,0 +1,212 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Michael-JRead/Doc2ArchAgent/schemas/system.schema.json",
+  "title": "Doc2ArchAgent System YAML Schema",
+  "description": "Schema for architecture/*/system.yaml — the core C4 architecture model.",
+  "type": "object",
+  "properties": {
+    "metadata": {
+      "type": "object",
+      "description": "System-level metadata.",
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "description": { "type": "string", "minLength": 1 },
+        "owner": { "type": "string", "minLength": 1 },
+        "status": {
+          "type": "string",
+          "enum": ["proposed", "active", "deprecated", "decommissioned"]
+        },
+        "compliance_frameworks": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      },
+      "required": ["name", "description", "owner", "status"],
+      "additionalProperties": true
+    },
+    "contexts": {
+      "type": "array",
+      "description": "C4 Level 1 — System contexts.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$" },
+          "name": { "type": "string", "minLength": 1 },
+          "description": { "type": "string", "minLength": 1 },
+          "internal": { "type": "boolean" },
+          "external_system_id": { "type": "string" }
+        },
+        "required": ["id", "name", "description", "internal"],
+        "additionalProperties": true
+      }
+    },
+    "context_relationships": {
+      "type": "array",
+      "description": "Relationships between contexts.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$" },
+          "source_context": { "type": "string" },
+          "target_context": { "type": "string" },
+          "label": { "type": "string" },
+          "bidirectional": { "type": "boolean" }
+        },
+        "required": ["id", "source_context", "target_context", "label"],
+        "additionalProperties": true
+      }
+    },
+    "containers": {
+      "type": "array",
+      "description": "C4 Level 2 — Containers within contexts.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$" },
+          "name": { "type": "string", "minLength": 1 },
+          "context_id": { "type": "string" },
+          "container_type": { "type": "string", "minLength": 1 },
+          "technology": { "type": "string", "minLength": 1 },
+          "description": { "type": "string" },
+          "status": {
+            "type": "string",
+            "enum": ["proposed", "active", "deprecated", "decommissioned"]
+          }
+        },
+        "required": ["id", "name", "context_id", "container_type", "technology"],
+        "additionalProperties": true
+      }
+    },
+    "container_relationships": {
+      "type": "array",
+      "description": "Relationships between containers.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$" },
+          "source_container": { "type": "string" },
+          "target_container": { "type": "string" },
+          "label": { "type": "string" },
+          "synchronous": { "type": "boolean" },
+          "data_classification": {
+            "type": "string",
+            "enum": ["public", "internal", "confidential", "restricted"]
+          }
+        },
+        "required": ["id", "source_container", "target_container", "label"],
+        "additionalProperties": true
+      }
+    },
+    "components": {
+      "type": "array",
+      "description": "C4 Level 3 — Components within containers.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$" },
+          "name": { "type": "string", "minLength": 1 },
+          "container_id": { "type": "string" },
+          "component_type": { "type": "string", "minLength": 1 },
+          "technology": { "type": "string", "minLength": 1 },
+          "platform": { "type": "string" },
+          "resiliency": { "type": "string" },
+          "listeners": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": { "type": "string" },
+                "protocol": { "type": "string", "minLength": 1 },
+                "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+                "tls_enabled": { "type": "boolean" },
+                "tls_version_min": { "type": "string" },
+                "authn_mechanism": { "type": "string" },
+                "authz_required": { "type": "boolean" }
+              },
+              "required": ["id", "protocol", "port", "tls_enabled", "authn_mechanism", "authz_required"],
+              "additionalProperties": true
+            }
+          }
+        },
+        "required": ["id", "name", "container_id", "component_type", "technology"],
+        "additionalProperties": true
+      }
+    },
+    "component_relationships": {
+      "type": "array",
+      "description": "Relationships between components.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$" },
+          "source_component": { "type": "string" },
+          "target_component": { "type": "string" },
+          "target_listener_ref": { "type": "string" },
+          "label": { "type": "string" },
+          "synchronous": { "type": "boolean" },
+          "data_entities": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "data_classification": {
+            "type": "string",
+            "enum": ["public", "internal", "confidential", "restricted"]
+          }
+        },
+        "required": ["id", "source_component", "target_component", "label"],
+        "additionalProperties": true
+      }
+    },
+    "external_systems": {
+      "type": "array",
+      "description": "External systems referenced by contexts or relationships.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$" },
+          "name": { "type": "string", "minLength": 1 },
+          "description": { "type": "string" },
+          "category": { "type": "string" }
+        },
+        "required": ["id", "name"],
+        "additionalProperties": true
+      }
+    },
+    "data_entities": {
+      "type": "array",
+      "description": "Data entities referenced in component relationships.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$" },
+          "name": { "type": "string", "minLength": 1 },
+          "description": { "type": "string" },
+          "classification": {
+            "type": "string",
+            "enum": ["public", "internal", "confidential", "restricted"]
+          }
+        },
+        "required": ["id", "name"],
+        "additionalProperties": true
+      }
+    },
+    "trust_boundaries": {
+      "type": "array",
+      "description": "Trust boundaries between network zones.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$" },
+          "name": { "type": "string", "minLength": 1 },
+          "description": { "type": "string" },
+          "source_zone": { "type": "string" },
+          "target_zone": { "type": "string" }
+        },
+        "required": ["id", "name", "source_zone", "target_zone"],
+        "additionalProperties": true
+      }
+    }
+  },
+  "required": ["metadata"],
+  "additionalProperties": true
+}

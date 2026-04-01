@@ -1,0 +1,149 @@
+# Compliance Control Mappings for Doc2ArchAgent
+# Copyright (c) 2026 Michael J. Read. All rights reserved.
+# SPDX-License-Identifier: BUSL-1.1
+#
+# Maps compliance frameworks to specific architecture controls that @security-reviewer
+# can validate. Each control defines what architecture properties must be present.
+#
+# Used by @security-reviewer for compliance validation.
+
+frameworks:
+
+  - id: pci-dss
+    name: PCI DSS v4.0
+    description: Payment Card Industry Data Security Standard
+    controls:
+      - id: pci-4.1
+        name: "Req 4.1 — Encrypt cardholder data in transit"
+        description: Strong cryptography for transmitting cardholder data over open, public networks.
+        validation:
+          check: all_listeners_with_confidential_data_have_tls
+          conditions:
+            - data_classification: [confidential, restricted]
+            - tls_enabled: true
+            - tls_version_min: "1.2"
+        severity: critical
+
+      - id: pci-6.4
+        name: "Req 6.4 — Public-facing web applications protected"
+        description: Public-facing web applications must be protected against known attacks.
+        validation:
+          check: internet_routable_zones_have_waf
+          conditions:
+            - zone.internet_routable: true
+            - infrastructure_resource.resource_type: waf
+        severity: high
+
+      - id: pci-7.1
+        name: "Req 7.1 — Restrict access by business need-to-know"
+        description: Access to system components and cardholder data limited to those who require access.
+        validation:
+          check: all_listeners_have_authz
+          conditions:
+            - authz_required: true
+        severity: high
+
+      - id: pci-8.3
+        name: "Req 8.3 — Multi-factor authentication"
+        description: MFA for all non-console administrative access.
+        validation:
+          check: admin_listeners_have_mfa
+          conditions:
+            - authn_mechanism: [mfa, certificate, oauth2]
+        severity: high
+
+      - id: pci-10.1
+        name: "Req 10.1 — Audit trails established"
+        description: Implement audit trails to link all access to system components.
+        validation:
+          check: zones_have_logging_infrastructure
+          conditions:
+            - infrastructure_resource.resource_type: logging
+        severity: high
+
+  - id: soc2
+    name: SOC 2 Type II
+    description: Service Organization Control 2
+    controls:
+      - id: soc2-cc6.1
+        name: "CC6.1 — Logical access security"
+        description: Logical access security software, infrastructure, and architectures are in place.
+        validation:
+          check: all_listeners_have_authn
+          conditions:
+            - authn_mechanism: ["!none"]
+        severity: high
+
+      - id: soc2-cc6.6
+        name: "CC6.6 — Security for transmission"
+        description: Data transmitted outside the system boundary is protected.
+        validation:
+          check: external_flows_encrypted
+          conditions:
+            - tls_enabled: true
+        severity: high
+
+      - id: soc2-cc7.2
+        name: "CC7.2 — Monitoring of system components"
+        description: The entity monitors system components for anomalies.
+        validation:
+          check: zones_have_logging_infrastructure
+          conditions:
+            - infrastructure_resource.resource_type: [logging, monitoring]
+        severity: medium
+
+  - id: gdpr
+    name: GDPR
+    description: General Data Protection Regulation (EU)
+    controls:
+      - id: gdpr-32.1
+        name: "Art 32.1 — Security of processing"
+        description: Implement appropriate technical measures including encryption.
+        validation:
+          check: all_listeners_with_pii_data_have_tls
+          conditions:
+            - data_classification: [confidential, restricted]
+            - tls_enabled: true
+        severity: high
+
+      - id: gdpr-32.2
+        name: "Art 32.2 — Confidentiality and integrity"
+        description: Ensure ongoing confidentiality, integrity, availability, and resilience.
+        validation:
+          check: components_have_resiliency
+          conditions:
+            - resiliency: ["!null"]
+        severity: medium
+
+  - id: hipaa
+    name: HIPAA
+    description: Health Insurance Portability and Accountability Act
+    controls:
+      - id: hipaa-164.312.a.1
+        name: "§164.312(a)(1) — Access control"
+        description: Implement technical policies and procedures for access to ePHI.
+        validation:
+          check: all_listeners_have_authn_and_authz
+          conditions:
+            - authn_mechanism: ["!none"]
+            - authz_required: true
+        severity: critical
+
+      - id: hipaa-164.312.e.1
+        name: "§164.312(e)(1) — Transmission security"
+        description: Implement technical security measures to guard against unauthorized access to ePHI.
+        validation:
+          check: all_listeners_with_confidential_data_have_tls
+          conditions:
+            - tls_enabled: true
+            - tls_version_min: "1.2"
+        severity: critical
+
+      - id: hipaa-164.312.b
+        name: "§164.312(b) — Audit controls"
+        description: Implement hardware, software, and/or procedural mechanisms that record and examine activity.
+        validation:
+          check: zones_have_logging_infrastructure
+          conditions:
+            - infrastructure_resource.resource_type: logging
+        severity: high

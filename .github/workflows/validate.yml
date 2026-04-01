@@ -1,0 +1,91 @@
+name: Validate Architecture
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'architecture/**'
+      - 'tools/validate.py'
+      - 'tools/validate-patterns.py'
+      - 'schemas/**'
+      - 'patterns/**'
+  pull_request:
+    paths:
+      - 'architecture/**'
+      - 'tools/validate.py'
+      - 'tools/validate-patterns.py'
+      - 'schemas/**'
+      - 'patterns/**'
+
+jobs:
+  validate:
+    name: Validate Architecture YAML
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      actions: read
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install pyyaml
+
+      - name: Validate architecture files
+        id: validate
+        run: |
+          # Find all system.yaml files and validate each
+          EXIT_CODE=0
+          SARIF_FILES=""
+          for system_file in $(find architecture -name "system.yaml" 2>/dev/null); do
+            echo "Validating: $system_file"
+            python tools/validate.py "$system_file" --format table || EXIT_CODE=1
+            python tools/validate.py "$system_file" --format sarif > "/tmp/sarif-$(echo $system_file | tr '/' '-').sarif"
+            SARIF_FILES="$SARIF_FILES /tmp/sarif-$(echo $system_file | tr '/' '-').sarif"
+          done
+
+          # Validate pattern files
+          if [ -d "patterns" ]; then
+            echo "Validating patterns..."
+            python tools/validate-patterns.py patterns/ --format table 2>/dev/null || true
+          fi
+
+          # Merge SARIF files into one (or create empty)
+          python3 -c "
+          import json, sys, glob
+
+          merged = {
+              '\$schema': 'https://json.schemastore.org/sarif-2.1.0.json',
+              'version': '2.1.0',
+              'runs': []
+          }
+          for f in glob.glob('/tmp/sarif-*.sarif'):
+              with open(f) as fh:
+                  data = json.load(fh)
+                  merged['runs'].extend(data.get('runs', []))
+
+          if not merged['runs']:
+              merged['runs'] = [{
+                  'tool': {'driver': {'name': 'Doc2ArchAgent-Validate', 'rules': []}},
+                  'results': []
+              }]
+
+          with open('results.sarif', 'w') as fh:
+              json.dump(merged, fh, indent=2)
+          "
+
+          exit $EXIT_CODE
+
+      - name: Upload SARIF results
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: results.sarif
+          category: architecture-validation

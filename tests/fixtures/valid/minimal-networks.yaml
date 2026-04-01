@@ -1,0 +1,6 @@
+network_zones:
+  - id: dmz
+    name: DMZ
+    zone_type: dmz
+    internet_routable: true
+    trust: semi_trusted

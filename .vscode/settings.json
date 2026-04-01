@@ -3,7 +3,11 @@
     "*.yaml": "yaml",
     "*.yml": "yaml"
   },
-  "yaml.schemas": {},
+  "yaml.schemas": {
+    "./schemas/system.schema.json": "architecture/*/system.yaml",
+    "./schemas/networks.schema.json": "architecture/networks.yaml",
+    "./schemas/deployment.schema.json": "architecture/*/deployments/*.yaml"
+  },
   "editor.quickSuggestions": {
     "strings": true
   },

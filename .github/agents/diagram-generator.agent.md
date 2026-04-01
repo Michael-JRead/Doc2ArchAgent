@@ -12,6 +12,15 @@ handoffs:
   - label: "Generate Lucidchart diagrams"
     agent: diagram-drawio
     prompt: "Generate Draw.io/Lucidchart diagram files from the layout plan."
+  - label: "Generate Structurizr DSL"
+    agent: diagram-structurizr
+    prompt: "Generate Structurizr DSL files from the layout plan."
+  - label: "Generate D2 diagrams"
+    agent: diagram-d2
+    prompt: "Generate D2 diagram files from the layout plan."
+  - label: "Compare architecture versions"
+    agent: diagram-diff
+    prompt: "Compare current architecture against a previous version and generate a diff report."
   - label: "Generate documentation"
     agent: doc-writer
     prompt: "Generate architecture documentation from the YAML files."

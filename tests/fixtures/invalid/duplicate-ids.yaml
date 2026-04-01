@@ -1,0 +1,15 @@
+metadata:
+  name: Duplicate IDs
+  description: System with duplicate IDs
+  owner: Test
+  status: active
+
+contexts:
+  - id: my-context
+    name: Context A
+    description: First context
+    internal: true
+  - id: my-context
+    name: Context B
+    description: Duplicate ID
+    internal: false

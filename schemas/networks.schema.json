@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Michael-JRead/Doc2ArchAgent/schemas/networks.schema.json",
+  "title": "Doc2ArchAgent Networks YAML Schema",
+  "description": "Schema for architecture/networks.yaml — shared network zones and infrastructure resources.",
+  "type": "object",
+  "properties": {
+    "network_zones": {
+      "type": "array",
+      "description": "Network zones defining trust boundaries.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$" },
+          "name": { "type": "string", "minLength": 1 },
+          "zone_type": {
+            "type": "string",
+            "minLength": 1
+          },
+          "internet_routable": { "type": "boolean" },
+          "trust": {
+            "type": "string",
+            "enum": ["trusted", "semi_trusted", "untrusted"]
+          },
+          "description": { "type": "string" }
+        },
+        "required": ["id", "name", "zone_type", "internet_routable", "trust"],
+        "additionalProperties": true
+      }
+    },
+    "infrastructure_resources": {
+      "type": "array",
+      "description": "Infrastructure resources deployed into network zones.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$" },
+          "name": { "type": "string", "minLength": 1 },
+          "resource_type": { "type": "string", "minLength": 1 },
+          "technology": { "type": "string", "minLength": 1 },
+          "zone_id": { "type": "string" }
+        },
+        "required": ["id", "name", "resource_type", "technology", "zone_id"],
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": true
+}

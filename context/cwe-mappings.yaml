@@ -1,0 +1,110 @@
+# CWE Mappings for Doc2ArchAgent Security Findings
+# Copyright (c) 2026 Michael J. Read. All rights reserved.
+# SPDX-License-Identifier: BUSL-1.1
+#
+# Maps architecture-level security finding categories to CWE identifiers.
+# Used by @security-reviewer to enrich STRIDE analysis output.
+#
+# Sources:
+#   - MITRE CWE: https://cwe.mitre.org/
+#   - OWASP: https://owasp.org/www-community/vulnerabilities/
+#   - Verified against CWE v4.14 (2024)
+
+finding_categories:
+
+  - id: unauthenticated-listener
+    name: Unauthenticated Listener
+    description: A component listener accepts requests without any authentication mechanism.
+    cwe_id: CWE-306
+    cwe_name: Missing Authentication for Critical Function
+    cwe_url: https://cwe.mitre.org/data/definitions/306.html
+    severity: high
+    stride_category: spoofing
+
+  - id: unencrypted-listener
+    name: Unencrypted Listener
+    description: A component listener does not use TLS encryption for data in transit.
+    cwe_id: CWE-319
+    cwe_name: Cleartext Transmission of Sensitive Information
+    cwe_url: https://cwe.mitre.org/data/definitions/319.html
+    severity: high
+    stride_category: tampering
+
+  - id: missing-authorization
+    name: Missing Authorization
+    description: A component listener does not enforce authorization checks.
+    cwe_id: CWE-862
+    cwe_name: Missing Authorization
+    cwe_url: https://cwe.mitre.org/data/definitions/862.html
+    severity: high
+    stride_category: elevation_of_privilege
+
+  - id: internet-exposed-listener
+    name: Internet-Exposed Listener
+    description: A component in an internet-routable zone exposes a listener without adequate controls.
+    cwe_id: CWE-668
+    cwe_name: Exposure of Resource to Wrong Sphere
+    cwe_url: https://cwe.mitre.org/data/definitions/668.html
+    severity: high
+    stride_category: spoofing
+    note: >
+      CWE-668 is more precise than CWE-749 for network-level exposure.
+      CWE-749 (Exposed Dangerous Method or Function) applies to API method exposure.
+
+  - id: sensitive-data-external-flow
+    name: External Sensitive Data Flow
+    description: Confidential or restricted data flows to an external system.
+    cwe_id: CWE-200
+    cwe_name: Exposure of Sensitive Information to an Unauthorized Actor
+    cwe_url: https://cwe.mitre.org/data/definitions/200.html
+    severity: medium
+    stride_category: information_disclosure
+
+  - id: trust-boundary-controls-missing
+    name: Unconfirmed Trust Boundary Controls
+    description: Data crosses a trust boundary without verified access controls.
+    cwe_id: CWE-284
+    cwe_name: Improper Access Control
+    cwe_url: https://cwe.mitre.org/data/definitions/284.html
+    severity: medium
+    stride_category: elevation_of_privilege
+    note: >
+      CWE-284 is a pillar-level CWE. For more specific findings, consider:
+      CWE-923 (Improper Restriction of Communication Channel to Intended Endpoints)
+      for network-level trust boundary issues.
+
+  - id: weak-tls-version
+    name: Weak TLS Version
+    description: A listener uses TLS version below 1.2.
+    cwe_id: CWE-326
+    cwe_name: Inadequate Encryption Strength
+    cwe_url: https://cwe.mitre.org/data/definitions/326.html
+    severity: medium
+    stride_category: tampering
+
+  - id: missing-logging
+    name: Missing Audit Logging
+    description: A zone or component lacks logging infrastructure for repudiation defense.
+    cwe_id: CWE-778
+    cwe_name: Insufficient Logging
+    cwe_url: https://cwe.mitre.org/data/definitions/778.html
+    severity: medium
+    stride_category: repudiation
+
+  - id: missing-waf
+    name: Missing WAF Protection
+    description: An internet-routable zone lacks a Web Application Firewall.
+    cwe_id: CWE-693
+    cwe_name: Protection Mechanism Failure
+    cwe_url: https://cwe.mitre.org/data/definitions/693.html
+    severity: medium
+    stride_category: denial_of_service
+
+  - id: missing-rate-limiting
+    name: Missing Rate Limiting
+    description: An internet-facing listener has no rate limiting or throttling.
+    cwe_id: CWE-770
+    cwe_name: Allocation of Resources Without Limits or Throttling
+    cwe_url: https://cwe.mitre.org/data/definitions/770.html
+    severity: medium
+    stride_category: denial_of_service

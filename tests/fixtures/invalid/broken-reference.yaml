@@ -1,0 +1,25 @@
+metadata:
+  name: Broken References
+  description: System with invalid references
+  owner: Test
+  status: active
+
+containers:
+  - id: orphan-container
+    name: Orphan Container
+    context_id: nonexistent-context
+    container_type: app
+    technology: Java
+
+components:
+  - id: orphan-component
+    name: Orphan Component
+    container_id: nonexistent-container
+    component_type: api
+    technology: Spring
+
+component_relationships:
+  - id: bad-rel
+    source_component: nonexistent-source
+    target_component: nonexistent-target
+    label: "broken"

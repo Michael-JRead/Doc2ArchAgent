@@ -1,0 +1,15 @@
+metadata:
+  name: Non Kebab Case
+  description: System with non-kebab-case IDs
+  owner: Test
+  status: active
+
+contexts:
+  - id: MyContext
+    name: Bad ID
+    description: Uses PascalCase instead of kebab-case
+    internal: true
+  - id: my_context
+    name: Bad ID 2
+    description: Uses snake_case instead of kebab-case
+    internal: true

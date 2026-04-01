@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Michael-JRead/Doc2ArchAgent/schemas/deployment.schema.json",
+  "title": "Doc2ArchAgent Deployment YAML Schema",
+  "description": "Schema for architecture/*/deployments/*.yaml — deployment mapping of containers and components to network zones.",
+  "type": "object",
+  "properties": {
+    "deployment_metadata": {
+      "type": "object",
+      "description": "Deployment-level metadata.",
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$" },
+        "name": { "type": "string", "minLength": 1 },
+        "environment": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "type": "string",
+          "enum": ["proposed", "approved", "active", "deprecated"]
+        },
+        "description": { "type": "string" },
+        "region": { "type": "string" },
+        "cloud_provider": { "type": "string" }
+      },
+      "required": ["id", "name", "environment", "status"],
+      "additionalProperties": true
+    },
+    "zone_placements": {
+      "type": "array",
+      "description": "Placement of containers and components into network zones.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "zone_id": { "type": "string" },
+          "containers": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "container_id": { "type": "string" },
+                "components": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "component_id": { "type": "string" }
+                    },
+                    "required": ["component_id"],
+                    "additionalProperties": true
+                  }
+                }
+              },
+              "required": ["container_id"],
+              "additionalProperties": true
+            }
+          }
+        },
+        "required": ["zone_id"],
+        "additionalProperties": true
+      }
+    }
+  },
+  "required": ["deployment_metadata"],
+  "additionalProperties": true
+}
