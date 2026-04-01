@@ -1,6 +1,12 @@
-# Doc2ArchAgent
+<p align="center">
+  <img src="assets/logo.png" alt="Doc2Arch — Documentation to Architecture" width="600">
+</p>
 
-[![License: BSL 1.1](https://img.shields.io/badge/License-BSL%201.1-blue.svg)](LICENSE)
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-BSL%201.1-blue.svg" alt="License: BSL 1.1"></a>
+</p>
+
+# Doc2ArchAgent
 
 A multi-agent architecture modeling system for VS Code, powered by GitHub Copilot custom agents. Walk through a structured, conversational workflow to transform your software architecture knowledge into well-formed C4 model YAML, deployment maps, security analyses, and auto-generated diagrams — all without leaving your editor.
 
