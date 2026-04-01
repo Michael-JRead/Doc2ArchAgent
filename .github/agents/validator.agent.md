@@ -12,6 +12,9 @@ handoffs:
   - label: "Review security"
     agent: security-reviewer
     prompt: "Analyze the architecture for security vulnerabilities."
+  - label: "Fix pattern issues"
+    agent: pattern-manager
+    prompt: "Return to pattern manager to fix pattern-related validation errors."
 ---
 
 <!-- Copyright (c) 2026 Michael J. Read. All rights reserved. -->
@@ -139,6 +142,12 @@ python tools/validate.py architecture/<system-id>/system.yaml
 
 The script auto-detects `networks.yaml` in the parent directory.
 
+Also validate any pattern files if the `patterns/` directory exists:
+```
+python tools/validate-patterns.py patterns/networks/
+python tools/validate-patterns.py patterns/products/
+```
+
 Parse the JSON output and present results using the standard report format:
 - `errors` → show as `✗ [ERROR]` entries — these MUST be fixed
 - `warnings` → show as `⚠ [WARNING]` entries — should be reviewed
@@ -148,7 +157,10 @@ Parse the JSON output and present results using the standard report format:
 - Unique ID enforcement per entity type
 - Referential integrity (context_id, container_id, target_listener_ref, zone_id)
 - Kebab-case naming convention
+- Infrastructure resource validation (zone_id referential integrity)
 - Security posture (unauthenticated listeners, missing TLS, orphaned components)
+- Pattern file schema validation (metadata, entity completeness, internal references)
+- Catalog integrity (referenced files exist, no duplicate pattern IDs)
 
 Same input ALWAYS produces same validation result — no LLM variability.
 

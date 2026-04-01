@@ -15,6 +15,9 @@ handoffs:
   - label: "Validate"
     agent: validator
     prompt: "Validate architecture YAML for structural correctness and referential integrity."
+  - label: "Manage patterns"
+    agent: pattern-manager
+    prompt: "Save, load, or swap reusable network and product patterns."
 ---
 
 <!-- Copyright (c) 2026 Michael J. Read. All rights reserved. -->

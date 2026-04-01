@@ -1,0 +1,21 @@
+catalog:
+  type: products
+  description: Product and service patterns organized by capability
+  tree:
+    - name: Messaging
+      key: messaging
+      patterns:
+        - id: ibm-mq
+          file: messaging/ibm-mq.pattern.yaml
+    - name: Streaming
+      key: streaming
+      patterns: []
+    - name: Orchestration
+      key: orchestration
+      patterns: []
+    - name: Security
+      key: security
+      patterns: []
+    - name: Logging
+      key: logging
+      patterns: []

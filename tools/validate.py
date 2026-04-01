@@ -173,7 +173,21 @@ def validate(system_path: str, networks_path: str | None = None) -> dict:
                 errors.append(f"network_zone '{zone.get('id', '?')}': trust '{zone['trust']}' is not valid ({', '.join(sorted(VALID_TRUST_LEVELS))})")
             _check_kebab_case(zone.get('id', ''), 'network_zone', warnings)
 
-    # --- 9. Security posture warnings ---
+    # --- 9. Infrastructure resource required fields + referential integrity ---
+    if networks:
+        infra_resources = networks.get('infrastructure_resources', [])
+        _check_unique_ids('infrastructure_resource', infra_resources, errors)
+        for res in infra_resources:
+            if not isinstance(res, dict):
+                continue
+            for field in ('id', 'name', 'resource_type', 'technology', 'zone_id'):
+                if not res.get(field):
+                    errors.append(f"infrastructure_resource '{res.get('id', '?')}': required field '{field}' is missing")
+            if res.get('zone_id') and res['zone_id'] not in zones:
+                errors.append(f"infrastructure_resource '{res.get('id', '?')}': zone_id '{res['zone_id']}' does not exist in network_zones")
+            _check_kebab_case(res.get('id', ''), 'infrastructure_resource', warnings)
+
+    # --- 10. Security posture warnings ---
     for comp in system.get('components', []):
         if not isinstance(comp, dict):
             continue
@@ -191,7 +205,7 @@ def validate(system_path: str, networks_path: str | None = None) -> dict:
                     f"tls_enabled is false — unencrypted traffic"
                 )
 
-    # --- 10. Orphaned components ---
+    # --- 11. Orphaned components ---
     connected = set()
     for rel in system.get('component_relationships', []):
         if isinstance(rel, dict):

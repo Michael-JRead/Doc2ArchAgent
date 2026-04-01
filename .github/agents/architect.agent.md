@@ -21,6 +21,9 @@ handoffs:
   - label: "Collect documents for ingestion"
     agent: doc-collector
     prompt: "Collect and convert architecture documents for entity extraction."
+  - label: "Manage patterns"
+    agent: pattern-manager
+    prompt: "Save, load, or swap reusable network and product patterns."
 ---
 
 <!-- Copyright (c) 2026 Michael J. Read. All rights reserved. -->

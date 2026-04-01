@@ -1,0 +1,33 @@
+catalog:
+  type: networks
+  description: Network topology patterns organized by geography
+  tree:
+    - name: North America
+      children:
+        - name: USA
+          key: usa
+          patterns:
+            - id: standard-3tier
+              file: usa/standard-3tier.pattern.yaml
+        - name: Canada
+          key: canada
+          patterns: []
+    - name: Asia Pacific
+      children:
+        - name: China
+          key: china
+          patterns: []
+        - name: Japan
+          key: japan
+          patterns: []
+    - name: Europe
+      children:
+        - name: United Kingdom
+          key: uk
+          patterns: []
+        - name: Germany
+          key: germany
+          patterns: []
+    - name: High Risk Locations
+      key: hrl
+      patterns: []

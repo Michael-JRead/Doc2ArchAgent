@@ -100,7 +100,7 @@ code .
 ### Step 3: Verify Agents are Detected
 1. Open Copilot Chat: press `Ctrl+Shift+I` (Windows/Linux) or `Cmd+Shift+I` (Mac)
 2. Click the **agents dropdown** (the `@` icon or type `@`)
-3. You should see all **11 agents** listed:
+3. You should see all **12 agents** listed:
    - `@architect` — architecture modeling
    - `@doc-collector` — document collection and conversion
    - `@doc-extractor` — document entity extraction
@@ -112,6 +112,7 @@ code .
    - `@diagram-drawio` — Draw.io/Lucidchart renderer
    - `@doc-writer` — documentation generation
    - `@validator` — validation
+   - `@pattern-manager` — reusable network and product patterns
 
 If you don't see them, ensure:
 - The `.github/agents/` folder is at the root of your workspace
@@ -139,6 +140,7 @@ The system is composed of **10 specialized agents**, each owning a specific conc
 | **@deployer** | Places your containers and components into network zones for specific environments (production, staging, regional deployments). Writes deployment YAML files. | After `@architect` completes your system model, or when you need to add a new deployment. |
 | **@security-reviewer** | Reads all YAML and produces security findings, STRIDE threat analysis per data flow, and firewall ACL rules. Checks for unauthenticated listeners, unencrypted flows, trust boundary gaps, and more. | After deployments are defined, or anytime you want a security audit. |
 | **@validator** | Dual-pass validation: deterministic Python script for structural/referential checks, then LLM semantic review for business logic. Reports errors, warnings, and info. | Anytime. Run it after making changes to catch issues early. |
+| **@pattern-manager** | Manages reusable network topology and product/service patterns. Save, load, swap, version, and browse patterns organized in hierarchy trees (by geography for networks, by capability for products). | When you want to reuse a standard network layout or product stack across systems. Pop-and-swap between configurations. |
 
 #### Diagram Agents (Phased Pipeline)
 
@@ -1422,6 +1424,11 @@ These commands can be typed in any agent's chat session. The agent will either h
 | `Summarize risks` | Executive summary of top findings | @security-reviewer |
 | `Show derived links` | Network links for current deployment | @deployer |
 | `Add another deployment` | Start a new deployment for same system | @deployer |
+| `List network patterns` | Browse network pattern catalog by geography | @pattern-manager |
+| `List product patterns` | Browse product pattern catalog by capability | @pattern-manager |
+| `Load pattern <id>` | Apply a saved pattern to architecture files | @pattern-manager |
+| `Save as pattern` | Extract current config into a reusable pattern | @pattern-manager |
+| `Swap network` / `Swap product` | Pop-and-swap a loaded pattern for another | @pattern-manager |
 
 ---
 
