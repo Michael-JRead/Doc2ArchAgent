@@ -17,6 +17,7 @@ A multi-agent architecture modeling system for VS Code, powered by GitHub Copilo
   - [Phase 3: Security Review (@security-reviewer)](#phase-3-security-review-security-reviewer)
   - [Phase 4: Diagram Generation (@diagram-generator)](#phase-4-diagram-generation-diagram-generator)
   - [Phase 5: Validation (@validator)](#phase-5-validation-validator)
+  - [Phase 6: Documentation Generation (@doc-writer)](#phase-6-documentation-generation-doc-writer)
 - [File Structure Explained](#file-structure-explained)
 - [YAML Schema Reference](#yaml-schema-reference)
 - [Commands You Can Use Anytime](#commands-you-can-use-anytime)
@@ -41,9 +42,11 @@ Doc2ArchAgent turns your architecture knowledge into a structured, validated C4 
 - A `networks.yaml` defining your network zones and infrastructure resources
 - Deployment YAML files mapping containers/components to specific network zones per environment
 - A `provenance.yaml` tracing every extracted field back to its source document, section, and quote
-- C4 diagrams at every level (Context, Container, Component, Deployment) in Mermaid and PlantUML
+- C4 diagrams at every level (Context, Container, Component, Deployment) in **3 formats**: Mermaid, PlantUML, and Draw.io/Lucidchart
 - Confidence-colored diagrams showing which elements are well-supported vs. need verification
 - Persona-specific diagram views (Executive, Architect, Security, Network, Compliance)
+- **HLDD (High-Level Design Document)** formatted for Confluence page upload or Markdown
+- **Executive summaries** and **stakeholder briefs** tailored to specific audiences
 - A STRIDE threat analysis per data flow crossing trust boundaries
 - Firewall ACL rules auto-generated from listener data (protocol, port, zone)
 - A security findings report identifying vulnerabilities, trust boundary issues, and blast radius
@@ -87,12 +90,17 @@ code .
 ### Step 3: Verify Agents are Detected
 1. Open Copilot Chat: press `Ctrl+Shift+I` (Windows/Linux) or `Cmd+Shift+I` (Mac)
 2. Click the **agents dropdown** (the `@` icon or type `@`)
-3. You should see all 5 agents listed:
-   - `@architect`
-   - `@deployer`
-   - `@security-reviewer`
-   - `@diagram-generator`
-   - `@validator`
+3. You should see all **10 agents** listed:
+   - `@architect` — architecture modeling
+   - `@doc-ingester` — document ingestion
+   - `@deployer` — deployment mapping
+   - `@security-reviewer` — security analysis
+   - `@diagram-generator` — diagram orchestrator
+   - `@diagram-mermaid` — Mermaid renderer
+   - `@diagram-plantuml` — PlantUML renderer
+   - `@diagram-drawio` — Draw.io/Lucidchart renderer
+   - `@doc-writer` — documentation generation
+   - `@validator` — validation
 
 If you don't see them, ensure:
 - The `.github/agents/` folder is at the root of your workspace
@@ -106,9 +114,11 @@ Select `@architect` from the dropdown and type your system description. That's i
 
 ## How It Works — The Agent System
 
-The system is composed of **5 specialized agents**, each owning a specific concern. They communicate through **handoffs** — when one agent finishes its work, it offers to hand off to the next logical agent.
+The system is composed of **10 specialized agents**, each owning a specific concern. They communicate through **handoffs** — when one agent finishes its work, it offers to hand off to the next logical agent. Each handoff includes a descriptive prompt visible in the Copilot UI.
 
 ### Agent Overview
+
+#### Core Workflow Agents
 
 | Agent | What It Does | When to Use It |
 |-------|-------------|----------------|
@@ -116,24 +126,46 @@ The system is composed of **5 specialized agents**, each owning a specific conce
 | **@architect** | Walks you through defining contexts, containers, components, listeners, and relationships. Writes `system.yaml` and `networks.yaml` incrementally. | **Start here if starting fresh.** Or continue after `@doc-ingester` to refine. |
 | **@deployer** | Places your containers and components into network zones for specific environments (production, staging, regional deployments). Writes deployment YAML files. | After `@architect` completes your system model, or when you need to add a new deployment. |
 | **@security-reviewer** | Reads all YAML and produces security findings, STRIDE threat analysis per data flow, and firewall ACL rules. Checks for unauthenticated listeners, unencrypted flows, trust boundary gaps, and more. | After deployments are defined, or anytime you want a security audit. |
-| **@diagram-generator** | Generates C4 architecture diagrams in 3 formats: Mermaid C4, PlantUML C4, and Mermaid graph/subgraph. Covers all 4 C4 levels. Supports confidence color-coding, security overlays, and persona-specific views. | After your architecture is modeled. Use anytime to visualize the current state. |
 | **@validator** | Dual-pass validation: deterministic Python script for structural/referential checks, then LLM semantic review for business logic. Reports errors, warnings, and info. | Anytime. Run it after making changes to catch issues early. |
+
+#### Diagram Agents (Phased Pipeline)
+
+The diagram system uses a **phased pipeline**: the orchestrator analyzes your architecture and builds a layout plan, then hands off to specialized renderers.
+
+| Agent | What It Does | When to Use It |
+|-------|-------------|----------------|
+| **@diagram-generator** | Orchestrator: reads architecture YAML, assesses complexity, builds a structured `layout-plan.yaml` with grid positions and node/edge data. Dispatches to renderer agents. | After your architecture is modeled. Use anytime to visualize the current state. |
+| **@diagram-mermaid** | Renderer: reads `layout-plan.yaml` and generates Mermaid `flowchart LR` diagrams with subgraph boundaries and C4 styling. | Called by `@diagram-generator`, or directly if you want Mermaid-only output. |
+| **@diagram-plantuml** | Renderer: reads `layout-plan.yaml` and generates PlantUML C4 diagrams using the C4-PlantUML stdlib. Verified syntax for plantuml.com and VS Code extension. | Called by `@diagram-generator`, or directly for PlantUML-only output. |
+| **@diagram-drawio** | Renderer: reads `layout-plan.yaml` and generates `.drawio` XML files with explicit x,y coordinates. Import into Lucidchart via File > Import > Draw.io. | Called by `@diagram-generator`, or directly for Lucidchart export. |
+
+#### Documentation Agent
+
+| Agent | What It Does | When to Use It |
+|-------|-------------|----------------|
+| **@doc-writer** | Generates architecture documentation from YAML: HLDD (High-Level Design Document), executive summaries, and stakeholder briefs. Output in Confluence storage format (`.confluence.html`) or Markdown. | After architecture is modeled. For stakeholder presentations, Confluence pages, or design reviews. |
 
 ### How Handoffs Work
 
-Each agent has **handoff buttons** that appear in the chat when appropriate. For example, after `@architect` finishes Layer 3 (Components), you'll see buttons like:
+Each agent has **handoff buttons** that appear in the Copilot Chat when appropriate. Every handoff includes a descriptive `prompt` explaining what the target agent will do. For example, after `@architect` finishes Layer 3 (Components), you'll see buttons like:
 
 ```
 Architecture modeling is complete. You can now:
-1. Deploy to network zones        → hands off to @deployer
-2. Review security posture        → hands off to @security-reviewer
-3. Generate diagrams              → hands off to @diagram-generator
-4. Validate architecture          → hands off to @validator
+1. Deploy to network zones        → "Place containers and components into network zones"
+2. Review security posture        → "Analyze the architecture for security vulnerabilities"
+3. Generate diagrams              → "Generate architecture diagrams from the YAML model"
+4. Generate documentation         → "Generate HLDD and stakeholder docs from the architecture"
+5. Validate architecture          → "Validate architecture YAML for structural correctness"
 ```
 
 Click a button or type the agent name directly (e.g., `@deployer place my containers`) to switch.
 
 **Handoffs carry context.** When you switch from `@architect` to `@deployer`, the deployer reads your `system.yaml` and `networks.yaml` automatically — you don't need to re-explain anything.
+
+**Diagram pipeline handoffs:** The `@diagram-generator` orchestrator hands off to renderers one at a time. Each renderer offers to hand off to the next renderer or back to the orchestrator:
+```
+@diagram-generator → builds layout-plan.yaml → @diagram-mermaid → @diagram-plantuml → @diagram-drawio
+```
 
 ---
 
@@ -809,7 +841,22 @@ Output: `architecture/<system>/diagrams/firewall-acls.md`
 
 ### Phase 4: Diagram Generation (@diagram-generator)
 
-The `@diagram-generator` generates C4 architecture diagrams from your YAML files. It produces **3 file formats** for each diagram level.
+The diagram system uses a **phased pipeline** — the orchestrator analyzes your architecture, builds a structured layout plan, and then hands off to specialized renderer agents. This approach ensures any LLM model can execute the workflow without timeouts.
+
+#### How the Pipeline Works
+
+```
+@diagram-generator (orchestrator)
+    ↓ reads system.yaml + networks.yaml
+    ↓ assesses complexity (simple/medium/complex)
+    ↓ writes layout-plan.yaml (grid positions, nodes, edges, legend)
+    ↓
+    ├── @diagram-mermaid    → generates .md files (Mermaid flowchart LR)
+    ├── @diagram-plantuml   → generates .puml files (PlantUML C4)
+    └── @diagram-drawio     → generates .drawio files (import into Lucidchart)
+```
+
+The `layout-plan.yaml` is the intermediate artifact — it decouples analysis from rendering. All three renderers read the same plan, ensuring **consistent diagrams** across formats.
 
 #### Starting the Session
 
@@ -821,7 +868,8 @@ The `@diagram-generator` generates C4 architecture diagrams from your YAML files
 **The agent responds:**
 1. Reads `system.yaml` and `networks.yaml`
 2. Shows: *"Found: 3 contexts, 5 containers, 8 components, 2 deployments."*
-3. Presents a menu:
+3. Assesses complexity: *"Complexity: medium (14 nodes, 18 relationships)"*
+4. Presents menus:
    ```
    Which diagrams would you like to generate?
    1. Context (Level 1)
@@ -829,7 +877,14 @@ The `@diagram-generator` generates C4 architecture diagrams from your YAML files
    3. Component (Level 3)
    4. Deployment — specify which deployment
    5. All diagrams
+
+   Which formats?
+   1. All formats (Mermaid + PlantUML + Lucidchart)
+   2. Mermaid only (.md)
+   3. PlantUML only (.puml)
+   4. Lucidchart only (.drawio)
    ```
+5. Builds `layout-plan.yaml` and hands off to the first renderer
 
 #### Diagram Levels Explained
 
@@ -842,11 +897,13 @@ The `@diagram-generator` generates C4 architecture diagrams from your YAML files
 
 #### Three Output Formats Per Diagram
 
-| Format | File Extension | Use Case |
-|--------|---------------|----------|
-| **Mermaid C4** | `.md` | Preview in VS Code Markdown preview, GitHub rendering |
-| **PlantUML C4** | `.puml` | Enterprise tooling, Confluence, detailed styling |
-| **Mermaid Graph/Subgraph** | `-graph.md` | Better layout control, subgraph boundaries, custom styling |
+| Format | File Extension | Use Case | Renderer Agent |
+|--------|---------------|----------|----------------|
+| **Mermaid** | `.md` | Preview in VS Code Markdown preview, GitHub rendering, Obsidian | `@diagram-mermaid` |
+| **PlantUML C4** | `.puml` | VS Code PlantUML extension preview, plantuml.com, Confluence | `@diagram-plantuml` |
+| **Draw.io / Lucidchart** | `.drawio` | Import into Lucidchart (File > Import > Draw.io), draw.io desktop app, Confluence draw.io plugin | `@diagram-drawio` |
+
+All three formats use the **same C4 color scheme** and produce **visually consistent** diagrams — when viewed side by side, they look nearly identical but rendered in different tools.
 
 #### Color Scheme
 
@@ -859,21 +916,33 @@ The `@diagram-generator` generates C4 architecture diagrams from your YAML files
 | Semi-trusted zones | Yellow border (`#f9a825`) | DMZ, semi-exposed |
 | Untrusted zones | Red border (`#c62828`) | Internet-facing |
 
+#### The Layout Plan (Intermediate Artifact)
+
+The orchestrator writes `layout-plan.yaml` before any rendering begins. This file contains:
+- **Grid positions** for every node (column = left-to-right flow, row = vertical grouping)
+- **Node metadata** — type, label, technology, description, boundary membership
+- **Edge data** — source, target, label, protocol, sync/async
+- **Legend entries** — element types and flow types present in the diagram
+- **Complexity assessment** — determines renderer preamble (spacing, layout engine)
+
+You can inspect `layout-plan.yaml` to understand exactly what will be rendered.
+
 #### Output
 
-The agent writes files and confirms:
+Each renderer writes files and shows progress:
 ```
-Written 3 files:
+✓ Phase 1 — Layout plan              [layout-plan.yaml written]
+✓ Phase 2 — Mermaid rendering        [4 files written]
+► Phase 3 — PlantUML rendering       [handing off to @diagram-plantuml]
+  Phase 4 — Lucidchart rendering
+
+Files per level:
   architecture/payment-platform/diagrams/payment-platform-context.md
   architecture/payment-platform/diagrams/payment-platform-context.puml
-  architecture/payment-platform/diagrams/payment-platform-context-graph.md
-
-Generating diagram 2 of 4 — Container Level
-Writing 3 files: .md, .puml, -graph.md
-...
+  architecture/payment-platform/diagrams/payment-platform-context.drawio
 
 DIAGRAM GENERATION COMPLETE
-Files written: 12
+Files written: 12 (+ layout-plan.yaml)
 Location: architecture/payment-platform/diagrams/
 ```
 
@@ -1005,6 +1074,115 @@ Would you like to fix these? I can hand off to:
 
 ---
 
+### Phase 6: Documentation Generation (@doc-writer)
+
+The `@doc-writer` agent generates architecture documentation from your YAML model files. It reads the same `system.yaml`, `networks.yaml`, and deployment files used by all other agents.
+
+#### Starting the Session
+
+**You type:**
+```
+@doc-writer Generate HLDD for payment-platform
+```
+
+**The agent responds:**
+1. Reads all architecture files
+2. Shows: *"Loaded: Payment Processing Platform — 3 contexts, 5 containers, 8 components, 2 deployments"*
+3. Asks which document type and format:
+   ```
+   What documentation would you like to generate?
+   1. HLDD — Full High-Level Design Document
+   2. Executive Summary — Non-technical overview
+   3. Stakeholder Brief — Targeted summary for a specific audience
+
+   Output format?
+   1. Confluence (storage format — paste into Confluence editor or upload via API)
+   2. Markdown (for GitHub, wikis, or general use)
+   3. Both
+   ```
+
+#### Document Types
+
+**HLDD (High-Level Design Document)** — Comprehensive 12-section technical architecture document:
+
+| Section | Content Source |
+|---------|--------------|
+| Title & Metadata | system.yaml metadata, status badges |
+| Table of Contents | Auto-generated (Confluence TOC macro or Markdown links) |
+| Executive Summary | metadata.description + contexts overview |
+| System Context | contexts + context_relationships |
+| Container Architecture | containers + container_relationships with expand/collapse |
+| Component Design | components + component_relationships per container |
+| Data Flow | relationships with data_classification, warnings for sensitive flows |
+| Deployment Architecture | deployments + networks.yaml, zone placements, TLS status |
+| Security Considerations | compliance frameworks, trust boundaries, auth mechanisms |
+| Technology Stack | Deduplicated from all technology fields |
+| Assumptions & Constraints | From provenance gaps or manual modeling notes |
+| Appendix: Glossary | Auto-generated from entity names and descriptions |
+
+**Executive Summary** — Max 2 pages, non-technical language, business value and risk focus.
+
+**Stakeholder Brief** — Tailored to a specific audience:
+- **Engineering leads**: Container architecture, tech stack, integration points
+- **Security team**: Trust boundaries, auth mechanisms, data classification
+- **Operations**: Deployment topology, infrastructure, monitoring
+- **Product/Business**: Context diagram narrative, capabilities, integrations
+
+#### Output Formats
+
+**Confluence Storage Format** (`.confluence.html`):
+- Uses Confluence XHTML with `ac:structured-macro` elements
+- Includes: TOC macro, info/warning/note panels, status badges, expand/collapse sections, styled tables, code blocks
+- Paste directly into the Confluence editor or upload via REST API
+- Works on both Confluence Cloud and Data Center
+
+**Markdown** (`.md`):
+- GitHub-flavored Markdown with callouts (`> [!NOTE]`, `> [!WARNING]`)
+- Suitable for GitHub wikis, Obsidian, or any Markdown renderer
+
+#### Format Preferences
+
+You can customize the output by telling the agent:
+- *"Use expand macros for components"* — wrap details in collapsible sections
+- *"Flat structure"* — no expand/collapse, all content visible
+- *"Compact"* — shorter descriptions, more bullet points
+- *"Detailed"* — full descriptions, all tables, YAML excerpts
+- *"Include diagrams inline"* — add diagram embed references
+
+#### Confidence Annotations
+
+When `provenance.yaml` exists (from `@doc-ingester`), the documentation includes confidence annotations:
+- HIGH confidence — no annotation
+- MEDIUM confidence — *(needs verification)* in italic
+- LOW confidence — warning panel: "verify with source documents"
+- UNRESOLVED — warning panel: "could not be confirmed from source documents"
+
+#### Output Files
+
+```
+architecture/<system-id>/docs/
+├── <system-id>-hldd.confluence.html          ← Confluence HLDD
+├── <system-id>-hldd.md                       ← Markdown HLDD
+├── <system-id>-executive-summary.confluence.html
+├── <system-id>-executive-summary.md
+├── <system-id>-stakeholder-brief.confluence.html
+└── <system-id>-stakeholder-brief.md
+```
+
+#### On-Demand Commands
+
+| Command | What It Does |
+|---------|-------------|
+| `Generate HLDD` | Full High-Level Design Document |
+| `Generate executive summary` | Non-technical overview |
+| `Generate stakeholder brief for [audience]` | Tailored brief (engineering, security, ops, product) |
+| `Generate all docs` | HLDD + executive summary |
+| `Regenerate` | Re-read YAML and regenerate |
+| `Switch to Confluence format` | Change output to Confluence storage format |
+| `Switch to Markdown` | Change output to Markdown |
+
+---
+
 ## File Structure Explained
 
 After a full workflow, your project will look like this:
@@ -1034,34 +1212,36 @@ architecture/
     │   ├── staging-eu.yaml                          ← Staging EU placement
     │   └── dr-asia.yaml                             ← Disaster recovery Asia
     │
+    ├── docs/                                        ← Generated documentation
+    │   ├── payment-platform-hldd.confluence.html    ← HLDD (Confluence format)
+    │   ├── payment-platform-hldd.md                 ← HLDD (Markdown)
+    │   ├── payment-platform-executive-summary.confluence.html
+    │   ├── payment-platform-executive-summary.md
+    │   ├── payment-platform-stakeholder-brief.confluence.html
+    │   └── payment-platform-stakeholder-brief.md
+    │
     └── diagrams/
-        ├── payment-platform-context.md              ← Mermaid C4 Context
-        ├── payment-platform-context.puml            ← PlantUML C4 Context
-        ├── payment-platform-context-graph.md        ← Mermaid graph Context
-        ├── payment-platform-container.md            ← Mermaid C4 Container
-        ├── payment-platform-container.puml          ← PlantUML C4 Container
-        ├── payment-platform-container-graph.md      ← Mermaid graph Container
-        ├── payment-platform-component.md            ← Mermaid C4 Component
-        ├── payment-platform-component.puml          ← PlantUML C4 Component
-        ├── payment-platform-component-graph.md      ← Mermaid graph Component
-        ├── prod-us-east-deployment-container.md     ← Deployment (container level)
-        ├── prod-us-east-deployment-container.puml
-        ├── prod-us-east-deployment-component.md     ← Deployment (component level)
-        ├── prod-us-east-deployment-component.puml
-        ├── prod-us-east-deployment-graph.md         ← Mermaid graph Deployment
+        ├── layout-plan.yaml                         ← Intermediate layout plan (orchestrator output)
+        ├── payment-platform-context.md              ← Mermaid Context
+        ├── payment-platform-context.puml            ← PlantUML Context
+        ├── payment-platform-context.drawio          ← Draw.io/Lucidchart Context
+        ├── payment-platform-container.md            ← Mermaid Container
+        ├── payment-platform-container.puml          ← PlantUML Container
+        ├── payment-platform-container.drawio        ← Draw.io/Lucidchart Container
+        ├── payment-platform-component.md            ← Mermaid Component
+        ├── payment-platform-component.puml          ← PlantUML Component
+        ├── payment-platform-component.drawio        ← Draw.io/Lucidchart Component
+        ├── prod-us-east-deployment.md               ← Deployment (Mermaid)
+        ├── prod-us-east-deployment.puml             ← Deployment (PlantUML)
+        ├── prod-us-east-deployment.drawio           ← Deployment (Draw.io)
         ├── prod-us-east-network-crossings.md        ← Network crossing report
         ├── security-findings.md                     ← Security analysis report
         ├── stride-analysis.md                       ← STRIDE threat analysis per relationship
         ├── firewall-acls.md                         ← Auto-generated firewall ACL rules
         ├── blast-radius-*.md                        ← Blast radius analysis per container
-        ├── payment-platform-security-overlay.md     ← Security overlay diagram (Mermaid C4)
-        ├── payment-platform-security-overlay.puml   ← Security overlay diagram (PlantUML)
-        ├── payment-platform-security-overlay-graph.md ← Security overlay (Mermaid graph)
-        ├── payment-platform-executive.md            ← Executive persona view
-        ├── payment-platform-architect.md            ← Architect persona view
-        ├── payment-platform-security.md             ← Security engineer persona view
-        ├── payment-platform-network.md              ← Network engineer persona view
-        └── payment-platform-compliance.md           ← Compliance officer persona view
+        ├── payment-platform-security-overlay.md     ← Security overlay (Mermaid)
+        ├── payment-platform-security-overlay.puml   ← Security overlay (PlantUML)
+        └── payment-platform-security-overlay.drawio ← Security overlay (Draw.io)
 
 tools/
 ├── validate.py                                      ← Deterministic validation script
@@ -1220,6 +1400,10 @@ These commands can be typed in any agent's chat session. The agent will either h
 | `Generate security view` | Full DFD with STRIDE annotations | @diagram-generator |
 | `Generate network view` | Zone-focused diagram with protocol/port detail | @diagram-generator |
 | `Regenerate` | Re-reads YAML and regenerates all diagrams | @diagram-generator |
+| `Generate HLDD` | Full High-Level Design Document | @doc-writer |
+| `Generate executive summary` | Non-technical overview | @doc-writer |
+| `Generate stakeholder brief for <audience>` | Tailored brief (engineering, security, ops, product) | @doc-writer |
+| `Generate all docs` | HLDD + executive summary | @doc-writer |
 | `Show security findings` | Runs full security analysis | @security-reviewer |
 | `Show blast radius for <container-id>` | Impact analysis for a container | @security-reviewer |
 | `Show network crossings for <deployment-id>` | Zone crossing report | @security-reviewer |
@@ -1251,12 +1435,12 @@ These commands can be typed in any agent's chat session. The agent will either h
 
 **New system from existing docs (recommended):**
 ```
-@doc-ingester → @validator → @architect → @deployer → @diagram-generator → @security-reviewer
+@doc-ingester → @validator → @architect → @deployer → @security-reviewer → @diagram-generator → @doc-writer
 ```
 
 **New system from scratch (no docs):**
 ```
-@architect → @deployer → @security-reviewer → @diagram-generator → @validator
+@architect → @deployer → @security-reviewer → @diagram-generator → @doc-writer → @validator
 ```
 
 **Add a deployment to an existing system:**
@@ -1272,6 +1456,17 @@ These commands can be typed in any agent's chat session. The agent will either h
 **Regenerate diagrams after YAML edits:**
 ```
 @diagram-generator Regenerate
+```
+
+**Export diagrams for Lucidchart:**
+```
+@diagram-drawio Generate all Draw.io diagrams
+```
+Then import the `.drawio` files into Lucidchart via File > Import > Draw.io.
+
+**Generate Confluence documentation:**
+```
+@doc-writer Generate HLDD in Confluence format
 ```
 
 **Quick validation check:**
@@ -1408,7 +1603,7 @@ The `@diagram-generator` can render filtered views of the same architecture YAML
 | **Network Engineer** | Zones, protocols, ports, firewall rules | Deployment with raw specs, ACL annotations |
 | **Compliance Officer** | Data classification map, boundary controls, framework coverage | Container with compliance overlay |
 
-Each view generates 3 files (Mermaid C4, PlantUML C4, Mermaid graph).
+Each view generates up to 3 files (Mermaid, PlantUML, Draw.io) depending on which formats you request.
 
 ---
 
@@ -1420,9 +1615,9 @@ Each view generates 3 files (Mermaid C4, PlantUML C4, Mermaid graph).
 | **Threagile** | YAML-in, risk-out | Requires manual YAML authoring; Doc2ArchAgent extracts it from documents |
 | **Visual Paradigm AI** | AI-generated diagrams | No zero-hallucination controls, no source traceability |
 | **pytm** | Python code defines threats | Code-first (not document-first), no multi-pass extraction |
-| **Doc2ArchAgent** | Document → validated C4 model → diagrams + STRIDE + ACLs | Full pipeline: extraction with provenance, deterministic validation, multi-persona rendering |
+| **Doc2ArchAgent** | Document → validated C4 model → diagrams + docs + STRIDE + ACLs | Full pipeline: extraction with provenance, deterministic validation, multi-format rendering (Mermaid, PlantUML, Lucidchart), Confluence-ready documentation |
 
-Doc2ArchAgent's key differentiator is the **zero-hallucination pipeline**: every element is traceable to a source document, validated by deterministic code, and rendered with confidence indicators. The output is a verifiable subset, never a plausible guess.
+Doc2ArchAgent's key differentiator is the **zero-hallucination pipeline**: every element is traceable to a source document, validated by deterministic code, and rendered with confidence indicators. The output is a verifiable subset, never a plausible guess. The multi-format output (Mermaid, PlantUML, Lucidchart, Confluence, Markdown) ensures integration with any toolchain.
 
 ---
 
@@ -1456,6 +1651,11 @@ Doc2ArchAgent's key differentiator is the **zero-hallucination pipeline**: every
 | `@doc-ingester` extracted something wrong | Say the field number to correct it, or "reject" to remove the extraction entirely. |
 | Validation shows "non-existent context" errors | A container references a `context_id` that doesn't exist. Check your contexts list. |
 | Diagrams have empty Deployment_Nodes | Known Mermaid limitation. The agent adds comments explaining the omission. |
+| PlantUML shows `Syntax Error?` | Most common cause: hyphens in aliases. The PlantUML agent converts kebab-case to snake_case automatically. If editing manually, use only alphanumeric + underscore in aliases. |
+| PlantUML `!include` fails | Ensure you use `!include <C4/C4_Container>` with the `C4/` prefix. Without it, the stdlib can't find the files. |
+| PlantUML renders `//` as italic | Escape forward slashes in URLs/protocols: use `~/~/` instead of `//`. |
+| Lucidchart import looks wrong | Ensure you import `.drawio` files via File > Import > Draw.io (not drag-and-drop). Elements use simple shapes, not C4 stencils. |
+| Confluence HTML doesn't render | The `.confluence.html` files use Confluence storage format (XHTML + `ac:` macros). Paste into the Confluence editor's source view, or upload via REST API. |
 | Agent skips a question | Required fields are never skipped. If something was skipped, it was optional. Say "go back" to revisit. |
 | YAML looks wrong after editing manually | Run `@validator` to check for structural issues. Hand off to `@architect` to fix. |
 | Want to change something from Layer 1 while in Layer 3 | Tell the agent: "Go back and change context X". It will re-display, accept changes, and re-write. |
