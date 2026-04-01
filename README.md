@@ -11,7 +11,7 @@ A multi-agent architecture modeling system for VS Code, powered by GitHub Copilo
 - [Installation](#installation)
 - [How It Works — The Agent System](#how-it-works--the-agent-system)
 - [Complete Step-by-Step Workflow](#complete-step-by-step-workflow)
-  - [Phase 0: Document Ingestion (@doc-ingester)](#phase-0-document-ingestion-doc-ingester)
+  - [Phase 0: Document Collection & Extraction (@doc-collector / @doc-extractor)](#phase-0-document-collection--extraction-doc-collector--doc-extractor)
   - [Phase 1: Architecture Modeling (@architect)](#phase-1-architecture-modeling-architect)
   - [Phase 2: Deployment Mapping (@deployer)](#phase-2-deployment-mapping-deployer)
   - [Phase 3: Security Review (@security-reviewer)](#phase-3-security-review-security-reviewer)
@@ -90,9 +90,10 @@ code .
 ### Step 3: Verify Agents are Detected
 1. Open Copilot Chat: press `Ctrl+Shift+I` (Windows/Linux) or `Cmd+Shift+I` (Mac)
 2. Click the **agents dropdown** (the `@` icon or type `@`)
-3. You should see all **10 agents** listed:
+3. You should see all **11 agents** listed:
    - `@architect` — architecture modeling
-   - `@doc-ingester` — document ingestion
+   - `@doc-collector` — document collection and conversion
+   - `@doc-extractor` — document entity extraction
    - `@deployer` — deployment mapping
    - `@security-reviewer` — security analysis
    - `@diagram-generator` — diagram orchestrator
@@ -122,8 +123,9 @@ The system is composed of **10 specialized agents**, each owning a specific conc
 
 | Agent | What It Does | When to Use It |
 |-------|-------------|----------------|
-| **@doc-ingester** | Ingests existing architecture documents (PDF, Word, text, images), extracts entities with source citations, validates with you, then writes YAML. Zero hallucinations. | **Start here if you have existing docs.** Import documentation before manual modeling. |
-| **@architect** | Walks you through defining contexts, containers, components, listeners, and relationships. Writes `system.yaml` and `networks.yaml` incrementally. | **Start here if starting fresh.** Or continue after `@doc-ingester` to refine. |
+| **@doc-collector** | Collects and converts architecture documents (PDF, Word, text, images) into readable text using `tools/convert-docs.py`. Builds a document inventory. | **Start here if you have existing docs.** Collects and prepares documents for extraction. |
+| **@doc-extractor** | Extracts architecture entities from collected documents with source citations. Validates with you, then writes YAML. Zero hallucinations. | After `@doc-collector` prepares your documents, or if text files are already in `context/`. |
+| **@architect** | Walks you through defining contexts, containers, components, listeners, and relationships. Writes `system.yaml` and `networks.yaml` incrementally. | **Start here if starting fresh.** Or continue after `@doc-extractor` to refine. |
 | **@deployer** | Places your containers and components into network zones for specific environments (production, staging, regional deployments). Writes deployment YAML files. | After `@architect` completes your system model, or when you need to add a new deployment. |
 | **@security-reviewer** | Reads all YAML and produces security findings, STRIDE threat analysis per data flow, and firewall ACL rules. Checks for unauthenticated listeners, unencrypted flows, trust boundary gaps, and more. | After deployments are defined, or anytime you want a security audit. |
 | **@validator** | Dual-pass validation: deterministic Python script for structural/referential checks, then LLM semantic review for business logic. Reports errors, warnings, and info. | Anytime. Run it after making changes to catch issues early. |
@@ -175,17 +177,17 @@ Below is the full end-to-end workflow, showing exactly what happens at each step
 
 ---
 
-### Phase 0: Document Ingestion (@doc-ingester)
+### Phase 0: Document Collection & Extraction (@doc-collector / @doc-extractor)
 
 **Skip this phase if you don't have existing documentation.** Go straight to Phase 1.
 
-The `@doc-ingester` agent reads your existing architecture documents and extracts structured entities with source citations. Every fact it extracts must be traceable to a specific document and section. You approve everything before it writes any YAML.
+The document ingestion pipeline uses two agents: `@doc-collector` collects and converts your documents (PDF, DOCX, images → text), then hands off to `@doc-extractor` which extracts structured architecture entities with source citations. Every fact it extracts must be traceable to a specific document and section. You approve everything before it writes any YAML.
 
 #### Starting the Session
 
 **You type:**
 ```
-@doc-ingester Ingest my architecture docs
+@doc-collector Collect my architecture docs
 ```
 
 **The agent responds with:**
@@ -317,11 +319,11 @@ This is the main phase. The `@architect` agent walks you through **6 layers** in
 2. Asks for your **system name** and **one-sentence description**
 3. Explains the file structure it will create
 4. Asks: "How would you like to start?"
-   1. **Ingest from documents** — import existing architecture docs (hands off to `@doc-ingester`)
+   1. **Ingest from documents** — import existing architecture docs (hands off to `@doc-collector`/`@doc-extractor`)
    2. **Start fresh** — guided questions layer by layer
    3. **Load existing folder** — extend what's already been modeled
 
-> **If option 1:** Hands off to `@doc-ingester` with your system name.
+> **If option 1:** Hands off to `@doc-collector`/`@doc-extractor` with your system name.
 >
 > **If option 2 (start fresh):** The agent begins with Layer 1 below.
 >
@@ -948,7 +950,7 @@ Location: architecture/payment-platform/diagrams/
 
 #### Confidence-Colored Diagrams
 
-When `provenance.yaml` exists (generated by `@doc-ingester`), diagrams are automatically color-coded by extraction confidence:
+When `provenance.yaml` exists (generated by `@doc-collector`/`@doc-extractor`), diagrams are automatically color-coded by extraction confidence:
 
 | Color | Meaning |
 |-------|---------|
@@ -1151,7 +1153,7 @@ You can customize the output by telling the agent:
 
 #### Confidence Annotations
 
-When `provenance.yaml` exists (from `@doc-ingester`), the documentation includes confidence annotations:
+When `provenance.yaml` exists (from `@doc-collector`/`@doc-extractor`), the documentation includes confidence annotations:
 - HIGH confidence — no annotation
 - MEDIUM confidence — *(needs verification)* in italic
 - LOW confidence — warning panel: "verify with source documents"
@@ -1435,7 +1437,7 @@ These commands can be typed in any agent's chat session. The agent will either h
 
 **New system from existing docs (recommended):**
 ```
-@doc-ingester → @validator → @architect → @deployer → @security-reviewer → @diagram-generator → @doc-writer
+@doc-collector → @validator → @architect → @deployer → @security-reviewer → @diagram-generator → @doc-writer
 ```
 
 **New system from scratch (no docs):**
@@ -1482,7 +1484,7 @@ Each system gets its own subfolder under `architecture/`. The `networks.yaml` fi
 
 ## Zero-Hallucination Pipeline
 
-When using `@doc-ingester` to extract architecture from existing documents, the system enforces a **zero-hallucination invariant**:
+When using `@doc-collector`/`@doc-extractor` to extract architecture from existing documents, the system enforces a **zero-hallucination invariant**:
 
 > For every element E in the output YAML, there exists a source reference S in the input documents where E is a direct extraction (not inference) from S, and S is verifiable by human review.
 
@@ -1517,7 +1519,7 @@ Confidence determines routing: HIGH elements auto-present, MEDIUM elements get `
 
 ### Provenance File
 
-After extraction, `@doc-ingester` writes `architecture/<system-id>/provenance.yaml` containing:
+After extraction, `@doc-collector`/`@doc-extractor` writes `architecture/<system-id>/provenance.yaml` containing:
 - Per-field source citations with document, section, and extraction pass
 - Supporting quotes from source documents
 - Conflict resolution history
@@ -1644,11 +1646,11 @@ Doc2ArchAgent's key differentiator is the **zero-hallucination pipeline**: every
 |-------|---------|
 | Agents don't appear in Copilot Chat dropdown | Ensure `.github/agents/` is at the workspace root. Reload VS Code (`Ctrl+Shift+P` → "Reload Window"). |
 | Agent says "No architecture files found" | Run `@architect` first to create `system.yaml` and `networks.yaml`. |
-| `@doc-ingester` can't convert PDF/DOCX | Install pandoc (`choco install pandoc`) or switch to Option 1 (manual text conversion). |
-| `@doc-ingester` says "pdftotext not found" | Install poppler-utils, or copy-paste the PDF content into chat (Option 3). |
+| `@doc-collector`/`@doc-extractor` can't convert PDF/DOCX | Install pandoc (`choco install pandoc`) or switch to Option 1 (manual text conversion). |
+| `@doc-collector`/`@doc-extractor` says "pdftotext not found" | Install poppler-utils, or copy-paste the PDF content into chat (Option 3). |
 | Image in docs folder not readable | Paste the image directly into Copilot Chat. The agent uses GPT-4o Vision to analyze it. |
 | Extraction shows LOW confidence for many fields | Your documents may be ambiguous. Review the cited sources and provide corrections at each layer. |
-| `@doc-ingester` extracted something wrong | Say the field number to correct it, or "reject" to remove the extraction entirely. |
+| `@doc-collector`/`@doc-extractor` extracted something wrong | Say the field number to correct it, or "reject" to remove the extraction entirely. |
 | Validation shows "non-existent context" errors | A container references a `context_id` that doesn't exist. Check your contexts list. |
 | Diagrams have empty Deployment_Nodes | Known Mermaid limitation. The agent adds comments explaining the omission. |
 | PlantUML shows `Syntax Error?` | Most common cause: hyphens in aliases. The PlantUML agent converts kebab-case to snake_case automatically. If editing manually, use only alphanumeric + underscore in aliases. |

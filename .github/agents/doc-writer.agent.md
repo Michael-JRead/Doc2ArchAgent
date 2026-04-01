@@ -15,9 +15,9 @@ handoffs:
   - label: "Validate"
     agent: validator
     prompt: "Validate architecture YAML for structural correctness."
-  - label: "Ingest documents"
-    agent: doc-ingester
-    prompt: "Extract architecture entities from existing documents into YAML."
+  - label: "Collect documents for ingestion"
+    agent: doc-collector
+    prompt: "Collect and convert architecture documents for entity extraction."
 ---
 
 # Documentation Writer Agent

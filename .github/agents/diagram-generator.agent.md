@@ -278,7 +278,7 @@ If the user requests a level beyond what was extracted:
 
 Options:
 1. Generate with available data only
-2. Add more documents → @doc-ingester
+2. Add more documents → @doc-collector
 3. Fill in details manually → @architect
 ```
 

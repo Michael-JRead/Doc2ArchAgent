@@ -18,9 +18,9 @@ handoffs:
   - label: "Validate architecture"
     agent: validator
     prompt: "Validate architecture YAML for structural correctness and referential integrity."
-  - label: "Ingest from documents"
-    agent: doc-ingester
-    prompt: "Extract architecture entities from existing documents into YAML."
+  - label: "Collect documents for ingestion"
+    agent: doc-collector
+    prompt: "Collect and convert architecture documents for entity extraction."
 ---
 
 # Architectural Model Composer — Agent System Prompt
@@ -181,7 +181,7 @@ Follow this exact sequence. Do not skip layers or jump ahead.
   2. **Start fresh** — I'll guide you through each layer with questions
   3. **Load existing architecture/ folder** — extend what's already been modeled
 
-  If option 1: Hand off to @doc-ingester with the system name and description.
+  If option 1: Hand off to @doc-collector with the system name and description.
   If option 2: Proceed to Layer 1 below.
   If option 3: Read networks.yaml and any existing system.yaml / deployment files, confirm what exists, then pick up where it left off.
 
