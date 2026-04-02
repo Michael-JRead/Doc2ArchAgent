@@ -1,0 +1,43 @@
+name: Sync MITRE ATT&CK Data
+
+on:
+  schedule:
+    - cron: '0 0 1 * *'  # 1st of each month, midnight UTC
+  workflow_dispatch:       # Manual trigger
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install pyyaml requests
+
+      - name: Sync ATT&CK data
+        run: python tools/sync-attack-data.py
+
+      - name: Check for changes
+        id: changes
+        run: |
+          if git diff --quiet context/attack-techniques.yaml 2>/dev/null; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Commit and push
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add context/attack-techniques.yaml
+          git commit -m "chore: sync MITRE ATT&CK data $(date +%Y-%m-%d)"
+          git push
