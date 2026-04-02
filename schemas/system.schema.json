@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/Michael-JRead/Doc2ArchAgent/schemas/system.schema.json",
   "title": "Doc2ArchAgent System YAML Schema",
-  "description": "Schema for architecture/*/system.yaml — the core C4 architecture model.",
+  "description": "Schema for architecture/*/system.yaml — the core C4 architecture model with security-enriched fields for threat modeling, compliance validation, and attack surface analysis.",
   "type": "object",
   "properties": {
     "metadata": {
@@ -18,7 +18,8 @@
         },
         "compliance_frameworks": {
           "type": "array",
-          "items": { "type": "string" }
+          "items": { "type": "string" },
+          "description": "Regulatory frameworks this system must comply with (e.g., PCI-DSS, SOC2, GDPR, HIPAA, ISO27001)."
         },
         "confidence_threshold": {
           "type": "number",
@@ -26,6 +27,29 @@
           "maximum": 1,
           "default": 0.95,
           "description": "Minimum extraction confidence (0.0–1.0) for including entities. Default 0.95."
+        },
+        "business_criticality": {
+          "type": "string",
+          "enum": ["mission_critical", "critical", "important", "operational", "archive"],
+          "description": "Business criticality tier. Drives risk impact scoring and SLA expectations."
+        },
+        "data_sensitivity_level": {
+          "type": "string",
+          "enum": ["public", "internal", "confidential", "restricted"],
+          "description": "System-wide default data sensitivity. Individual data_entities may override."
+        },
+        "threat_model_version": {
+          "type": "string",
+          "description": "Version identifier for the threat model (e.g., 1.0, 2024-Q4-review)."
+        },
+        "last_review_date": {
+          "type": "string",
+          "format": "date",
+          "description": "ISO 8601 date of last security/architecture review."
+        },
+        "reviewer": {
+          "type": "string",
+          "description": "Person or team who conducted the last review."
         }
       },
       "required": ["name", "description", "owner", "status"],
@@ -89,7 +113,11 @@
             "type": "string",
             "enum": ["proposed", "active", "deprecated", "decommissioned"]
           },
-          "out_of_scope": { "type": "boolean", "default": false }
+          "out_of_scope": { "type": "boolean", "default": false },
+          "owner": {
+            "type": "string",
+            "description": "Team or person owning this container. Overrides system-level owner for blast radius contact."
+          }
         },
         "required": ["id", "name", "context_id", "container_type", "technology"],
         "additionalProperties": true
@@ -145,13 +173,22 @@
           "multi_tenant": {
             "type": "boolean",
             "default": false,
-            "description": "Multi-tenant components require stronger authentication."
+            "description": "Multi-tenant components require stronger authentication and tenant isolation."
           },
           "out_of_scope": { "type": "boolean", "default": false },
           "encryption_at_rest": {
             "type": "string",
-            "enum": ["none", "aes-256", "rsa", "envelope", "platform_managed", "customer_managed"],
+            "enum": ["none", "aes-256", "aes-128", "rsa", "envelope", "platform_managed", "customer_managed"],
             "description": "At-rest encryption for data-storing components."
+          },
+          "encryption_key_management": {
+            "type": "string",
+            "enum": ["provider_managed", "customer_managed", "byok", "hsm", "vault"],
+            "description": "How encryption keys are managed. HSM/vault indicate stronger key protection."
+          },
+          "secrets_manager_ref": {
+            "type": "string",
+            "description": "Reference to an infrastructure_resource ID for secrets management (e.g., hashicorp-vault)."
           },
           "availability": {
             "type": "string",
@@ -163,6 +200,54 @@
             "enum": ["critical", "high", "medium", "low"],
             "description": "Integrity requirement. Critical components trigger tampering risk rules."
           },
+          "confidentiality": {
+            "type": "string",
+            "enum": ["critical", "high", "medium", "low"],
+            "description": "Confidentiality requirement (CIA triad). Critical components require encryption and strong access control."
+          },
+          "dfd_element_type": {
+            "type": "string",
+            "enum": ["process", "data_store", "external_entity"],
+            "description": "Data Flow Diagram element type for STRIDE-per-element applicability. process=all 6, data_store=TRID, external_entity=SR."
+          },
+          "stores_data": {
+            "type": "boolean",
+            "default": false,
+            "description": "Whether this component persists data. Enables encryption-at-rest and data retention rules."
+          },
+          "processes_pii": {
+            "type": "boolean",
+            "default": false,
+            "description": "Whether this component processes PII. Triggers GDPR/privacy compliance rules."
+          },
+          "audit_logging": {
+            "type": "boolean",
+            "description": "Whether this component emits audit logs. Required for HIPAA §164.312(b) and PCI-DSS Req 10."
+          },
+          "audit_log_destination": {
+            "type": "string",
+            "description": "Reference to a logging infrastructure_resource ID where audit logs are sent."
+          },
+          "rto_minutes": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Recovery Time Objective in minutes. Drives disaster recovery planning."
+          },
+          "rpo_minutes": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Recovery Point Objective in minutes. Drives backup frequency requirements."
+          },
+          "slsa_level": {
+            "type": "integer",
+            "enum": [0, 1, 2, 3],
+            "description": "SLSA supply chain integrity level (0=none, 3=highest). Enables supply chain threat rules."
+          },
+          "sbom_available": {
+            "type": "boolean",
+            "default": false,
+            "description": "Whether an SBOM (Software Bill of Materials) exists for this component."
+          },
           "listeners": {
             "type": "array",
             "items": {
@@ -173,6 +258,34 @@
                 "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
                 "tls_enabled": { "type": "boolean" },
                 "tls_version_min": { "type": "string" },
+                "tls_version_max": {
+                  "type": "string",
+                  "description": "Maximum TLS version (e.g., 1.3). Useful to detect forced downgrades."
+                },
+                "cipher_suite_policy": {
+                  "type": "string",
+                  "enum": ["modern", "intermediate", "legacy", "custom"],
+                  "description": "Cipher suite policy. modern=TLS 1.3 AEAD only, intermediate=TLS 1.2+ PFS, legacy=weak suites (flagged)."
+                },
+                "forward_secrecy_required": {
+                  "type": "boolean",
+                  "description": "Perfect Forward Secrecy via ECDHE. Prevents retrospective decryption if keys compromised."
+                },
+                "certificate_type": {
+                  "type": "string",
+                  "enum": ["dv", "ov", "ev", "self_signed", "internal_ca", "none"],
+                  "description": "TLS certificate validation level. Self-signed certificates flag as risk in production."
+                },
+                "mtls_mode": {
+                  "type": "string",
+                  "enum": ["none", "optional", "strict"],
+                  "description": "Mutual TLS mode. strict=both sides verify identity (Zero Trust requirement)."
+                },
+                "tls_termination_point": {
+                  "type": "string",
+                  "enum": ["self", "load_balancer", "api_gateway", "service_mesh", "cdn"],
+                  "description": "Where TLS terminates. Affects whether internal traffic is encrypted."
+                },
                 "authn_mechanism": {
                   "type": "string",
                   "enum": [
@@ -180,7 +293,51 @@
                     "mtls", "certificate", "jwt", "mfa", "password", "custom"
                   ]
                 },
-                "authz_required": { "type": "boolean" }
+                "authz_required": { "type": "boolean" },
+                "rate_limiting_enabled": {
+                  "type": "boolean",
+                  "description": "Whether rate limiting is active on this listener. OWASP API #4."
+                },
+                "rate_limit_rps": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "description": "Maximum requests per second. Enables DoS risk quantification."
+                },
+                "throttle_by": {
+                  "type": "string",
+                  "enum": ["ip", "api_key", "user", "tenant", "none"],
+                  "description": "Rate limiting dimension. tenant-level throttling prevents noisy neighbor."
+                },
+                "exposure": {
+                  "type": "string",
+                  "enum": ["public", "partner", "internal", "localhost"],
+                  "description": "Intended exposure scope. More granular than zone-level internet_routable."
+                },
+                "api_type": {
+                  "type": "string",
+                  "enum": ["rest", "graphql", "grpc", "soap", "websocket", "tcp_raw", "udp"],
+                  "description": "API protocol type. GraphQL and SOAP have specific threat surfaces."
+                },
+                "admin_interface": {
+                  "type": "boolean",
+                  "default": false,
+                  "description": "Administrative endpoint. Higher risk — requires MFA per PCI-DSS Req 8.3."
+                },
+                "session_timeout_minutes": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "description": "Session/token timeout in minutes. Long sessions increase session hijacking risk."
+                },
+                "error_detail_exposure": {
+                  "type": "string",
+                  "enum": ["none", "generic", "detailed", "stack_trace"],
+                  "description": "Error response verbosity. detailed/stack_trace in production is information disclosure."
+                },
+                "cors_policy": {
+                  "type": "string",
+                  "enum": ["none", "restrictive", "permissive", "wildcard"],
+                  "description": "CORS policy strictness. Wildcard CORS on authenticated endpoints is a vulnerability."
+                }
               },
               "required": ["id", "protocol", "port", "tls_enabled", "authn_mechanism", "authz_required"],
               "additionalProperties": true
@@ -193,7 +350,7 @@
     },
     "component_relationships": {
       "type": "array",
-      "description": "Relationships between components.",
+      "description": "Relationships between components — data flows for STRIDE analysis.",
       "items": {
         "type": "object",
         "properties": {
@@ -215,6 +372,28 @@
             "type": "string",
             "enum": ["business", "devops", "monitoring"],
             "default": "business"
+          },
+          "interaction_type": {
+            "type": "string",
+            "enum": ["request_response", "publish_subscribe", "fire_and_forget", "streaming", "batch"],
+            "description": "Communication pattern. Async patterns have different threat profiles (replay, ordering)."
+          },
+          "mutual_authentication": {
+            "type": "boolean",
+            "description": "Both sides verify identity (mTLS, not just server TLS). Zero Trust requirement."
+          },
+          "input_validation": {
+            "type": "string",
+            "enum": ["none", "schema", "allowlist", "waf", "custom"],
+            "description": "Input validation at this boundary. none=injection risk."
+          },
+          "replay_protection": {
+            "type": "boolean",
+            "description": "Whether nonces/timestamps/sequence numbers prevent replay attacks."
+          },
+          "data_masking": {
+            "type": "boolean",
+            "description": "Whether PII/sensitive fields are masked or tokenized in transit."
           }
         },
         "required": ["id", "source_component", "target_component", "label"],
@@ -223,14 +402,58 @@
     },
     "external_systems": {
       "type": "array",
-      "description": "External systems referenced by contexts or relationships.",
+      "description": "External systems referenced by contexts or relationships. Security Lead's #1 attack surface.",
       "items": {
         "type": "object",
         "properties": {
           "id": { "type": "string", "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$" },
           "name": { "type": "string", "minLength": 1 },
           "description": { "type": "string" },
-          "category": { "type": "string" }
+          "category": {
+            "type": "string",
+            "enum": ["partner", "vendor", "saas", "open_source", "government", "customer", "other"],
+            "description": "External system relationship category. Drives vendor risk assessment."
+          },
+          "trust_level": {
+            "type": "string",
+            "enum": ["trusted", "semi_trusted", "untrusted"],
+            "description": "Trust level assigned to this external system. Affects STRIDE-per-element applicability."
+          },
+          "data_classification": {
+            "type": "string",
+            "enum": ["public", "internal", "confidential", "restricted"],
+            "description": "Highest data classification exchanged with this system."
+          },
+          "authn_mechanism": {
+            "type": "string",
+            "enum": [
+              "none", "api_key", "basic", "oauth2", "oidc", "saml",
+              "mtls", "certificate", "jwt", "mfa", "password", "custom"
+            ],
+            "description": "Authentication mechanism used when communicating with this external system."
+          },
+          "tls_required": {
+            "type": "boolean",
+            "description": "Whether TLS is required for communication with this external system."
+          },
+          "sla_tier": {
+            "type": "string",
+            "enum": ["platinum", "gold", "silver", "bronze", "none"],
+            "description": "Service level agreement tier. Drives availability impact analysis."
+          },
+          "vendor_security_assessed": {
+            "type": "boolean",
+            "description": "Whether a vendor security assessment has been conducted."
+          },
+          "vendor_security_assessment_date": {
+            "type": "string",
+            "format": "date",
+            "description": "Date of last vendor security assessment. Stale assessments trigger re-review."
+          },
+          "data_residency": {
+            "type": "string",
+            "description": "Geographic region where this external system processes/stores data (e.g., US, EU, APAC)."
+          }
         },
         "required": ["id", "name"],
         "additionalProperties": true
@@ -238,7 +461,7 @@
     },
     "data_entities": {
       "type": "array",
-      "description": "Data entities referenced in component relationships.",
+      "description": "Data entities referenced in component relationships. Regulatory annotations enable automated compliance rules.",
       "items": {
         "type": "object",
         "properties": {
@@ -248,6 +471,51 @@
           "classification": {
             "type": "string",
             "enum": ["public", "internal", "confidential", "restricted"]
+          },
+          "contains_pii": {
+            "type": "boolean",
+            "default": false,
+            "description": "Contains Personally Identifiable Information. Triggers GDPR Art 32 controls."
+          },
+          "contains_phi": {
+            "type": "boolean",
+            "default": false,
+            "description": "Contains Protected Health Information. Triggers HIPAA §164.312 controls."
+          },
+          "contains_pci": {
+            "type": "boolean",
+            "default": false,
+            "description": "Contains Payment Card Industry data (cardholder data, PANs). Triggers PCI-DSS Req 3/4."
+          },
+          "data_subject_type": {
+            "type": "string",
+            "enum": ["customer", "employee", "partner", "public", "system"],
+            "description": "Type of data subjects. Drives DSAR scope and breach notification requirements."
+          },
+          "retention_days": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Data retention period in days. 0=indefinite. Enables data lifecycle compliance checks."
+          },
+          "residency_requirements": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Geographic regions where this data must reside (e.g., ['EU', 'US']). Drives GDPR Art 44 checks."
+          },
+          "masking_required": {
+            "type": "boolean",
+            "default": false,
+            "description": "Whether this data requires masking/tokenization when displayed or logged."
+          },
+          "origin": {
+            "type": "string",
+            "enum": ["user_input", "system_generated", "third_party", "derived"],
+            "description": "Data origin. user_input data requires stricter input validation."
+          },
+          "volume": {
+            "type": "string",
+            "enum": ["low", "medium", "high", "very_high"],
+            "description": "Data volume indicator. High-volume data exfiltration has greater blast radius."
           }
         },
         "required": ["id", "name"],
@@ -256,7 +524,7 @@
     },
     "trust_boundaries": {
       "type": "array",
-      "description": "Trust boundaries between network zones.",
+      "description": "Trust boundaries between network zones. Enriched with enforcement details for STRIDE-per-interaction analysis.",
       "items": {
         "type": "object",
         "properties": {
@@ -264,7 +532,26 @@
           "name": { "type": "string", "minLength": 1 },
           "description": { "type": "string" },
           "source_zone": { "type": "string" },
-          "target_zone": { "type": "string" }
+          "target_zone": { "type": "string" },
+          "boundary_type": {
+            "type": "string",
+            "enum": ["network", "process", "privilege", "jurisdiction", "vendor"],
+            "description": "Type of trust boundary. Jurisdiction boundaries trigger data residency rules."
+          },
+          "enforcement_mechanism": {
+            "type": "string",
+            "enum": ["firewall", "api_gateway", "service_mesh", "iam_policy", "physical", "none"],
+            "description": "How the boundary is enforced. none=logical-only boundary, higher risk."
+          },
+          "inspection_enabled": {
+            "type": "boolean",
+            "description": "Whether deep packet inspection or content inspection occurs at this boundary."
+          },
+          "bidirectional": {
+            "type": "boolean",
+            "default": true,
+            "description": "Whether enforcement applies in both directions. Unidirectional boundaries may allow lateral movement."
+          }
         },
         "required": ["id", "name", "source_zone", "target_zone"],
         "additionalProperties": true
@@ -282,7 +569,17 @@
           "justification": { "type": "string", "minLength": 10 },
           "accepted_by": { "type": "string", "minLength": 1 },
           "review_date": { "type": "string", "format": "date" },
-          "expires": { "type": "string", "format": "date" }
+          "expires": { "type": "string", "format": "date" },
+          "compensating_controls": {
+            "type": "string",
+            "description": "Description of compensating controls that mitigate this accepted risk."
+          },
+          "risk_score": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 16,
+            "description": "Risk score at time of acceptance (likelihood × impact). Enables trend tracking."
+          }
         },
         "required": ["id", "finding_pattern", "justification", "accepted_by", "review_date"],
         "additionalProperties": true

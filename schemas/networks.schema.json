@@ -2,12 +2,12 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/Michael-JRead/Doc2ArchAgent/schemas/networks.schema.json",
   "title": "Doc2ArchAgent Networks YAML Schema",
-  "description": "Schema for architecture/networks.yaml — shared network zones and infrastructure resources.",
+  "description": "Schema for architecture/networks.yaml — shared network zones, infrastructure resources, and zone-to-zone access policies.",
   "type": "object",
   "properties": {
     "network_zones": {
       "type": "array",
-      "description": "Network zones defining trust boundaries.",
+      "description": "Network zones defining trust boundaries and segmentation.",
       "items": {
         "type": "object",
         "properties": {
@@ -15,14 +15,46 @@
           "name": { "type": "string", "minLength": 1 },
           "zone_type": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "description": "Zone classification (e.g., external, dmz, private, management, data)."
           },
           "internet_routable": { "type": "boolean" },
           "trust": {
             "type": "string",
             "enum": ["trusted", "semi_trusted", "untrusted"]
           },
-          "description": { "type": "string" }
+          "description": { "type": "string" },
+          "segmentation_type": {
+            "type": "string",
+            "enum": ["physical", "vlan", "vpc", "subnet", "namespace", "security_group", "microsegment", "none"],
+            "description": "Network segmentation enforcement mechanism. none=logical-only, higher risk."
+          },
+          "egress_filtered": {
+            "type": "boolean",
+            "description": "Whether outbound traffic is filtered. Unfiltered egress enables data exfiltration."
+          },
+          "ids_ips_enabled": {
+            "type": "boolean",
+            "description": "Whether intrusion detection/prevention systems monitor this zone."
+          },
+          "dlp_enabled": {
+            "type": "boolean",
+            "description": "Whether data loss prevention controls are active in this zone."
+          },
+          "default_deny": {
+            "type": "boolean",
+            "description": "Whether the zone defaults to deny-all for inbound traffic. Zero Trust baseline."
+          },
+          "allowed_ingress_zones": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Zone IDs allowed to send traffic into this zone. Enables firewall ACL validation."
+          },
+          "allowed_egress_zones": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Zone IDs this zone is allowed to send traffic to. Enables egress policy validation."
+          }
         },
         "required": ["id", "name", "zone_type", "internet_routable", "trust"],
         "additionalProperties": true
@@ -30,15 +62,36 @@
     },
     "infrastructure_resources": {
       "type": "array",
-      "description": "Infrastructure resources deployed into network zones.",
+      "description": "Infrastructure resources deployed into network zones — WAFs, load balancers, logging, secrets managers, etc.",
       "items": {
         "type": "object",
         "properties": {
           "id": { "type": "string", "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$" },
           "name": { "type": "string", "minLength": 1 },
-          "resource_type": { "type": "string", "minLength": 1 },
+          "resource_type": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Resource type (waf, load_balancer, logging, monitoring, secrets_manager, iam, hsm, ddos_protection, siem, vulnerability_scanner, container_registry, ids_ips, etc.)."
+          },
           "technology": { "type": "string", "minLength": 1 },
-          "zone_id": { "type": "string" }
+          "zone_id": { "type": "string" },
+          "version": {
+            "type": "string",
+            "description": "Product version. Enables CVE-aware vulnerability checks."
+          },
+          "high_availability": {
+            "type": "boolean",
+            "description": "Whether this resource is deployed in HA mode."
+          },
+          "encryption_key_management": {
+            "type": "string",
+            "enum": ["provider_managed", "customer_managed", "byok", "hsm"],
+            "description": "Key management model for encryption resources."
+          },
+          "compliance_certified": {
+            "type": "boolean",
+            "description": "Whether this resource has relevant compliance certifications (SOC2, ISO 27001, etc.)."
+          }
         },
         "required": ["id", "name", "resource_type", "technology", "zone_id"],
         "additionalProperties": true

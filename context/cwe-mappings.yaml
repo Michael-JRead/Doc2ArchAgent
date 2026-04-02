@@ -108,3 +108,104 @@ finding_categories:
     cwe_url: https://cwe.mitre.org/data/definitions/770.html
     severity: medium
     stride_category: denial_of_service
+
+  # New CWE mappings for enriched schema fields
+
+  - id: no-supply-chain-attestation
+    name: No Supply Chain Attestation
+    description: A component has no SLSA level or SBOM for dependency verification.
+    cwe_id: CWE-1104
+    cwe_name: Use of Unmaintained Third-Party Components
+    cwe_url: https://cwe.mitre.org/data/definitions/1104.html
+    severity: low
+    stride_category: tampering
+
+  - id: no-input-validation
+    name: No Input Validation
+    description: A data flow has no input validation, enabling injection attacks.
+    cwe_id: CWE-20
+    cwe_name: Improper Input Validation
+    cwe_url: https://cwe.mitre.org/data/definitions/20.html
+    severity: medium
+    stride_category: tampering
+
+  - id: external-vendor-no-assessment
+    name: External Vendor Without Security Assessment
+    description: A vendor or partner external system has no recorded security assessment.
+    cwe_id: CWE-829
+    cwe_name: Inclusion of Functionality from Untrusted Control Sphere
+    cwe_url: https://cwe.mitre.org/data/definitions/829.html
+    severity: low
+    stride_category: spoofing
+
+  - id: verbose-error-exposure
+    name: Verbose Error Details Exposed
+    description: A listener exposes detailed error messages or stack traces.
+    cwe_id: CWE-209
+    cwe_name: Generation of Error Message Containing Sensitive Information
+    cwe_url: https://cwe.mitre.org/data/definitions/209.html
+    severity: medium
+    stride_category: information_disclosure
+
+  - id: admin-interface-no-mfa
+    name: Admin Interface Without MFA
+    description: An administrative endpoint does not use multi-factor authentication.
+    cwe_id: CWE-308
+    cwe_name: Use of Single-factor Authentication
+    cwe_url: https://cwe.mitre.org/data/definitions/308.html
+    severity: high
+    stride_category: spoofing
+
+  - id: excessive-session-timeout
+    name: Excessive Session Timeout
+    description: A listener has a session timeout exceeding 8 hours.
+    cwe_id: CWE-613
+    cwe_name: Insufficient Session Expiration
+    cwe_url: https://cwe.mitre.org/data/definitions/613.html
+    severity: low
+    stride_category: spoofing
+
+  - id: wildcard-cors-authenticated
+    name: Wildcard CORS on Authenticated Endpoint
+    description: A listener with authentication has a wildcard CORS policy.
+    cwe_id: CWE-346
+    cwe_name: Origin Validation Error
+    cwe_url: https://cwe.mitre.org/data/definitions/346.html
+    severity: high
+    stride_category: spoofing
+
+  - id: unenforced-trust-boundary
+    name: Unenforced Trust Boundary
+    description: A trust boundary has no enforcement mechanism defined.
+    cwe_id: CWE-284
+    cwe_name: Improper Access Control
+    cwe_url: https://cwe.mitre.org/data/definitions/284.html
+    severity: medium
+    stride_category: elevation_of_privilege
+
+  - id: no-audit-logging
+    name: Missing Audit Logging on Component
+    description: A component handling sensitive data has no audit logging enabled.
+    cwe_id: CWE-778
+    cwe_name: Insufficient Logging
+    cwe_url: https://cwe.mitre.org/data/definitions/778.html
+    severity: medium
+    stride_category: repudiation
+
+  - id: pii-no-encryption-in-transit
+    name: PII Data on Unencrypted Flow
+    description: PII data is transmitted without TLS encryption.
+    cwe_id: CWE-319
+    cwe_name: Cleartext Transmission of Sensitive Information
+    cwe_url: https://cwe.mitre.org/data/definitions/319.html
+    severity: critical
+    stride_category: information_disclosure
+
+  - id: pci-data-no-masking
+    name: PCI Data Without Masking
+    description: PCI cardholder data is transmitted without masking or tokenization.
+    cwe_id: CWE-200
+    cwe_name: Exposure of Sensitive Information to an Unauthorized Actor
+    cwe_url: https://cwe.mitre.org/data/definitions/200.html
+    severity: high
+    stride_category: information_disclosure

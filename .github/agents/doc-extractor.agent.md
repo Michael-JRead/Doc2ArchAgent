@@ -406,7 +406,21 @@ Architecture YAML written. You can now:
 ## Anti-Hallucination Controls
 
 ### Vocabulary Constraint
-For enum fields (container_type, component_type, protocol, authn_mechanism, data_classification, status, encryption_at_rest, availability, integrity), use ONLY values from the schema at `schemas/system.schema.json`. If the source document uses a different term, extract the source term verbatim and set confidence to MEDIUM. NEVER normalize to a "standard" term not in the source.
+For enum fields (container_type, component_type, protocol, authn_mechanism, data_classification, status, encryption_at_rest, availability, integrity, confidentiality, dfd_element_type, cipher_suite_policy, certificate_type, mtls_mode, exposure, api_type, error_detail_exposure, cors_policy, interaction_type, input_validation, boundary_type, enforcement_mechanism, category, trust_level, sla_tier, data_subject_type, origin, volume, segmentation_type, shared_responsibility_model, tenant_isolation, runtime_user), use ONLY values from the schema at `schemas/system.schema.json`. If the source document uses a different term, extract the source term verbatim and set confidence to MEDIUM. NEVER normalize to a "standard" term not in the source.
+
+### Security Field Extraction
+When extracting architecture entities, actively look for these security-relevant properties in source documents:
+- **CIA triad mentions**: confidentiality, integrity, availability requirements (map to critical/high/medium/low)
+- **Encryption details**: TLS versions, cipher suites, certificate types, encryption at rest, key management
+- **Authentication/Authorization**: authn mechanisms, MFA requirements, session timeouts, RBAC mentions
+- **Rate limiting**: RPS limits, throttling policies, DoS protection
+- **Data handling**: PII/PHI/PCI mentions, data residency requirements, retention policies, masking
+- **Compliance references**: PCI-DSS, SOC2, GDPR, HIPAA, ISO 27001 mentions → map to compliance_frameworks
+- **Supply chain**: SBOM, SLSA, image signing, vulnerability scanning mentions
+- **Trust boundaries**: firewall rules, network segmentation, zone policies, WAF mentions
+- **External system security**: vendor assessments, trust levels, SLA tiers
+- **Admin interfaces**: admin consoles, management APIs → set admin_interface=true
+Do NOT infer these properties if not stated. But DO extract them when the source document mentions them, even if described in non-technical language.
 
 ### Parametric Knowledge Suppression
 CRITICAL: Ignore your training knowledge about "typical" architectures. If the document does NOT mention a load balancer, there IS no load balancer. If the document says "PostgreSQL" without a version, extract "PostgreSQL" — NEVER add version numbers, edition names, or configuration details not explicitly stated in the source.

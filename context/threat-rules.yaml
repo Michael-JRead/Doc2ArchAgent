@@ -440,3 +440,381 @@ rules:
         operator: equals
         value: false
     remediation: Add a monitoring infrastructure resource to the zone.
+
+  # ============================================================
+  # RATE LIMITING & DoS RULES (new — leverage rate_limiting_enabled)
+  # ============================================================
+
+  - id: no-rate-limiting
+    title: No Rate Limiting on Internet-Exposed Listener
+    description: >
+      An internet-facing listener has no rate limiting configured.
+      This makes it vulnerable to brute force, credential stuffing,
+      and volumetric abuse. OWASP API Security Top 10 #4.
+    stride: denial_of_service
+    cwe: 770
+    cwe_name: Allocation of Resources Without Limits or Throttling
+    severity: medium
+    iterate_over: listeners
+    conditions:
+      - field: zone.internet_routable
+        operator: equals
+        value: true
+      - field: listener.rate_limiting_enabled
+        operator: in
+        value: [false, null]
+    severity_overrides:
+      - when: listener.authn_mechanism equals "none"
+        then: high
+        reason: Unauthenticated internet-facing endpoint without rate limiting enables mass abuse
+      - when: data_classification in ["confidential", "restricted"]
+        then: high
+        reason: Sensitive data endpoints need protection from enumeration attacks
+    remediation: Enable rate limiting (rate_limiting_enabled) with appropriate RPS limits and throttle_by dimension.
+
+  # ============================================================
+  # SUPPLY CHAIN RULES (new — leverage slsa_level, sbom_available)
+  # ============================================================
+
+  - id: no-supply-chain-attestation
+    title: No Supply Chain Attestation
+    description: >
+      A component has no SLSA level or SBOM. Without supply chain
+      attestation, compromised dependencies may go undetected.
+      OWASP Top 10 2021 #A08 (Software and Data Integrity Failures).
+    stride: tampering
+    cwe: 1104
+    cwe_name: Use of Unmaintained Third-Party Components
+    severity: low
+    iterate_over: components
+    conditions:
+      - field: component.slsa_level
+        operator: in
+        value: [null, 0]
+      - field: component.sbom_available
+        operator: in
+        value: [false, null]
+    severity_overrides:
+      - when: data_classification in ["confidential", "restricted"]
+        then: medium
+        reason: Components handling sensitive data need supply chain verification
+      - when: zone.internet_routable equals true
+        then: medium
+        reason: Internet-facing components are higher-value targets for supply chain attacks
+    false_positive_note: >
+      May be acceptable for legacy components with no active development
+      or internally-built components with other verification processes.
+    remediation: Generate an SBOM (CycloneDX or SPDX format) and target SLSA Level 2+.
+
+  # ============================================================
+  # CONFIDENTIALITY RULES (new — leverage confidentiality field)
+  # ============================================================
+
+  - id: high-confidentiality-no-encryption
+    title: High-Confidentiality Component Without Encryption at Rest
+    description: >
+      A component with critical or high confidentiality requirements
+      has no encryption at rest configured. Stored data may be exposed
+      if storage media or backups are compromised.
+    stride: information_disclosure
+    cwe: 311
+    cwe_name: Missing Encryption of Sensitive Data
+    severity: high
+    iterate_over: components
+    conditions:
+      - field: component.confidentiality
+        operator: in
+        value: ["critical", "high"]
+      - field: component.encryption_at_rest
+        operator: in
+        value: ["none", null]
+    severity_overrides:
+      - when: component.stores_data equals true
+        then: critical
+        reason: Data-storing component with high confidentiality and no encryption is critical
+    remediation: Enable encryption at rest (aes-256, platform_managed, or customer_managed) and configure key management.
+
+  # ============================================================
+  # INPUT VALIDATION RULES (new — leverage input_validation)
+  # ============================================================
+
+  - id: no-input-validation
+    title: No Input Validation on Data Flow
+    description: >
+      A data flow has no input validation configured. Without validation,
+      the target component is vulnerable to injection attacks (SQLi, XSS,
+      command injection). OWASP Top 10 2021 #A03.
+    stride: tampering
+    cwe: 20
+    cwe_name: Improper Input Validation
+    severity: medium
+    iterate_over: relationships
+    conditions:
+      - field: relationship.input_validation
+        operator: in
+        value: ["none", null]
+    severity_overrides:
+      - when: data_classification in ["confidential", "restricted"]
+        then: high
+        reason: Flows carrying sensitive data need input validation to prevent injection
+      - when: crosses_trust_boundary equals true
+        then: high
+        reason: Cross-boundary flows without validation enable boundary bypass attacks
+    remediation: Add input validation (schema, allowlist, or waf) on the receiving component.
+
+  # ============================================================
+  # EXTERNAL SYSTEM RULES (new — leverage trust_level, vendor assessment)
+  # ============================================================
+
+  - id: untrusted-external-no-tls
+    title: Untrusted External System Without TLS
+    description: >
+      An external system with untrusted or unspecified trust level
+      does not require TLS for communication. Data exchanged with
+      this system may be intercepted.
+    stride: information_disclosure
+    cwe: 319
+    cwe_name: Cleartext Transmission of Sensitive Information
+    severity: high
+    iterate_over: external_systems
+    conditions:
+      - field: external_system.tls_required
+        operator: in
+        value: [false, null]
+      - field: external_system.trust_level
+        operator: in
+        value: ["untrusted", "semi_trusted", null]
+    severity_overrides:
+      - when: external_system.data_classification in ["confidential", "restricted"]
+        then: critical
+        reason: Sensitive data sent to external system without TLS
+    remediation: Require TLS (tls_required=true) for all external system communication.
+
+  - id: external-vendor-no-assessment
+    title: External Vendor Without Security Assessment
+    description: >
+      A vendor or partner external system has no recorded security
+      assessment. Third-party risk management requires periodic
+      vendor security reviews.
+    stride: spoofing
+    cwe: 829
+    cwe_name: Inclusion of Functionality from Untrusted Control Sphere
+    severity: low
+    iterate_over: external_systems
+    conditions:
+      - field: external_system.category
+        operator: in
+        value: ["vendor", "partner", "saas"]
+      - field: external_system.vendor_security_assessed
+        operator: in
+        value: [false, null]
+    severity_overrides:
+      - when: external_system.data_classification in ["confidential", "restricted"]
+        then: medium
+        reason: Vendors handling sensitive data require formal security assessment
+    false_positive_note: >
+      May be acceptable for well-known, audited services (e.g., major cloud providers)
+      where public compliance certifications serve as the assessment.
+    remediation: Conduct a vendor security assessment and record the date.
+
+  # ============================================================
+  # DATA ENTITY COMPLIANCE RULES (new — leverage PII/PHI/PCI flags)
+  # ============================================================
+
+  - id: pii-no-encryption-in-transit
+    title: PII Data Entity on Unencrypted Flow
+    description: >
+      A data entity containing PII is transmitted over a flow where
+      the target listener does not have TLS enabled. GDPR Art 32.1
+      requires appropriate technical measures including encryption.
+    stride: information_disclosure
+    cwe: 319
+    cwe_name: Cleartext Transmission of Sensitive Information
+    severity: critical
+    iterate_over: relationships
+    conditions:
+      - field: relationship.data_entities_contain_pii
+        operator: equals
+        value: true
+      - field: target_listener.tls_enabled
+        operator: equals
+        value: false
+    remediation: Enable TLS on all flows carrying PII data.
+
+  - id: pci-data-no-masking
+    title: PCI Data Without Masking on Flow
+    description: >
+      A data entity containing PCI data (cardholder data, PANs)
+      is transmitted without data masking. PCI-DSS Req 3.4 requires
+      rendering PAN unreadable anywhere it is stored or displayed.
+    stride: information_disclosure
+    cwe: 200
+    cwe_name: Exposure of Sensitive Information to Unauthorized Actor
+    severity: high
+    iterate_over: relationships
+    conditions:
+      - field: relationship.data_entities_contain_pci
+        operator: equals
+        value: true
+      - field: relationship.data_masking
+        operator: in
+        value: [false, null]
+    remediation: Enable data masking (data_masking=true) on flows carrying PCI data.
+
+  # ============================================================
+  # TRUST BOUNDARY ENFORCEMENT RULES (new)
+  # ============================================================
+
+  - id: unenforced-trust-boundary
+    title: Unenforced Trust Boundary
+    description: >
+      A trust boundary has no enforcement mechanism defined. Without
+      enforcement, the boundary is conceptual only and provides no
+      actual security isolation.
+    stride: elevation_of_privilege
+    cwe: 284
+    cwe_name: Improper Access Control
+    severity: medium
+    iterate_over: trust_boundaries
+    conditions:
+      - field: trust_boundary.enforcement_mechanism
+        operator: in
+        value: ["none", null]
+    severity_overrides:
+      - when: trust_boundary.boundary_type equals "network"
+        then: high
+        reason: Network boundaries without enforcement allow unrestricted lateral movement
+    remediation: Define an enforcement mechanism (firewall, api_gateway, service_mesh, or iam_policy).
+
+  # ============================================================
+  # SESSION MANAGEMENT RULES (new)
+  # ============================================================
+
+  - id: excessive-session-timeout
+    title: Excessive Session Timeout
+    description: >
+      A listener has a session timeout exceeding 480 minutes (8 hours).
+      Long-lived sessions increase the window for session hijacking
+      and credential theft.
+    stride: spoofing
+    cwe: 613
+    cwe_name: Insufficient Session Expiration
+    severity: low
+    iterate_over: listeners
+    conditions:
+      - field: listener.session_timeout_minutes
+        operator: greater_than
+        value: 480
+    severity_overrides:
+      - when: zone.internet_routable equals true
+        then: medium
+        reason: Internet-facing endpoints with long sessions are higher risk
+      - when: listener.admin_interface equals true
+        then: high
+        reason: Admin interfaces must have strict session timeouts
+    remediation: Reduce session timeout to 480 minutes or less (30 minutes recommended for admin interfaces).
+
+  # ============================================================
+  # ERROR EXPOSURE RULES (new)
+  # ============================================================
+
+  - id: verbose-error-exposure
+    title: Verbose Error Details Exposed
+    description: >
+      A listener is configured to expose detailed error messages or
+      stack traces. This leaks internal architecture, technology stack,
+      and potential vulnerability information to attackers.
+    stride: information_disclosure
+    cwe: 209
+    cwe_name: Generation of Error Message Containing Sensitive Information
+    severity: medium
+    iterate_over: listeners
+    conditions:
+      - field: listener.error_detail_exposure
+        operator: in
+        value: ["detailed", "stack_trace"]
+    severity_overrides:
+      - when: zone.internet_routable equals true
+        then: high
+        reason: Internet-facing endpoints must not expose internal error details
+    remediation: Set error_detail_exposure to 'none' or 'generic' for production environments.
+
+  # ============================================================
+  # ADMIN INTERFACE RULES (new)
+  # ============================================================
+
+  - id: admin-interface-no-mfa
+    title: Admin Interface Without MFA
+    description: >
+      An administrative endpoint does not use multi-factor authentication.
+      Admin interfaces provide elevated access and must be protected
+      with the strongest authentication. PCI-DSS Req 8.3.
+    stride: spoofing
+    cwe: 308
+    cwe_name: Use of Single-factor Authentication
+    severity: high
+    iterate_over: listeners
+    conditions:
+      - field: listener.admin_interface
+        operator: equals
+        value: true
+      - field: listener.authn_mechanism
+        operator: not_in
+        value: ["mfa", "mtls", "certificate"]
+    severity_overrides:
+      - when: zone.internet_routable equals true
+        then: critical
+        reason: Internet-facing admin interfaces without MFA are critical risk
+    remediation: Upgrade admin interface authentication to MFA, mTLS, or certificate-based.
+
+  # ============================================================
+  # AUDIT LOGGING RULES (new — leverage audit_logging field)
+  # ============================================================
+
+  - id: no-audit-logging
+    title: Missing Audit Logging on Component
+    description: >
+      A component that handles confidential or restricted data does not
+      have audit logging enabled. Without audit trails, security
+      incidents cannot be investigated. HIPAA §164.312(b), PCI-DSS Req 10.
+    stride: repudiation
+    cwe: 778
+    cwe_name: Insufficient Logging
+    severity: medium
+    iterate_over: components
+    conditions:
+      - field: data_classification
+        operator: in
+        value: ["confidential", "restricted"]
+      - field: component.audit_logging
+        operator: in
+        value: [false, null]
+    severity_overrides:
+      - when: component.processes_pii equals true
+        then: high
+        reason: Components processing PII must have audit trails for GDPR compliance
+    remediation: Enable audit logging (audit_logging=true) and configure an audit_log_destination.
+
+  # ============================================================
+  # WILDCARD CORS RULES (new)
+  # ============================================================
+
+  - id: wildcard-cors-authenticated
+    title: Wildcard CORS on Authenticated Endpoint
+    description: >
+      A listener with authentication has a wildcard CORS policy,
+      allowing any origin to make authenticated cross-origin requests.
+      This enables CSRF and credential theft from malicious sites.
+    stride: spoofing
+    cwe: 346
+    cwe_name: Origin Validation Error
+    severity: high
+    iterate_over: listeners
+    conditions:
+      - field: listener.cors_policy
+        operator: equals
+        value: "wildcard"
+      - field: listener.authn_mechanism
+        operator: not_equals
+        value: "none"
+    remediation: Set cors_policy to 'restrictive' with an explicit allowlist of trusted origins.

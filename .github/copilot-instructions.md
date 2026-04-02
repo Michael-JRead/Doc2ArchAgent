@@ -67,6 +67,107 @@ Run validation: `python tools/validate.py <system.yaml> [networks.yaml] --format
 ### trust
 `trusted`, `semi_trusted`, `untrusted`
 
+### encryption_at_rest
+`none`, `aes-256`, `aes-128`, `rsa`, `envelope`, `platform_managed`, `customer_managed`
+
+### encryption_key_management
+`provider_managed`, `customer_managed`, `byok`, `hsm`, `vault`
+
+### confidentiality / integrity / availability (CIA triad)
+`critical`, `high`, `medium`, `low`
+
+### business_criticality
+`mission_critical`, `critical`, `important`, `operational`, `archive`
+
+### dfd_element_type (STRIDE-per-element)
+`process`, `data_store`, `external_entity`
+
+### cipher_suite_policy
+`modern`, `intermediate`, `legacy`, `custom`
+
+### certificate_type
+`dv`, `ov`, `ev`, `self_signed`, `internal_ca`, `none`
+
+### mtls_mode
+`none`, `optional`, `strict`
+
+### tls_termination_point
+`self`, `load_balancer`, `api_gateway`, `service_mesh`, `cdn`
+
+### exposure (listener scope)
+`public`, `partner`, `internal`, `localhost`
+
+### api_type
+`rest`, `graphql`, `grpc`, `soap`, `websocket`, `tcp_raw`, `udp`
+
+### error_detail_exposure
+`none`, `generic`, `detailed`, `stack_trace`
+
+### cors_policy
+`none`, `restrictive`, `permissive`, `wildcard`
+
+### throttle_by
+`ip`, `api_key`, `user`, `tenant`, `none`
+
+### external_system category
+`partner`, `vendor`, `saas`, `open_source`, `government`, `customer`, `other`
+
+### sla_tier
+`platinum`, `gold`, `silver`, `bronze`, `none`
+
+### trust_boundary boundary_type
+`network`, `process`, `privilege`, `jurisdiction`, `vendor`
+
+### trust_boundary enforcement_mechanism
+`firewall`, `api_gateway`, `service_mesh`, `iam_policy`, `physical`, `none`
+
+### interaction_type (component_relationships)
+`request_response`, `publish_subscribe`, `fire_and_forget`, `streaming`, `batch`
+
+### input_validation
+`none`, `schema`, `allowlist`, `waf`, `custom`
+
+### data_entity data_subject_type
+`customer`, `employee`, `partner`, `public`, `system`
+
+### data_entity origin
+`user_input`, `system_generated`, `third_party`, `derived`
+
+### data_entity volume
+`low`, `medium`, `high`, `very_high`
+
+### zone segmentation_type
+`physical`, `vlan`, `vpc`, `subnet`, `namespace`, `security_group`, `microsegment`, `none`
+
+### deployment shared_responsibility_model
+`iaas`, `paas`, `saas`, `on_prem`
+
+### deployment tenant_isolation
+`dedicated`, `shared`, `hybrid`
+
+### deployment runtime_user
+`root`, `non_root`, `unknown`
+
+## Security-Enriched Fields Summary
+
+### For Security Leads — Key Fields That Drive Threat Analysis
+
+**Components:** `confidentiality`, `integrity`, `availability` (CIA triad), `dfd_element_type` (STRIDE-per-element), `stores_data`, `processes_pii`, `audit_logging`, `encryption_at_rest`, `encryption_key_management`, `slsa_level`, `sbom_available`, `rto_minutes`, `rpo_minutes`
+
+**Listeners:** `cipher_suite_policy`, `forward_secrecy_required`, `certificate_type`, `mtls_mode`, `tls_termination_point`, `rate_limiting_enabled`, `rate_limit_rps`, `throttle_by`, `exposure`, `api_type`, `admin_interface`, `session_timeout_minutes`, `error_detail_exposure`, `cors_policy`
+
+**Relationships:** `interaction_type`, `mutual_authentication`, `input_validation`, `replay_protection`, `data_masking`
+
+**External Systems:** `trust_level`, `data_classification`, `authn_mechanism`, `tls_required`, `sla_tier`, `vendor_security_assessed`, `vendor_security_assessment_date`, `data_residency`
+
+**Data Entities:** `contains_pii`, `contains_phi`, `contains_pci`, `data_subject_type`, `retention_days`, `residency_requirements`, `masking_required`, `origin`, `volume`
+
+**Trust Boundaries:** `boundary_type`, `enforcement_mechanism`, `inspection_enabled`, `bidirectional`
+
+**Network Zones:** `segmentation_type`, `egress_filtered`, `ids_ips_enabled`, `dlp_enabled`, `default_deny`, `allowed_ingress_zones`, `allowed_egress_zones`
+
+**Deployments:** `data_residency_region`, `data_residency_required`, `shared_responsibility_model`, `tenant_isolation`, `replicas`, `runtime_user`, `read_only_filesystem`, `resource_limits_set`, `network_policy_enforced`, `image_signed`, `vulnerability_scan_date`
+
 ## Build and Test Commands
 
 ```bash
