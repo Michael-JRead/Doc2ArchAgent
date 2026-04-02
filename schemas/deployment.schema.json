@@ -13,7 +13,8 @@
         "name": { "type": "string", "minLength": 1 },
         "environment": {
           "type": "string",
-          "minLength": 1
+          "enum": ["development", "staging", "production", "dr"],
+          "description": "Environment type. Controls threat severity thresholds: development suppresses MEDIUM and below, staging shows MEDIUM+, production shows all."
         },
         "status": {
           "type": "string",

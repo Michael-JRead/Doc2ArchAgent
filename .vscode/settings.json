@@ -6,7 +6,8 @@
   "yaml.schemas": {
     "./schemas/system.schema.json": "architecture/*/system.yaml",
     "./schemas/networks.schema.json": "architecture/networks.yaml",
-    "./schemas/deployment.schema.json": "architecture/*/deployments/*.yaml"
+    "./schemas/deployment.schema.json": "architecture/*/deployments/*.yaml",
+    "./schemas/provenance.schema.json": "architecture/*/provenance.yaml"
   },
   "editor.quickSuggestions": {
     "strings": true

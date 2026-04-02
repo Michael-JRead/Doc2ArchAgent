@@ -1,0 +1,107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Michael-JRead/Doc2ArchAgent/schemas/provenance.schema.json",
+  "title": "Doc2ArchAgent Provenance YAML Schema",
+  "description": "Schema for architecture/*/provenance.yaml — per-field source citations, confidence scores, and extraction metadata.",
+  "type": "object",
+  "properties": {
+    "provenance_metadata": {
+      "type": "object",
+      "properties": {
+        "system_id": { "type": "string", "minLength": 1 },
+        "extracted_at": { "type": "string", "format": "date-time" },
+        "extraction_model": { "type": "string" },
+        "confidence_threshold": {
+          "type": "number", "minimum": 0, "maximum": 1, "default": 0.95,
+          "description": "Minimum confidence for auto-inclusion. Default 0.95."
+        },
+        "source_documents": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "filename": { "type": "string" },
+              "format": { "type": "string" },
+              "pages": { "type": "integer" },
+              "hash": { "type": "string", "description": "SHA-256 of source document for integrity." }
+            },
+            "required": ["id", "filename"],
+            "additionalProperties": true
+          }
+        }
+      },
+      "required": ["system_id", "extracted_at"],
+      "additionalProperties": true
+    },
+    "entities": {
+      "type": "array",
+      "description": "Per-entity provenance records.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "entity_type": {
+            "type": "string",
+            "enum": ["context", "container", "component", "listener", "relationship", "data_entity", "external_system", "trust_boundary"]
+          },
+          "entity_id": { "type": "string" },
+          "fields": {
+            "type": "object",
+            "description": "Per-field provenance. Keys are field names, values are citation objects.",
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "value": { "description": "The extracted value." },
+                "source_id": { "type": "string", "description": "References provenance_metadata.source_documents[].id" },
+                "section": { "type": "string" },
+                "page": { "type": "integer" },
+                "quote": { "type": "string", "description": "Exact quote from source document supporting this value." },
+                "source_span": {
+                  "type": "object",
+                  "description": "Character offsets in the source document for instant verification.",
+                  "properties": {
+                    "char_start": { "type": "integer", "minimum": 0 },
+                    "char_end": { "type": "integer", "minimum": 0 }
+                  }
+                },
+                "confidence": {
+                  "type": "number", "minimum": 0, "maximum": 1,
+                  "description": "Composite confidence score (0.0–1.0). Computed as min(source_clarity, extraction_method_cap, cross_doc_boost, self_verification_penalty)."
+                },
+                "confidence_factors": {
+                  "type": "object",
+                  "properties": {
+                    "source_clarity": { "type": "number", "minimum": 0, "maximum": 1 },
+                    "extraction_method": { "type": "string", "enum": ["explicit_text", "table", "diagram", "inferred"] },
+                    "extraction_method_cap": { "type": "number", "minimum": 0, "maximum": 1 },
+                    "cross_doc_count": { "type": "integer", "minimum": 0, "description": "Number of corroborating sources." },
+                    "cross_doc_boost": { "type": "number", "minimum": 0, "maximum": 1 },
+                    "self_verification": { "type": "string", "enum": ["passed", "failed", "skipped"] },
+                    "self_verification_penalty": { "type": "number", "minimum": 0, "maximum": 1 }
+                  }
+                },
+                "nli_status": {
+                  "type": "string",
+                  "enum": ["entailed", "contradicted", "neutral", "not_checked"],
+                  "description": "NLI verification result from verify-claims.py."
+                },
+                "extraction_pass": {
+                  "type": "string",
+                  "enum": ["prose", "table", "diagram", "cross_reference"],
+                  "description": "Which extraction pass produced this value."
+                },
+                "human_verified": { "type": "boolean", "default": false }
+              },
+              "required": ["value", "confidence"],
+              "additionalProperties": true
+            }
+          }
+        },
+        "required": ["entity_type", "entity_id", "fields"],
+        "additionalProperties": true
+      }
+    }
+  },
+  "required": ["provenance_metadata", "entities"],
+  "additionalProperties": true
+}
