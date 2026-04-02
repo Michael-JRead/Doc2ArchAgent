@@ -402,3 +402,28 @@ Quantifies risk using likelihood × impact (1-4 each, yielding 1-16 score). Incl
 ```
 - **Risk Score:** 12/16 (CRITICAL) — Likelihood: 4 (Frequent) × Impact: 3 (High)
 ```
+
+## False Positive Reduction Controls
+
+### Trust Boundary Gate
+Only escalate findings to HIGH if the data flow crosses a trust boundary. Same-zone, same-trust-level findings cap at MEDIUM unless data_classification is "restricted."
+
+### Data Classification Gate
+Findings involving only "public" data cap at INFO regardless of other factors. Do not flag public-data flows as security risks.
+
+### Component Type Exceptions
+- Health check endpoints (`component_type: health_check`) with `authn_mechanism: none` are INFO, not HIGH
+- Metrics endpoints (`component_type: metrics`) with `authn_mechanism: none` are INFO, not HIGH
+- Kubernetes readiness/liveness probes are expected to be unauthenticated
+
+### Defense-in-Depth Credit
+If a finding is mitigated by another control (e.g., no TLS but behind a WAF with TLS termination, or no auth but network-level isolation via NetworkPolicy), note the compensating control and cap severity at MEDIUM.
+
+### Environment-Aware Severity
+When deployment YAML specifies `environment: development`, suppress MEDIUM and below. For `environment: staging`, report MEDIUM and above. For `environment: production`, report all findings.
+
+### Codified Rules Reference
+Before generating findings manually, run `tools/threat-rules.py` to get deterministic findings. Use those as the baseline and add LLM-inferred findings only for threats that codified rules cannot detect (business logic flaws, architectural design weaknesses, implicit trust assumptions).
+
+### Risk Acceptance
+Check for `accepted_risks` entries in system.yaml. Do not re-report findings that match an active (non-expired) risk acceptance entry. Note expired acceptances as "risk acceptance expired — re-review required."

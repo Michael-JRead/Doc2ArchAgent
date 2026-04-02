@@ -102,6 +102,20 @@ SARIF_RULES = {
         "help": {"text": "Use a port number between 1 and 65535."},
         "defaultConfiguration": {"level": "error"},
     },
+    "ARCH010": {
+        "id": "ARCH010",
+        "shortDescription": {"text": "Component in external context"},
+        "fullDescription": {"text": "A component exists in an external (non-internal) context, which may indicate an extraction error."},
+        "help": {"text": "External contexts represent third-party systems. Internal components should be in internal contexts."},
+        "defaultConfiguration": {"level": "warning"},
+    },
+    "ARCH011": {
+        "id": "ARCH011",
+        "shortDescription": {"text": "Unusual cardinality"},
+        "fullDescription": {"text": "An entity has an unusually high number of children, suggesting a possible extraction error."},
+        "help": {"text": "Review the architecture model for correct abstraction levels."},
+        "defaultConfiguration": {"level": "warning"},
+    },
 }
 
 
@@ -360,6 +374,39 @@ def validate(system_path: str, networks_path: str | None = None) -> dict:
     for comp_id in components:
         if comp_id not in connected:
             add_warning(f"component '{comp_id}' has no relationships (orphaned)", rule_id="ARCH008")
+
+    # --- 12. Cross-entity consistency checks (hallucination detection) ---
+    # A component in an external context (internal=false) is suspicious
+    for comp_id, comp in components.items():
+        cont_id = comp.get('container_id', '')
+        container = containers.get(cont_id, {})
+        ctx_id = container.get('context_id', '')
+        context = contexts.get(ctx_id, {})
+        if context and not context.get('internal', True):
+            add_warning(
+                f"component '{comp_id}' is in external context '{ctx_id}' via container '{cont_id}' "
+                f"— external contexts typically represent third-party systems without internal components",
+                rule_id="ARCH010",
+            )
+
+    # --- 13. Cardinality checks (model quality / extraction gap detection) ---
+    for cont_id, container in containers.items():
+        comp_count = sum(1 for c in components.values() if c.get('container_id') == cont_id)
+        if comp_count > 50:
+            add_warning(
+                f"container '{cont_id}' has {comp_count} components — this may indicate "
+                f"an extraction error or wrong abstraction level",
+                rule_id="ARCH011",
+            )
+
+    for comp_id, comp in components.items():
+        listener_count = len(comp.get('listeners', []))
+        if listener_count > 10:
+            add_warning(
+                f"component '{comp_id}' has {listener_count} listeners — this is unusually high "
+                f"and may indicate an extraction error",
+                rule_id="ARCH011",
+            )
 
     return {
         "valid": len(errors) == 0,

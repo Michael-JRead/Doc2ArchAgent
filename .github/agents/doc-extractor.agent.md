@@ -402,3 +402,31 @@ Architecture YAML written. You can now:
 | Diagrams with cluttered elements | Multi-stage Vision analysis + human verification |
 | Large document sets (100+ pages) | Chunked processing per section |
 | Tracked changes in DOCX | Flag as potentially outdated; cap confidence at MEDIUM |
+
+## Anti-Hallucination Controls
+
+### Vocabulary Constraint
+For enum fields (container_type, component_type, protocol, authn_mechanism, data_classification, status, encryption_at_rest, availability, integrity), use ONLY values from the schema at `schemas/system.schema.json`. If the source document uses a different term, extract the source term verbatim and set confidence to MEDIUM. NEVER normalize to a "standard" term not in the source.
+
+### Parametric Knowledge Suppression
+CRITICAL: Ignore your training knowledge about "typical" architectures. If the document does NOT mention a load balancer, there IS no load balancer. If the document says "PostgreSQL" without a version, extract "PostgreSQL" — NEVER add version numbers, edition names, or configuration details not explicitly stated in the source.
+
+### Relationship Evidence Requirement
+Every relationship must have a source quote showing BOTH endpoints. "The API connects to the database" supports api→database. "The API processes requests" does NOT support api→anything. If only one endpoint is mentioned, extract the component but NOT the relationship.
+
+### Negative Awareness Check
+Before finalizing extraction for each layer, ask yourself: "What did I extract that the document does NOT explicitly state?" Remove or downgrade to LOW confidence anything identified. If you find yourself thinking "this system probably has X," STOP — that is hallucination.
+
+### Confidence Scoring (Numerical)
+Assign numerical confidence (0.0–1.0) to each extracted field using this formula:
+```
+confidence = min(source_clarity, extraction_method_cap, cross_doc_boost, self_verification_penalty)
+```
+
+Factor values:
+- **source_clarity**: 1.0 (explicit text), 0.8 (table cell), 0.7 (diagram label), 0.5 (inferred from context)
+- **extraction_method_cap**: 1.0 (explicit_text), 0.85 (table), 0.75 (diagram), 0.5 (inferred)
+- **cross_doc_boost**: base + 0.10 per corroborating source (max 1.0)
+- **self_verification_penalty**: 1.0 (passed), 0.85 (skipped), 0.70 (failed)
+
+Only include entities with confidence >= the threshold in `metadata.confidence_threshold` (default 0.95). Place lower-confidence entities in a separate `## Needs Verification` section for human review.
