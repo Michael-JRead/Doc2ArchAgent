@@ -232,8 +232,24 @@ Examples: "MQ Server" (message_queue), "API Gateway" (api_gateway), "Order DB" (
 For each container:
 1. Define its components:
    - name, description, component_type, technology, platform, resiliency
+   - **Security properties** (ask for each component):
+     - confidentiality, integrity, availability (CIA triad: critical/high/medium/low)
+     - dfd_element_type (process, data_store, external_entity) — for STRIDE-per-element
+     - stores_data, processes_pii — for encryption/compliance rules
+     - encryption_at_rest, encryption_key_management — for data-storing components
+     - audit_logging — for compliance (HIPAA, PCI-DSS Req 10)
+     - slsa_level, sbom_available — for supply chain assessment
 2. Define listeners on each component:
    - protocol, port, tls_enabled, tls_version_min, authn_mechanism, authz_required
+   - **Security properties** (ask for each listener):
+     - cipher_suite_policy (modern/intermediate/legacy)
+     - rate_limiting_enabled, rate_limit_rps — for DoS protection
+     - exposure (public/partner/internal/localhost) — for attack surface
+     - api_type (rest/graphql/grpc/soap/websocket/tcp_raw/udp)
+     - admin_interface — triggers MFA requirement
+     - session_timeout_minutes — for session management
+     - error_detail_exposure (none/generic/detailed/stack_trace)
+     - cors_policy (none/restrictive/permissive/wildcard)
    Listeners are defined at the component level. For diagrams:
    - Component diagram: listeners shown on individual components
    - Container diagram: listeners aggregated up — shown on the container
@@ -244,6 +260,7 @@ For each container:
    c. If targeting a component: display its listeners. Ask: which listener?
    d. Display selected listener spec as read-only confirmation
    e. Ask: label, synchronous/asynchronous, data entities, data classification
+   f. **Security properties**: interaction_type, mutual_authentication, input_validation, replay_protection, data_masking
 4. Update Container Relationships:
    - Now that listeners exist, revisit each container relationship
    - Resolve target_listener_ref from the target container's components' listeners
@@ -251,12 +268,17 @@ For each container:
 
 ### NETWORKS (networks.yaml — shared across systems)
 1. Network Zones (required) — for each: name, zone_type, internet_routable, trust
+   - **Security properties**: segmentation_type, egress_filtered, ids_ips_enabled, dlp_enabled, default_deny, allowed_ingress_zones, allowed_egress_zones
 2. Infrastructure Resources (required) — for each: name, resource_type, technology
+   - **Security properties**: version, high_availability, encryption_key_management, compliance_certified
 
 ### EXTERNAL SYSTEMS (system.yaml)
 1. External Systems (required if the system integrates with anything outside the org)
+   - **Security properties** (ask for each): category, trust_level, data_classification, authn_mechanism, tls_required, sla_tier, vendor_security_assessed, data_residency
 2. Data Entities (optional — ask: "Do you want to define named data entities for flow annotation?")
+   - **Regulatory annotations** (ask for each): contains_pii, contains_phi, contains_pci, data_subject_type, retention_days, residency_requirements, masking_required, origin, volume
 3. Trust Boundaries (optional — ask: "Do you want to define trust boundaries now or later?")
+   - **Enforcement details** (ask for each): boundary_type, enforcement_mechanism, inspection_enabled, bidirectional
 
 For each resource type, capture all instances before moving to the next type.
 After finishing each type, ask: "Any more [type]? Or shall we move on?"

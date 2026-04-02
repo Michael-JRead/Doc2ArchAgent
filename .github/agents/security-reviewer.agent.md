@@ -427,3 +427,51 @@ Before generating findings manually, run `tools/threat-rules.py` to get determin
 
 ### Risk Acceptance
 Check for `accepted_risks` entries in system.yaml. Do not re-report findings that match an active (non-expired) risk acceptance entry. Note expired acceptances as "risk acceptance expired — re-review required."
+
+## Security-Enriched Field Analysis
+
+When these fields are populated, use them to generate deeper findings:
+
+### CIA Triad Analysis
+If components have `confidentiality`, `integrity`, `availability` fields:
+- Verify that high-confidentiality components have encryption_at_rest and strong authn
+- Verify that high-integrity components have input_validation on incoming flows
+- Verify that high-availability components have rate_limiting and resiliency patterns
+
+### Supply Chain Assessment
+If components have `slsa_level` and `sbom_available`:
+- Flag components with slsa_level < 2 that handle confidential data
+- Flag components without SBOM in production deployments
+- Check deployment YAML for image_signed and vulnerability_scan_date
+
+### Data Regulatory Compliance
+If data entities have `contains_pii`, `contains_phi`, `contains_pci`:
+- PCI data: verify all flows use TLS 1.2+, data_masking=true, encryption_at_rest on stores
+- PHI data: verify all listeners have authn+authz, audit_logging=true, TLS required
+- PII data: verify GDPR Art 32 controls, check residency_requirements vs deployment region
+
+### External System Risk
+If external systems have `trust_level`, `vendor_security_assessed`:
+- Flag untrusted externals exchanging confidential data
+- Flag vendor/partner systems without security assessment
+- Check that tls_required=true for all non-trusted external systems
+
+### Trust Boundary Enforcement
+If trust boundaries have `enforcement_mechanism`:
+- Flag boundaries with enforcement_mechanism=none as logical-only
+- Verify network boundaries have firewall or equivalent
+- Check bidirectional enforcement for jurisdiction boundaries
+
+### Listener Attack Surface
+If listeners have `exposure`, `admin_interface`, `error_detail_exposure`:
+- Flag admin_interface=true without MFA authn
+- Flag error_detail_exposure=detailed or stack_trace in production
+- Flag cors_policy=wildcard on authenticated endpoints
+- Flag session_timeout_minutes > 480 on internet-facing listeners
+
+### Zone Security Posture
+If network zones have `segmentation_type`, `egress_filtered`:
+- Flag zones with segmentation_type=none as lacking isolation
+- Flag zones without egress_filtered as exfiltration risk
+- Flag internet-routable zones without ids_ips_enabled
+- Validate allowed_ingress_zones against actual data flows

@@ -147,3 +147,137 @@ frameworks:
           conditions:
             - infrastructure_resource.resource_type: logging
         severity: high
+
+  # New controls leveraging enriched schema fields
+
+  - id: nist-csf
+    name: NIST Cybersecurity Framework 2.0
+    description: NIST CSF core functions mapped to architecture properties
+    controls:
+      - id: nist-id-am
+        name: "ID.AM — Asset Management"
+        description: All components must have CIA triad ratings and business criticality defined.
+        validation:
+          check: components_have_cia_ratings
+          conditions:
+            - confidentiality: ["!null"]
+            - integrity: ["!null"]
+            - availability: ["!null"]
+        severity: medium
+
+      - id: nist-pr-ds-1
+        name: "PR.DS-1 — Data at rest is protected"
+        description: Data-storing components with high confidentiality must have encryption at rest.
+        validation:
+          check: data_stores_have_encryption
+          conditions:
+            - stores_data: true
+            - confidentiality: [critical, high]
+            - encryption_at_rest: ["!none", "!null"]
+        severity: high
+
+      - id: nist-pr-ds-2
+        name: "PR.DS-2 — Data in transit is protected"
+        description: All cross-boundary flows must use TLS with modern cipher suites.
+        validation:
+          check: cross_boundary_flows_encrypted
+          conditions:
+            - tls_enabled: true
+            - cipher_suite_policy: [modern, intermediate]
+        severity: high
+
+      - id: nist-pr-ac-7
+        name: "PR.AC-7 — Users, devices, and other assets are authenticated"
+        description: All non-health-check listeners must have authentication.
+        validation:
+          check: all_listeners_have_authn
+          conditions:
+            - authn_mechanism: ["!none"]
+        severity: high
+
+      - id: nist-de-cm
+        name: "DE.CM — Security Continuous Monitoring"
+        description: Network zones must have IDS/IPS and monitoring infrastructure.
+        validation:
+          check: zones_have_detection_capabilities
+          conditions:
+            - ids_ips_enabled: true
+            - infrastructure_resource.resource_type: [monitoring, ids_ips]
+        severity: medium
+
+      - id: nist-pr-ip-12
+        name: "PR.IP-12 — Vulnerability management plan"
+        description: Components in production must have recent vulnerability scans and SBOM.
+        validation:
+          check: components_have_vulnerability_management
+          conditions:
+            - sbom_available: true
+            - vulnerability_scan_date: ["!null"]
+        severity: medium
+
+  - id: pci-dss-extended
+    name: PCI DSS v4.0 (Extended Controls)
+    description: Additional PCI-DSS controls leveraging enriched schema fields
+    controls:
+      - id: pci-3.4
+        name: "Req 3.4 — Render PAN unreadable"
+        description: Primary Account Numbers must be masked or tokenized everywhere.
+        validation:
+          check: pci_data_masked_on_flows
+          conditions:
+            - data_entity.contains_pci: true
+            - data_masking: true
+        severity: critical
+
+      - id: pci-6.5
+        name: "Req 6.5 — Address common coding vulnerabilities"
+        description: All API flows must have input validation to prevent injection.
+        validation:
+          check: api_flows_have_input_validation
+          conditions:
+            - input_validation: ["!none", "!null"]
+        severity: high
+
+      - id: pci-11.4
+        name: "Req 11.4 — Intrusion detection and prevention"
+        description: Network zones processing cardholder data must have IDS/IPS.
+        validation:
+          check: pci_zones_have_ids
+          conditions:
+            - ids_ips_enabled: true
+        severity: high
+
+  - id: gdpr-extended
+    name: GDPR (Extended Controls)
+    description: Additional GDPR controls leveraging enriched schema fields
+    controls:
+      - id: gdpr-44
+        name: "Art 44 — Transfer of personal data to third countries"
+        description: PII data entities must have residency requirements matching deployment region.
+        validation:
+          check: pii_data_residency_enforced
+          conditions:
+            - data_entity.contains_pii: true
+            - data_entity.residency_requirements: ["!null"]
+            - deployment.data_residency_required: true
+        severity: high
+
+      - id: gdpr-25
+        name: "Art 25 — Data protection by design"
+        description: PII-processing components must have data masking and audit logging.
+        validation:
+          check: pii_processing_has_safeguards
+          conditions:
+            - component.processes_pii: true
+            - component.audit_logging: true
+        severity: high
+
+      - id: gdpr-5.1e
+        name: "Art 5.1(e) — Storage limitation"
+        description: PII data entities must have retention periods defined.
+        validation:
+          check: pii_data_has_retention
+          conditions:
+            - data_entity.contains_pii: true
+            - data_entity.retention_days: ["!null"]
+        severity: medium

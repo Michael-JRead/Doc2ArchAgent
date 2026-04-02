@@ -83,15 +83,33 @@ external_systems:
     name: Stripe
     description: Payment processing
     category: partner
+    trust_level: semi_trusted
+    data_classification: confidential
+    authn_mechanism: oauth2
+    tls_required: true
+    sla_tier: gold
+    vendor_security_assessed: true
+    vendor_security_assessment_date: "2025-12-01"
 
 data_entities:
   - id: session-data
     name: Session Data
     description: User session tokens
     classification: confidential
+    contains_pii: true
+    contains_phi: false
+    contains_pci: false
+    data_subject_type: customer
+    retention_days: 1
+    masking_required: false
+    origin: system_generated
 
 trust_boundaries:
   - id: public-to-private
     name: Public to Private
     source_zone: dmz
     target_zone: private-app-tier
+    boundary_type: network
+    enforcement_mechanism: firewall
+    inspection_enabled: true
+    bidirectional: true
