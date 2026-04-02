@@ -1,0 +1,85 @@
+# Doc2ArchAgent — Threat Applicability Conditions
+#
+# Defines global conditions for when threat rules should be suppressed or
+# adjusted based on architecture context. These conditions are checked
+# BEFORE individual rule severity_overrides.
+#
+# Used by tools/threat-rules.py to reduce false positives.
+
+# Global suppressions — skip rules entirely when these conditions are met
+global_suppressions:
+  - description: Skip out-of-scope components
+    condition: component.out_of_scope equals true
+    applies_to: all
+
+  - description: Skip out-of-scope containers
+    condition: container.out_of_scope equals true
+    applies_to: all
+
+  - description: Skip out-of-scope contexts
+    condition: context.out_of_scope equals true
+    applies_to: all
+
+# Environment-aware severity thresholds
+# In non-production environments, suppress lower-severity findings
+environment_thresholds:
+  development:
+    minimum_severity: high
+    description: Only report HIGH and CRITICAL findings in development
+  staging:
+    minimum_severity: medium
+    description: Report MEDIUM and above in staging
+  production:
+    minimum_severity: info
+    description: Report all findings in production
+  dr:
+    minimum_severity: medium
+    description: Report MEDIUM and above in DR environments
+
+# DevOps flow adjustments — reduce severity for monitoring/devops traffic
+devops_adjustments:
+  - description: DevOps flows get reduced severity
+    condition: relationship.usage in ["devops", "monitoring"]
+    severity_cap: medium
+    reason: DevOps and monitoring flows are internal operational traffic
+
+# Accepted risk filtering
+# The engine checks system.yaml accepted_risks[] entries and filters
+# findings that match both finding_pattern and entity_id.
+# Expired acceptances (past expires date) are re-reported.
+
+# Component type exceptions — certain component types have inherently
+# lower risk for specific findings
+component_type_exceptions:
+  health_check:
+    suppress_rules:
+      - unauthenticated-listener
+      - missing-authorization
+    reason: Health check endpoints are expected to be unauthenticated
+  metrics:
+    suppress_rules:
+      - unauthenticated-listener
+      - missing-authorization
+    reason: Metrics endpoints typically use network-level access control
+  proxy:
+    suppress_rules:
+      - missing-encryption-at-rest
+    reason: Proxies do not store data at rest
+
+# Defense-in-depth credit — if a compensating control exists,
+# cap the finding severity
+compensating_controls:
+  - description: WAF compensates for some web vulnerabilities
+    when: zone.has_waf equals true
+    affects_rules:
+      - internet-exposed-listener
+      - internet-exposed-no-waf
+    severity_cap: medium
+    reason: WAF provides compensating protection
+
+  - description: TLS termination at load balancer
+    when: zone.has_resource_type equals "load_balancer"
+    affects_rules:
+      - unencrypted-listener
+    severity_cap: info
+    reason: TLS may be terminated at the load balancer with internal cleartext acceptable

@@ -1,0 +1,442 @@
+# Doc2ArchAgent — Codified Threat Rules (YAML-Based Scripted Rules)
+# Modeled after Threagile's rule pattern: each rule gets the full model
+# and decides its own iteration strategy.
+#
+# These rules are deterministic — same input always produces same output.
+# No LLM involvement. Executed by tools/threat-rules.py.
+#
+# Rule structure:
+#   id:            Unique rule identifier (kebab-case)
+#   title:         Human-readable title
+#   description:   What this rule checks for
+#   stride:        STRIDE category
+#   cwe:           CWE identifier
+#   cwe_name:      CWE short name
+#   severity:      Default severity (critical, high, medium, low, info)
+#   iterate_over:  What model elements to check (components, listeners, relationships, zones, containers, trust_boundaries)
+#   conditions:    List of condition checks (all must be true to fire)
+#   severity_overrides: Context-aware severity adjustments
+#   false_positive_note: Guidance for users on when to accept this risk
+#   remediation:   Recommended fix
+
+rules:
+  # ============================================================
+  # AUTHENTICATION RULES
+  # ============================================================
+
+  - id: unauthenticated-listener
+    title: Unauthenticated Listener
+    description: >
+      A listener accepts connections without any authentication mechanism.
+      This allows any caller to access the component, risking unauthorized access.
+    stride: spoofing
+    cwe: 306
+    cwe_name: Missing Authentication for Critical Function
+    severity: high
+    iterate_over: listeners
+    conditions:
+      - field: listener.authn_mechanism
+        operator: equals
+        value: "none"
+    severity_overrides:
+      - when: component.component_type in ["health_check", "metrics"]
+        then: info
+        reason: Health check and metrics endpoints typically do not require authentication
+      - when: zone.trust equals "trusted" and zone.internet_routable equals false
+        then: medium
+        reason: Internal trusted zone reduces exploitation likelihood
+      - when: data_classification in ["confidential", "restricted"]
+        then: critical
+        reason: Sensitive data accessible without authentication
+    false_positive_note: >
+      May be acceptable for health check endpoints, Kubernetes readiness probes,
+      or internal service mesh endpoints with network-level controls.
+    remediation: Add authentication (oauth2, mtls, jwt, or api_key) to the listener.
+
+  - id: weak-authentication
+    title: Weak Authentication Mechanism
+    description: >
+      A listener uses basic or password-only authentication, which is vulnerable
+      to credential stuffing, brute force, and replay attacks.
+    stride: spoofing
+    cwe: 287
+    cwe_name: Improper Authentication
+    severity: medium
+    iterate_over: listeners
+    conditions:
+      - field: listener.authn_mechanism
+        operator: in
+        value: ["basic", "password"]
+    severity_overrides:
+      - when: zone.internet_routable equals true
+        then: high
+        reason: Internet-facing endpoints with weak auth are easily attacked
+      - when: component.multi_tenant equals true
+        then: high
+        reason: Multi-tenant systems require stronger authentication
+    remediation: Upgrade to oauth2, oidc, mtls, or jwt authentication.
+
+  - id: missing-authorization
+    title: Missing Authorization
+    description: >
+      A listener has authentication but no authorization enforcement.
+      Authenticated users can access any resource regardless of their role.
+    stride: elevation_of_privilege
+    cwe: 862
+    cwe_name: Missing Authorization
+    severity: medium
+    iterate_over: listeners
+    conditions:
+      - field: listener.authn_mechanism
+        operator: not_equals
+        value: "none"
+      - field: listener.authz_required
+        operator: equals
+        value: false
+    severity_overrides:
+      - when: data_classification in ["confidential", "restricted"]
+        then: high
+        reason: Sensitive data requires authorization controls
+      - when: component.multi_tenant equals true
+        then: critical
+        reason: Multi-tenant without authz enables cross-tenant data access
+    remediation: Enable authz_required and implement role-based access control.
+
+  # ============================================================
+  # ENCRYPTION RULES
+  # ============================================================
+
+  - id: unencrypted-listener
+    title: Unencrypted Listener
+    description: >
+      A listener does not use TLS encryption, allowing data in transit to be
+      intercepted via network sniffing or man-in-the-middle attacks.
+    stride: information_disclosure
+    cwe: 319
+    cwe_name: Cleartext Transmission of Sensitive Information
+    severity: medium
+    iterate_over: listeners
+    conditions:
+      - field: listener.tls_enabled
+        operator: equals
+        value: false
+    severity_overrides:
+      - when: data_classification in ["confidential", "restricted"]
+        then: high
+        reason: Sensitive data must be encrypted in transit
+      - when: zone.internet_routable equals true
+        then: critical
+        reason: Internet-facing cleartext traffic is trivially interceptable
+      - when: zone.trust equals "trusted" and data_classification equals "public"
+        then: info
+        reason: Public data in trusted internal zone is low risk
+    remediation: Enable TLS 1.2+ on the listener.
+
+  - id: weak-tls-version
+    title: Weak TLS Version
+    description: >
+      A listener uses TLS 1.0 or 1.1 which have known vulnerabilities
+      (POODLE, BEAST). TLS 1.2 is the minimum recommended version.
+    stride: information_disclosure
+    cwe: 326
+    cwe_name: Inadequate Encryption Strength
+    severity: medium
+    iterate_over: listeners
+    conditions:
+      - field: listener.tls_enabled
+        operator: equals
+        value: true
+      - field: listener.tls_version_min
+        operator: in
+        value: ["1.0", "1.1"]
+    severity_overrides:
+      - when: data_classification in ["confidential", "restricted"]
+        then: high
+        reason: Sensitive data requires strong encryption
+    remediation: Upgrade to TLS 1.2 minimum (TLS 1.3 recommended).
+
+  - id: missing-encryption-at-rest
+    title: Missing Encryption at Rest
+    description: >
+      A data-storing component has no at-rest encryption configured.
+      Stored data can be compromised if physical media or backups are exposed.
+    stride: information_disclosure
+    cwe: 311
+    cwe_name: Missing Encryption of Sensitive Data
+    severity: medium
+    iterate_over: components
+    conditions:
+      - field: component.component_type
+        operator: in
+        value: ["database", "cache", "other"]
+      - field: component.encryption_at_rest
+        operator: in
+        value: ["none", null]
+    severity_overrides:
+      - when: data_classification in ["confidential", "restricted"]
+        then: high
+        reason: Sensitive stored data must be encrypted at rest
+    remediation: Enable at-rest encryption (aes-256, platform_managed, or customer_managed).
+
+  # ============================================================
+  # NETWORK EXPOSURE RULES
+  # ============================================================
+
+  - id: internet-exposed-no-waf
+    title: Internet-Exposed Without WAF
+    description: >
+      A component is deployed in an internet-routable zone without a
+      WAF infrastructure resource in the same zone.
+    stride: tampering
+    cwe: 693
+    cwe_name: Protection Mechanism Failure
+    severity: medium
+    iterate_over: components
+    conditions:
+      - field: zone.internet_routable
+        operator: equals
+        value: true
+      - field: zone.has_waf
+        operator: equals
+        value: false
+    severity_overrides:
+      - when: component.component_type in ["api", "web_frontend", "service"]
+        then: high
+        reason: Web-facing components need WAF protection against OWASP Top 10
+    remediation: Add a WAF infrastructure resource to the internet-facing zone.
+
+  - id: internet-exposed-listener
+    title: Internet-Exposed Listener
+    description: >
+      A component listener is reachable from the internet. This significantly
+      increases the attack surface and exploitation likelihood.
+    stride: elevation_of_privilege
+    cwe: 668
+    cwe_name: Exposure of Resource to Wrong Sphere
+    severity: medium
+    iterate_over: listeners
+    conditions:
+      - field: zone.internet_routable
+        operator: equals
+        value: true
+    severity_overrides:
+      - when: listener.authn_mechanism equals "none"
+        then: critical
+        reason: Unauthenticated internet-facing listener is critical risk
+      - when: listener.tls_enabled equals false
+        then: critical
+        reason: Unencrypted internet-facing listener is critical risk
+      - when: data_classification in ["confidential", "restricted"]
+        then: high
+        reason: Internet-exposed sensitive data increases impact
+    false_positive_note: >
+      Internet-facing listeners are expected for public APIs and web apps.
+      This rule highlights them for awareness; severity depends on controls.
+    remediation: Ensure strong authentication, TLS, and WAF for internet-facing listeners.
+
+  - id: unguarded-datastore-access
+    title: Unguarded Direct Datastore Access
+    description: >
+      A database or cache component receives connections from outside its
+      trust zone without an intermediary API or proxy layer.
+    stride: tampering
+    cwe: 284
+    cwe_name: Improper Access Control
+    severity: high
+    iterate_over: components
+    conditions:
+      - field: component.component_type
+        operator: in
+        value: ["database", "cache"]
+      - field: has_cross_zone_incoming
+        operator: equals
+        value: true
+    remediation: Route datastore access through an API tier or connection proxy.
+
+  # ============================================================
+  # AVAILABILITY RULES
+  # ============================================================
+
+  - id: dos-risk-cross-boundary
+    title: DoS Risk Across Trust Boundary
+    description: >
+      A critical-availability component receives traffic from a different
+      trust zone, making it vulnerable to volumetric DoS attacks.
+    stride: denial_of_service
+    cwe: 400
+    cwe_name: Uncontrolled Resource Consumption
+    severity: medium
+    iterate_over: components
+    conditions:
+      - field: component.availability
+        operator: in
+        value: ["critical", "high"]
+      - field: has_cross_zone_incoming
+        operator: equals
+        value: true
+    severity_overrides:
+      - when: component.availability equals "critical" and zone.internet_routable equals true
+        then: high
+        reason: Critical internet-facing component without rate limiting
+    remediation: Add rate limiting, circuit breakers, or autoscaling for cross-boundary traffic.
+
+  # ============================================================
+  # DATA FLOW RULES
+  # ============================================================
+
+  - id: sensitive-data-unencrypted-flow
+    title: Sensitive Data Over Unencrypted Flow
+    description: >
+      A data flow carrying confidential or restricted data uses an
+      unencrypted listener, risking data exposure in transit.
+    stride: information_disclosure
+    cwe: 319
+    cwe_name: Cleartext Transmission of Sensitive Information
+    severity: high
+    iterate_over: relationships
+    conditions:
+      - field: relationship.data_classification
+        operator: in
+        value: ["confidential", "restricted"]
+      - field: target_listener.tls_enabled
+        operator: equals
+        value: false
+    remediation: Enable TLS on the target listener or reclassify the data flow.
+
+  - id: sensitive-data-no-auth-flow
+    title: Sensitive Data Over Unauthenticated Flow
+    description: >
+      A data flow carrying confidential or restricted data targets a
+      listener with no authentication, risking unauthorized data access.
+    stride: spoofing
+    cwe: 306
+    cwe_name: Missing Authentication for Critical Function
+    severity: high
+    iterate_over: relationships
+    conditions:
+      - field: relationship.data_classification
+        operator: in
+        value: ["confidential", "restricted"]
+      - field: target_listener.authn_mechanism
+        operator: equals
+        value: "none"
+    remediation: Add authentication to the target listener.
+
+  - id: cross-boundary-no-encryption
+    title: Cross-Boundary Flow Without Encryption
+    description: >
+      A data flow crosses a trust boundary without TLS encryption,
+      allowing interception at the network boundary.
+    stride: information_disclosure
+    cwe: 319
+    cwe_name: Cleartext Transmission of Sensitive Information
+    severity: high
+    iterate_over: relationships
+    conditions:
+      - field: crosses_trust_boundary
+        operator: equals
+        value: true
+      - field: target_listener.tls_enabled
+        operator: equals
+        value: false
+    remediation: Enable TLS on all cross-boundary communication links.
+
+  # ============================================================
+  # INTEGRITY RULES
+  # ============================================================
+
+  - id: high-integrity-no-auth
+    title: High-Integrity Component Without Authentication
+    description: >
+      A component with critical or high integrity requirements accepts
+      unauthenticated connections, risking unauthorized data modification.
+    stride: tampering
+    cwe: 345
+    cwe_name: Insufficient Verification of Data Authenticity
+    severity: high
+    iterate_over: listeners
+    conditions:
+      - field: component.integrity
+        operator: in
+        value: ["critical", "high"]
+      - field: listener.authn_mechanism
+        operator: equals
+        value: "none"
+    remediation: Add authentication to prevent unauthorized modification of high-integrity data.
+
+  # ============================================================
+  # MODEL QUALITY RULES
+  # ============================================================
+
+  - id: orphaned-component
+    title: Orphaned Component
+    description: >
+      A component has no incoming or outgoing relationships. This may
+      indicate an incomplete architecture model.
+    stride: null
+    cwe: null
+    cwe_name: null
+    severity: info
+    iterate_over: components
+    conditions:
+      - field: relationship_count
+        operator: equals
+        value: 0
+    false_positive_note: >
+      Standalone batch processors or cron jobs may legitimately have no relationships.
+    remediation: Add relationships or mark as out_of_scope if intentionally isolated.
+
+  - id: missing-data-classification
+    title: Missing Data Classification on Sensitive Flow
+    description: >
+      A component relationship does not specify data_classification.
+      Without classification, threat rules cannot assess data sensitivity.
+    stride: null
+    cwe: null
+    cwe_name: null
+    severity: info
+    iterate_over: relationships
+    conditions:
+      - field: relationship.data_classification
+        operator: in
+        value: [null, ""]
+    remediation: Add data_classification (public, internal, confidential, or restricted) to the relationship.
+
+  # ============================================================
+  # COMPLIANCE-ADJACENT RULES
+  # ============================================================
+
+  - id: missing-logging-zone
+    title: Missing Logging Infrastructure in Zone
+    description: >
+      A network zone has no logging infrastructure resource, making
+      it difficult to detect and investigate security incidents.
+    stride: repudiation
+    cwe: 778
+    cwe_name: Insufficient Logging
+    severity: medium
+    iterate_over: zones
+    conditions:
+      - field: zone.has_logging
+        operator: equals
+        value: false
+    severity_overrides:
+      - when: zone.trust in ["untrusted", "semi_trusted"]
+        then: high
+        reason: Higher-risk zones require logging for incident response
+    remediation: Add a logging infrastructure resource (SIEM, log aggregator) to the zone.
+
+  - id: missing-monitoring-zone
+    title: Missing Monitoring Infrastructure in Zone
+    description: >
+      A network zone has no monitoring infrastructure resource.
+    stride: denial_of_service
+    cwe: 778
+    cwe_name: Insufficient Logging
+    severity: low
+    iterate_over: zones
+    conditions:
+      - field: zone.has_monitoring
+        operator: equals
+        value: false
+    remediation: Add a monitoring infrastructure resource to the zone.
