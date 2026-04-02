@@ -1,0 +1,31 @@
+manifest:
+  id: mq-prod-us-east
+  name: MQ Production US East
+  description: >
+    IBM MQ messaging infrastructure deployed in the US East production
+    data center using the standard 3-tier network topology.
+  environment: production
+  region: us-east-1
+  status: active
+  cloud_provider: on-prem
+
+  network:
+    pattern_ref: standard-3tier
+    version: "1.0.0"
+    id_prefix: prod
+
+  products:
+    - pattern_ref: ibm-mq
+      version: "1.0.0"
+      id_prefix: mq
+      context_name: MQ Production Messaging
+
+  placements:
+    - container_ref: mq-mq-infrastructure
+      zone_ref: prod-private-app-tier
+      replicas: 2
+      runtime_user: non_root
+      read_only_filesystem: true
+      resource_limits_set: true
+      network_policy_enforced: true
+      image_signed: true

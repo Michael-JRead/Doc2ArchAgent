@@ -2137,15 +2137,15 @@ class TestSecuritySchemaSplit:
     # --- Compose generates security stubs ---
 
     def test_compose_generates_security_stubs(self, tmp_path):
-        """compose.py generates system-security.yaml and networks-security.yaml."""
+        """compose.py generates all 3 security overlay files."""
         from importlib.util import spec_from_file_location, module_from_spec
         spec = spec_from_file_location("compose", TOOLS_DIR / "compose.py")
         mod = module_from_spec(spec)
         spec.loader.exec_module(mod)
 
-        manifest_src = PROJECT_ROOT / "examples" / "payment-platform" / "manifest.yaml"
+        manifest_src = PROJECT_ROOT / "deployments" / "mq-prod-us-east" / "manifest.yaml"
         if not manifest_src.exists():
-            pytest.skip("No example manifest.yaml")
+            pytest.skip("No deployment manifest.yaml")
 
         import shutil
         test_manifest = tmp_path / "manifest.yaml"
@@ -2155,3 +2155,101 @@ class TestSecuritySchemaSplit:
         assert (tmp_path / "system-security.yaml").exists()
         assert (tmp_path / "networks-security.yaml").exists()
         assert (tmp_path / "deployment-security.yaml").exists()
+
+    def test_compose_deployment_security_has_posture(self, tmp_path):
+        """deployment-security.yaml contains deployment_posture from manifest."""
+        from importlib.util import spec_from_file_location, module_from_spec
+        spec = spec_from_file_location("compose", TOOLS_DIR / "compose.py")
+        mod = module_from_spec(spec)
+        spec.loader.exec_module(mod)
+
+        manifest_src = PROJECT_ROOT / "deployments" / "mq-prod-us-east" / "manifest.yaml"
+        if not manifest_src.exists():
+            pytest.skip("No deployment manifest.yaml")
+
+        import shutil
+        test_manifest = tmp_path / "manifest.yaml"
+        shutil.copy(manifest_src, test_manifest)
+        mod.compose(test_manifest, dry_run=False)
+
+        dep_sec = yaml.safe_load(open(tmp_path / "deployment-security.yaml"))
+        assert "deployment_posture" in dep_sec
+        assert dep_sec["deployment_posture"]["cloud_provider"] == "on-prem"
+
+    def test_compose_deployment_security_has_container_security(self, tmp_path):
+        """deployment-security.yaml contains runtime security fields from placements."""
+        from importlib.util import spec_from_file_location, module_from_spec
+        spec = spec_from_file_location("compose", TOOLS_DIR / "compose.py")
+        mod = module_from_spec(spec)
+        spec.loader.exec_module(mod)
+
+        manifest_src = PROJECT_ROOT / "deployments" / "mq-prod-us-east" / "manifest.yaml"
+        if not manifest_src.exists():
+            pytest.skip("No deployment manifest.yaml")
+
+        import shutil
+        test_manifest = tmp_path / "manifest.yaml"
+        shutil.copy(manifest_src, test_manifest)
+        mod.compose(test_manifest, dry_run=False)
+
+        dep_sec = yaml.safe_load(open(tmp_path / "deployment-security.yaml"))
+        assert len(dep_sec["container_security"]) == 1
+        cs = dep_sec["container_security"][0]
+        assert cs["container_id"] == "mq-mq-infrastructure"
+        assert cs["zone_id"] == "prod-private-app-tier"
+        assert cs["runtime_user"] == "non_root"
+        assert cs["read_only_filesystem"] is True
+        assert cs["image_signed"] is True
+
+    def test_compose_deployment_base_has_no_security_fields(self, tmp_path):
+        """deployment.yaml should not contain runtime security fields."""
+        from importlib.util import spec_from_file_location, module_from_spec
+        spec = spec_from_file_location("compose", TOOLS_DIR / "compose.py")
+        mod = module_from_spec(spec)
+        spec.loader.exec_module(mod)
+
+        manifest_src = PROJECT_ROOT / "deployments" / "mq-prod-us-east" / "manifest.yaml"
+        if not manifest_src.exists():
+            pytest.skip("No deployment manifest.yaml")
+
+        import shutil
+        test_manifest = tmp_path / "manifest.yaml"
+        shutil.copy(manifest_src, test_manifest)
+        mod.compose(test_manifest, dry_run=False)
+
+        dep = yaml.safe_load(open(tmp_path / "deployment.yaml"))
+        for zp in dep.get("zone_placements", []):
+            for ctr in zp.get("containers", []):
+                assert "runtime_user" not in ctr, "runtime_user should be in deployment-security.yaml"
+                assert "read_only_filesystem" not in ctr, "read_only_filesystem should be in deployment-security.yaml"
+                assert "image_signed" not in ctr, "image_signed should be in deployment-security.yaml"
+                assert "network_policy_enforced" not in ctr
+                assert "resource_limits_set" not in ctr
+
+    def test_compose_networks_security_has_infra_resources(self, tmp_path):
+        """networks-security.yaml contains infrastructure_resources moved from networks.yaml."""
+        from importlib.util import spec_from_file_location, module_from_spec
+        spec = spec_from_file_location("compose", TOOLS_DIR / "compose.py")
+        mod = module_from_spec(spec)
+        spec.loader.exec_module(mod)
+
+        manifest_src = PROJECT_ROOT / "deployments" / "mq-prod-us-east" / "manifest.yaml"
+        if not manifest_src.exists():
+            pytest.skip("No deployment manifest.yaml")
+
+        import shutil
+        test_manifest = tmp_path / "manifest.yaml"
+        shutil.copy(manifest_src, test_manifest)
+        mod.compose(test_manifest, dry_run=False)
+
+        # networks.yaml should NOT have infrastructure_resources
+        nets = yaml.safe_load(open(tmp_path / "networks.yaml"))
+        assert "infrastructure_resources" not in nets, \
+            "infrastructure_resources should be in networks-security.yaml"
+
+        # networks-security.yaml SHOULD have them
+        nets_sec = yaml.safe_load(open(tmp_path / "networks-security.yaml"))
+        assert len(nets_sec["infrastructure_resources"]) == 2
+        resource_ids = [r["id"] for r in nets_sec["infrastructure_resources"]]
+        assert "prod-edge-waf" in resource_ids
+        assert "prod-app-lb" in resource_ids

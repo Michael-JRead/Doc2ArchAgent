@@ -324,9 +324,12 @@ def compose_system(manifest: dict) -> dict:
 
 
 def compose_deployment(manifest: dict) -> dict:
-    """Generate deployment YAML from manifest placements."""
-    net_prefix = manifest["network"]["id_prefix"]
+    """Generate deployment YAML from manifest placements.
 
+    Structural fields (container_id, replicas) stay in deployment.yaml.
+    Security fields (runtime_user, read_only_filesystem, etc.) are separated
+    by _build_deployment_security_stub() into deployment-security.yaml.
+    """
     deployment = {
         "deployment_metadata": {
             "id": manifest["id"],
@@ -338,24 +341,21 @@ def compose_deployment(manifest: dict) -> dict:
 
     if manifest.get("region"):
         deployment["deployment_metadata"]["region"] = manifest["region"]
-    if manifest.get("cloud_provider"):
-        deployment["deployment_metadata"]["cloud_provider"] = manifest["cloud_provider"]
+    # cloud_provider stays in deployment_metadata for backward compat but is
+    # also copied to deployment_posture in the security stub
 
-    # Build zone placements from manifest
+    # Build zone placements from manifest — structural fields only
     placements = manifest.get("placements", [])
     if placements:
-        # Group placements by zone_ref
         zone_map: dict[str, list[dict]] = {}
         for p in placements:
             zone_ref = p["zone_ref"]
             if zone_ref not in zone_map:
                 zone_map[zone_ref] = []
             container_entry: dict = {"container_id": p["container_ref"]}
-            for field in ("replicas", "runtime_user", "read_only_filesystem",
-                          "resource_limits_set", "network_policy_enforced",
-                          "image_signed"):
-                if field in p:
-                    container_entry[field] = p[field]
+            # Only structural fields in base deployment
+            if "replicas" in p:
+                container_entry["replicas"] = p["replicas"]
             zone_map[zone_ref].append(container_entry)
 
         deployment["zone_placements"] = [
@@ -398,13 +398,52 @@ def _build_networks_security_stub(manifest: dict, networks: dict) -> dict:
 
 
 def _build_deployment_security_stub(manifest: dict, deployment: dict) -> dict:
-    """Build deployment-security.yaml stub from composed data."""
+    """Build deployment-security.yaml stub from composed data.
+
+    Extracts runtime security fields from manifest placements into
+    container_security entries keyed by container_id + zone_id.
+    Also populates deployment_posture from manifest-level fields.
+    """
+    _SECURITY_FIELDS = (
+        "runtime_user", "read_only_filesystem", "resource_limits_set",
+        "network_policy_enforced", "image_signed", "image_registry",
+        "image_tag", "image_digest", "vulnerability_scan_date",
+    )
+
     stub: dict = {
         "deployment_security_metadata": {
             "deployment_ref": manifest.get("id", ""),
         },
-        "container_security": [],
     }
+
+    # Build deployment_posture from manifest-level security fields
+    posture: dict = {}
+    if manifest.get("cloud_provider"):
+        posture["cloud_provider"] = manifest["cloud_provider"]
+    if manifest.get("shared_responsibility_model"):
+        posture["shared_responsibility_model"] = manifest["shared_responsibility_model"]
+    if manifest.get("tenant_isolation"):
+        posture["tenant_isolation"] = manifest["tenant_isolation"]
+    if manifest.get("data_residency_region"):
+        posture["data_residency_region"] = manifest["data_residency_region"]
+    if manifest.get("data_residency_required") is not None:
+        posture["data_residency_required"] = manifest["data_residency_required"]
+    if posture:
+        stub["deployment_posture"] = posture
+
+    # Extract container-level security fields from manifest placements
+    container_sec: list[dict] = []
+    for p in manifest.get("placements", []):
+        sec_entry: dict = {}
+        for field in _SECURITY_FIELDS:
+            if field in p:
+                sec_entry[field] = p[field]
+        if sec_entry:
+            sec_entry["container_id"] = p["container_ref"]
+            sec_entry["zone_id"] = p["zone_ref"]
+            container_sec.append(sec_entry)
+
+    stub["container_security"] = container_sec
     return stub
 
 
@@ -468,14 +507,16 @@ def compose(manifest_path: Path, dry_run: bool = False,
             "dry_run": True,
             "valid": True,
             "networks_zones_count": len(networks.get("network_zones", [])),
-            "networks_resources_count": len(networks.get("infrastructure_resources", [])),
             "system_contexts_count": len(system.get("contexts", [])),
             "system_containers_count": len(system.get("containers", [])),
             "system_components_count": len(system.get("components", [])),
             "system_relationships_count": len(system.get("component_relationships", [])),
             "deployment_placements_count": len(deployment.get("zone_placements", [])),
+            "security_infra_resources_count": len(networks_security.get("infrastructure_resources", [])),
             "security_data_entities_count": len(system_security.get("data_entities", [])),
             "security_trust_boundaries_count": len(system_security.get("trust_boundaries", [])),
+            "security_container_security_count": len(deployment_security.get("container_security", [])),
+            "security_has_deployment_posture": "deployment_posture" in deployment_security,
             "output_dir": str(output_dir),
         }, indent=2))
         return result
