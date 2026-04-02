@@ -1,0 +1,57 @@
+metadata:
+  name: Threat Test System
+  description: System with known security issues for threat rule testing
+  owner: Security Team
+  status: active
+
+contexts:
+  - id: threat-test
+    name: Threat Test Context
+    description: Context for threat testing
+    internal: true
+
+containers:
+  - id: web-app
+    name: Web Application
+    context_id: threat-test
+    container_type: web_application
+    technology: Node.js
+    status: active
+    owner: Platform Team
+
+components:
+  - id: public-api
+    name: Public API
+    container_id: web-app
+    component_type: api
+    technology: Express.js
+    dfd_element_type: process
+    listeners:
+      - id: http-listener
+        protocol: HTTPS
+        port: 8080
+        tls_enabled: false
+        authn_mechanism: none
+        authz_required: false
+
+  - id: admin-panel
+    name: Admin Panel
+    container_id: web-app
+    component_type: web_ui
+    technology: React
+    dfd_element_type: process
+    admin_interface: true
+    listeners:
+      - id: admin-listener
+        protocol: HTTPS
+        port: 9090
+        tls_enabled: true
+        authn_mechanism: basic
+        authz_required: true
+
+component_relationships:
+  - id: user-to-api
+    source_component: public-api
+    target_component: admin-panel
+    label: "Manages"
+    data_classification: confidential

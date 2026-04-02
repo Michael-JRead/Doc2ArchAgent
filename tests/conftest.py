@@ -12,6 +12,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent / "tools"))
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
+REGRESSION_DIR = FIXTURES_DIR / "regression"
 
 
 @pytest.fixture
@@ -22,3 +23,8 @@ def valid_dir():
 @pytest.fixture
 def invalid_dir():
     return FIXTURES_DIR / "invalid"
+
+
+@pytest.fixture
+def regression_dir():
+    return REGRESSION_DIR
