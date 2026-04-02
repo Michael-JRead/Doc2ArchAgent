@@ -139,14 +139,18 @@ Include by diagram level:
 
 ## SEQUENCE
 
-1. Read `architecture/<system-id>/diagrams/layout-plan.yaml`
-2. Read `architecture/<system-id>/system.yaml` (for any detail not in layout plan)
+1. Read the `layout-plan.yaml` from the diagrams directory specified in the handoff context:
+   - **Deployment:** `deployments/<deployment-id>/diagrams/layout-plan.yaml`
+   - **Pattern:** `patterns/<type>/<category>/<pattern-id>/diagrams/layout-plan.yaml`
+   - **General:** `architecture/<system-id>/diagrams/layout-plan.yaml`
+2. Read the corresponding system.yaml or networks.yaml for any detail not in the layout plan
 3. For each diagram entry in the layout plan:
    a. Select preamble tier based on `complexity` field
    b. Convert ALL node IDs from kebab-case to snake_case for aliases
    c. Generate PlantUML syntax following the templates below
-   d. Write to `architecture/<system-id>/diagrams/<system-id>-<level>.puml`
+   d. Write to the same diagrams directory as `<scope-id>-<level>.puml`
    e. Self-validate: count nodes/edges, check alias consistency
+   f. Include `GENERATED` header comment at top of file
 4. Show progress:
    ```
    ✓ PlantUML 1 of 4 — Context       → payment-platform-context.puml

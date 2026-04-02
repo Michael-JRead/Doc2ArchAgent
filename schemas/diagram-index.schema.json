@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Michael-JRead/Doc2ArchAgent/schemas/diagram-index.schema.json",
+  "title": "Doc2ArchAgent Diagram Index Schema",
+  "description": "Schema for diagrams/_index.yaml — catalog of generated and custom diagrams for a deployment or pattern.",
+  "type": "object",
+  "properties": {
+    "generated_at": {
+      "type": "string",
+      "description": "ISO 8601 timestamp when diagrams were last generated."
+    },
+    "scope_type": {
+      "type": "string",
+      "enum": ["deployment", "pattern"],
+      "description": "Whether these diagrams belong to a deployment composition or a standalone pattern."
+    },
+    "scope_id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+      "description": "Deployment ID or pattern ID in kebab-case."
+    },
+    "source_manifest": {
+      "type": "string",
+      "description": "Path to the manifest.yaml that produced this deployment (deployment scope only)."
+    },
+    "source_pattern": {
+      "type": "string",
+      "description": "Pattern ID this diagram set documents (pattern scope only)."
+    },
+    "diagrams": {
+      "type": "array",
+      "description": "List of generated diagram entries.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "level": {
+            "type": "string",
+            "enum": ["context", "containers", "component", "deployment", "network", "threat-model"],
+            "description": "C4 diagram level or special diagram type."
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Human-readable diagram title."
+          },
+          "scope_container": {
+            "type": "string",
+            "description": "Container ID for component-level diagrams (scopes which container is shown)."
+          },
+          "formats": {
+            "type": "object",
+            "description": "Map of format name to filename.",
+            "properties": {
+              "mermaid": { "type": "string" },
+              "plantuml": { "type": "string" },
+              "drawio": { "type": "string" },
+              "structurizr": { "type": "string" },
+              "d2": { "type": "string" }
+            },
+            "additionalProperties": false
+          },
+          "personas": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": ["executive", "architect", "security", "network", "compliance"]
+            },
+            "description": "Persona-specific views included. Empty = default view."
+          }
+        },
+        "required": ["level", "title", "formats"],
+        "additionalProperties": true
+      }
+    },
+    "custom_diagrams": {
+      "type": "array",
+      "description": "Hand-crafted diagrams in custom/ subdirectory (never overwritten by generators).",
+      "items": {
+        "type": "object",
+        "properties": {
+          "file": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Path relative to diagrams/ directory."
+          },
+          "description": {
+            "type": "string",
+            "description": "What this custom diagram shows."
+          }
+        },
+        "required": ["file"],
+        "additionalProperties": true
+      }
+    }
+  },
+  "required": ["scope_type", "scope_id", "diagrams"],
+  "additionalProperties": true
+}

@@ -441,6 +441,27 @@ def compose(manifest_path: Path, dry_run: bool = False,
             yaml.dump(data, f, default_flow_style=False, sort_keys=False,
                       allow_unicode=True)
 
+    # Create diagrams/ directory with _index.yaml stub and custom/ subdirectory
+    diagrams_dir = output_dir / "diagrams"
+    diagrams_dir.mkdir(exist_ok=True)
+    custom_dir = diagrams_dir / "custom"
+    custom_dir.mkdir(exist_ok=True)
+
+    index_path = diagrams_dir / "_index.yaml"
+    if not index_path.exists():
+        index_data = {
+            "generated_at": timestamp,
+            "scope_type": "deployment",
+            "scope_id": manifest["id"],
+            "source_manifest": "manifest.yaml",
+            "diagrams": [],
+            "custom_diagrams": [],
+        }
+        with open(index_path, "w") as f:
+            f.write(header)
+            yaml.dump(index_data, f, default_flow_style=False,
+                      sort_keys=False, allow_unicode=True)
+
     # Validate composed output
     if validate:
         try:
@@ -464,6 +485,7 @@ def compose(manifest_path: Path, dry_run: bool = False,
             str(output_dir / "networks.yaml"),
             str(output_dir / "system.yaml"),
             str(output_dir / "deployment.yaml"),
+            str(output_dir / "diagrams" / "_index.yaml"),
         ],
     }, indent=2))
 

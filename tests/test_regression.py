@@ -1698,3 +1698,279 @@ class TestDocAgentPatternAwareness:
     def test_doc_extractor_context_separation_rule(self):
         content = (AGENTS_DIR / "doc-extractor.agent.md").read_text()
         assert "Context Separation Rule" in content
+
+
+# ============================================================================
+# L10 — DIAGRAM HIERARCHY: Deployment-scoped diagram storage
+# ============================================================================
+
+class TestDiagramIndexSchema:
+    """Diagram index schema exists and is valid."""
+
+    def test_diagram_index_schema_exists(self):
+        assert (SCHEMAS_DIR / "diagram-index.schema.json").exists()
+
+    def test_diagram_index_schema_valid_json(self):
+        with open(SCHEMAS_DIR / "diagram-index.schema.json") as f:
+            schema = json.load(f)
+        assert schema["title"] == "Doc2ArchAgent Diagram Index Schema"
+        assert "scope_type" in schema["properties"]
+        assert "scope_id" in schema["properties"]
+        assert "diagrams" in schema["properties"]
+        assert "custom_diagrams" in schema["properties"]
+
+    def test_diagram_index_schema_validates_with_jsonschema(self):
+        jsonschema = pytest.importorskip("jsonschema")
+        with open(SCHEMAS_DIR / "diagram-index.schema.json") as f:
+            schema = json.load(f)
+        jsonschema.Draft202012Validator.check_schema(schema)
+
+    def test_diagram_index_schema_scope_type_enum(self):
+        with open(SCHEMAS_DIR / "diagram-index.schema.json") as f:
+            schema = json.load(f)
+        assert set(schema["properties"]["scope_type"]["enum"]) == {"deployment", "pattern"}
+
+    def test_diagram_index_schema_level_enum(self):
+        with open(SCHEMAS_DIR / "diagram-index.schema.json") as f:
+            schema = json.load(f)
+        level_enum = schema["properties"]["diagrams"]["items"]["properties"]["level"]["enum"]
+        assert "context" in level_enum
+        assert "containers" in level_enum
+        assert "deployment" in level_enum
+
+    def test_diagram_index_schema_format_keys(self):
+        with open(SCHEMAS_DIR / "diagram-index.schema.json") as f:
+            schema = json.load(f)
+        fmt_props = schema["properties"]["diagrams"]["items"]["properties"]["formats"]["properties"]
+        assert "mermaid" in fmt_props
+        assert "plantuml" in fmt_props
+        assert "drawio" in fmt_props
+        assert "structurizr" in fmt_props
+        assert "d2" in fmt_props
+
+
+class TestPatternDiagramDirectories:
+    """Pattern directories have diagrams/ with _index.yaml stubs."""
+
+    def test_product_pattern_diagrams_dir_exists(self):
+        path = PATTERNS_DIR / "products" / "messaging" / "ibm-mq" / "diagrams"
+        assert path.is_dir(), "ibm-mq/diagrams/ must exist"
+
+    def test_product_pattern_index_exists(self):
+        path = PATTERNS_DIR / "products" / "messaging" / "ibm-mq" / "diagrams" / "_index.yaml"
+        assert path.exists(), "ibm-mq/diagrams/_index.yaml must exist"
+
+    def test_product_pattern_index_valid(self):
+        path = PATTERNS_DIR / "products" / "messaging" / "ibm-mq" / "diagrams" / "_index.yaml"
+        with open(path) as f:
+            data = yaml.safe_load(f)
+        assert data["scope_type"] == "pattern"
+        assert data["scope_id"] == "ibm-mq"
+        assert isinstance(data["diagrams"], list)
+
+    def test_product_pattern_index_conforms_to_schema(self):
+        jsonschema = pytest.importorskip("jsonschema")
+        with open(SCHEMAS_DIR / "diagram-index.schema.json") as f:
+            schema = json.load(f)
+        path = PATTERNS_DIR / "products" / "messaging" / "ibm-mq" / "diagrams" / "_index.yaml"
+        with open(path) as f:
+            data = yaml.safe_load(f)
+        jsonschema.validate(instance=data, schema=schema,
+                            cls=jsonschema.Draft202012Validator)
+
+    def test_network_pattern_diagrams_dir_exists(self):
+        path = PATTERNS_DIR / "networks" / "usa" / "standard-3tier" / "diagrams"
+        assert path.is_dir(), "standard-3tier/diagrams/ must exist"
+
+    def test_network_pattern_index_exists(self):
+        path = PATTERNS_DIR / "networks" / "usa" / "standard-3tier" / "diagrams" / "_index.yaml"
+        assert path.exists()
+
+    def test_network_pattern_index_valid(self):
+        path = PATTERNS_DIR / "networks" / "usa" / "standard-3tier" / "diagrams" / "_index.yaml"
+        with open(path) as f:
+            data = yaml.safe_load(f)
+        assert data["scope_type"] == "pattern"
+        assert data["scope_id"] == "standard-3tier"
+        assert isinstance(data["diagrams"], list)
+
+    def test_network_pattern_index_conforms_to_schema(self):
+        jsonschema = pytest.importorskip("jsonschema")
+        with open(SCHEMAS_DIR / "diagram-index.schema.json") as f:
+            schema = json.load(f)
+        path = PATTERNS_DIR / "networks" / "usa" / "standard-3tier" / "diagrams" / "_index.yaml"
+        with open(path) as f:
+            data = yaml.safe_load(f)
+        jsonschema.validate(instance=data, schema=schema,
+                            cls=jsonschema.Draft202012Validator)
+
+
+class TestComposeDiagramsDirectory:
+    """compose.py creates diagrams/ directory with _index.yaml stub."""
+
+    @pytest.fixture(autouse=True)
+    def _setup_manifest(self, tmp_path):
+        self.manifest_dir = tmp_path / "test-deployment"
+        self.manifest_dir.mkdir()
+        manifest = {
+            "manifest": {
+                "id": "test-deployment",
+                "name": "Test Deployment",
+                "description": "Test deployment for diagram hierarchy testing",
+                "environment": "development",
+                "region": "us-east-1",
+                "status": "proposed",
+                "network": {
+                    "pattern_ref": "standard-3tier",
+                    "id_prefix": "test",
+                },
+                "products": [
+                    {
+                        "pattern_ref": "ibm-mq",
+                        "id_prefix": "mq",
+                    },
+                ],
+                "placements": [
+                    {
+                        "container_ref": "mq-mq-infrastructure",
+                        "zone_ref": "test-private-app-tier",
+                        "replicas": 2,
+                        "runtime_user": "non_root",
+                    },
+                ],
+            }
+        }
+        self.manifest_path = self.manifest_dir / "manifest.yaml"
+        with open(self.manifest_path, "w") as f:
+            yaml.dump(manifest, f)
+
+    def test_compose_creates_diagrams_dir(self):
+        subprocess.run(
+            [sys.executable, str(TOOLS_DIR / "compose.py"),
+             str(self.manifest_path)],
+            capture_output=True, text=True, timeout=30,
+        )
+        assert (self.manifest_dir / "diagrams").is_dir(), \
+            "compose.py must create diagrams/ directory"
+
+    def test_compose_creates_custom_dir(self):
+        subprocess.run(
+            [sys.executable, str(TOOLS_DIR / "compose.py"),
+             str(self.manifest_path)],
+            capture_output=True, text=True, timeout=30,
+        )
+        assert (self.manifest_dir / "diagrams" / "custom").is_dir(), \
+            "compose.py must create diagrams/custom/ directory"
+
+    def test_compose_creates_index_yaml(self):
+        subprocess.run(
+            [sys.executable, str(TOOLS_DIR / "compose.py"),
+             str(self.manifest_path)],
+            capture_output=True, text=True, timeout=30,
+        )
+        index_path = self.manifest_dir / "diagrams" / "_index.yaml"
+        assert index_path.exists(), "compose.py must create diagrams/_index.yaml"
+
+    def test_compose_index_yaml_valid(self):
+        subprocess.run(
+            [sys.executable, str(TOOLS_DIR / "compose.py"),
+             str(self.manifest_path)],
+            capture_output=True, text=True, timeout=30,
+        )
+        index_path = self.manifest_dir / "diagrams" / "_index.yaml"
+        with open(index_path) as f:
+            data = yaml.safe_load(f)
+        assert data["scope_type"] == "deployment"
+        assert data["scope_id"] == "test-deployment"
+        assert isinstance(data["diagrams"], list)
+
+    def test_compose_index_conforms_to_schema(self):
+        jsonschema = pytest.importorskip("jsonschema")
+        subprocess.run(
+            [sys.executable, str(TOOLS_DIR / "compose.py"),
+             str(self.manifest_path)],
+            capture_output=True, text=True, timeout=30,
+        )
+        with open(SCHEMAS_DIR / "diagram-index.schema.json") as f:
+            schema = json.load(f)
+        index_path = self.manifest_dir / "diagrams" / "_index.yaml"
+        with open(index_path) as f:
+            data = yaml.safe_load(f)
+        jsonschema.validate(instance=data, schema=schema,
+                            cls=jsonschema.Draft202012Validator)
+
+
+class TestValidatePatternsHandlesDiagrams:
+    """validate-patterns.py validates diagrams/ structure within patterns."""
+
+    def test_product_pattern_validates_with_diagrams(self):
+        result = subprocess.run(
+            [sys.executable, str(TOOLS_DIR / "validate-patterns.py"),
+             str(PATTERNS_DIR / "products" / "messaging" / "ibm-mq")],
+            capture_output=True, text=True, timeout=30,
+        )
+        data = json.loads(result.stdout)
+        assert data["valid"] is True, f"Validation errors: {data['errors']}"
+
+    def test_network_pattern_validates_with_diagrams(self):
+        result = subprocess.run(
+            [sys.executable, str(TOOLS_DIR / "validate-patterns.py"),
+             str(PATTERNS_DIR / "networks" / "usa" / "standard-3tier")],
+            capture_output=True, text=True, timeout=30,
+        )
+        data = json.loads(result.stdout)
+        assert data["valid"] is True, f"Validation errors: {data['errors']}"
+
+
+class TestDiagramAgentDeploymentPaths:
+    """Diagram agent files reference deployment-scoped paths."""
+
+    def test_diagram_generator_has_output_modes(self):
+        content = (AGENTS_DIR / "diagram-generator.agent.md").read_text()
+        assert "DIAGRAM OUTPUT MODES" in content
+        assert "deployments/" in content
+        assert "patterns/" in content
+        assert "_index.yaml" in content
+
+    def test_mermaid_agent_references_deployment_paths(self):
+        content = (AGENTS_DIR / "diagram-mermaid.agent.md").read_text()
+        assert "deployments/" in content
+        assert "layout-plan.yaml" in content
+
+    def test_plantuml_agent_references_deployment_paths(self):
+        content = (AGENTS_DIR / "diagram-plantuml.agent.md").read_text()
+        assert "deployments/" in content
+
+    def test_drawio_agent_references_deployment_paths(self):
+        content = (AGENTS_DIR / "diagram-drawio.agent.md").read_text()
+        assert "deployments/" in content
+
+    def test_structurizr_agent_references_deployment_paths(self):
+        content = (AGENTS_DIR / "diagram-structurizr.agent.md").read_text()
+        assert "deployments/" in content
+
+    def test_d2_agent_references_deployment_paths(self):
+        content = (AGENTS_DIR / "diagram-d2.agent.md").read_text()
+        assert "deployments/" in content
+
+    def test_deployer_has_diagram_generation_section(self):
+        content = (AGENTS_DIR / "deployer.agent.md").read_text()
+        assert "DIAGRAM GENERATION" in content
+        assert "@diagram-generator" in content
+
+    def test_doc_writer_has_diagram_discovery(self):
+        content = (AGENTS_DIR / "doc-writer.agent.md").read_text()
+        assert "DIAGRAM DISCOVERY" in content
+        assert "_index.yaml" in content
+
+
+class TestDiagramNamingConvention:
+    """Diagram naming convention documented in copilot-instructions."""
+
+    def test_copilot_instructions_has_diagram_section(self):
+        content = COPILOT_INSTRUCTIONS_PATH.read_text()
+        assert "diagram" in content.lower()
+
+    def test_copilot_instructions_lists_diagram_index_schema(self):
+        content = COPILOT_INSTRUCTIONS_PATH.read_text()
+        assert "diagram-index.schema.json" in content

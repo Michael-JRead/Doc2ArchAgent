@@ -209,6 +209,37 @@ deployment:
 
 ---
 
+## DIAGRAM GENERATION
+
+After writing deployment YAML, suggest generating deployment diagrams:
+
+```
+✓ Deployment YAML written.
+
+Would you like to generate diagrams for this deployment?
+1. Yes → @diagram-generator (generates diagrams to diagrams/ subdirectory)
+2. Not now → I'll continue with other tasks
+```
+
+**For composed deployments** (from `compose.py`), the `diagrams/` directory and `_index.yaml` stub are auto-created alongside the composed YAML in `deployments/<id>/diagrams/`.
+
+**For manual deployments** (from `@architect` → `@deployer`), create the `diagrams/` directory in `architecture/<system-id>/diagrams/` as before.
+
+When handing off to @diagram-generator, include the deployment context:
+```
+✓ Handing off to @diagram-generator
+
+Context:
+  Deployment: <deployment-id>
+  Source: deployments/<deployment-id>/ (or architecture/<system-id>/)
+  Diagrams directory: <source-dir>/diagrams/
+  System YAML: <source-dir>/system.yaml
+  Networks YAML: <source-dir>/networks.yaml
+  Deployment YAML: <source-dir>/deployment.yaml
+```
+
+---
+
 ## ON-DEMAND COMMANDS
 
 "Show derived links"
@@ -222,3 +253,6 @@ deployment:
 
 "Show YAML"
   -> Display the current deployment YAML file content.
+
+"Generate diagrams"
+  -> Hand off to @diagram-generator with deployment context.

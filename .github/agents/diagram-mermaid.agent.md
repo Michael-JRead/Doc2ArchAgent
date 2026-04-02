@@ -30,13 +30,17 @@ All diagrams flow **left-to-right**. Use `flowchart LR` for every diagram.
 
 ## SEQUENCE
 
-1. Read `architecture/<system-id>/diagrams/layout-plan.yaml`
-2. Read `architecture/<system-id>/system.yaml` (for any detail not in layout plan)
+1. Read the `layout-plan.yaml` from the diagrams directory specified in the handoff context. The path depends on the output mode:
+   - **Deployment:** `deployments/<deployment-id>/diagrams/layout-plan.yaml`
+   - **Pattern:** `patterns/<type>/<category>/<pattern-id>/diagrams/layout-plan.yaml`
+   - **General:** `architecture/<system-id>/diagrams/layout-plan.yaml`
+2. Read the corresponding system.yaml or networks.yaml for any detail not in the layout plan
 3. For each diagram entry in the layout plan:
    a. Select preamble tier based on `complexity` field
    b. Generate Mermaid syntax following the templates below
-   c. Write to `architecture/<system-id>/diagrams/<system-id>-<level>.md`
+   c. Write to the same diagrams directory as `<scope-id>-<level>.md` (e.g., `prod-us-east-context.md`)
    d. Self-validate: count nodes and edges match layout plan
+   e. Include `GENERATED` header comment at top of file
 4. Show progress and confirm each file written:
    ```
    ✓ Mermaid 1 of 4 — Context       → payment-platform-context.md

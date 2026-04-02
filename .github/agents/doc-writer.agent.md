@@ -76,16 +76,48 @@ Output format?
 
 ---
 
+## DIAGRAM DISCOVERY
+
+When generating documentation that includes diagrams, discover available diagrams from `_index.yaml` catalogs:
+
+### Deployment-Scoped Diagrams
+```
+deployments/<deployment-id>/diagrams/_index.yaml
+```
+Read this file to find all generated diagrams for a specific deployment. The `diagrams[]` array lists each diagram by level, title, and available formats.
+
+### Pattern-Scoped Diagrams
+```
+patterns/<type>/<category>/<pattern-id>/diagrams/_index.yaml
+```
+Read this file to find reference diagrams for standalone patterns.
+
+### General (Architecture) Diagrams
+```
+architecture/<system-id>/diagrams/_index.yaml
+```
+Fallback for non-deployment, non-pattern diagram discovery.
+
+### How to Use `_index.yaml`
+1. Read `_index.yaml` from the appropriate scope
+2. For each diagram entry, select the format matching the output (Mermaid for Markdown docs, Draw.io for Confluence)
+3. Embed diagram references using the filenames from the `formats` map
+4. Check `custom_diagrams[]` for hand-crafted diagrams to include
+5. If `_index.yaml` does not exist, fall back to globbing the `diagrams/` directory
+
+---
+
 ## SEQUENCE
 
-1. Read `architecture/<system-id>/system.yaml`
-2. Read `architecture/networks.yaml`
-3. Read any deployment files under `architecture/<system-id>/deployments/`
-4. If `provenance.yaml` exists, read it for confidence data
-5. Ask user which document type and format
-6. Generate the document following templates below
-7. Write to `architecture/<system-id>/docs/<system-id>-<doc-type>.<ext>`
-8. Show completion summary
+1. Read `architecture/<system-id>/system.yaml` (or `deployments/<id>/system.yaml` for composed deployments)
+2. Read `architecture/networks.yaml` (or `deployments/<id>/networks.yaml`)
+3. Read any deployment files under `architecture/<system-id>/deployments/` or `deployments/<id>/deployment.yaml`
+4. Read `diagrams/_index.yaml` from the appropriate scope to discover available diagrams
+5. If `provenance.yaml` exists, read it for confidence data
+6. Ask user which document type and format
+7. Generate the document following templates below
+8. Write to `architecture/<system-id>/docs/<system-id>-<doc-type>.<ext>` (or `deployments/<id>/docs/`)
+9. Show completion summary
 
 ---
 
@@ -258,19 +290,35 @@ Valid colours: `Grey`, `Yellow`, `Green`, `Blue`, `Red`.
 ```
 
 ### Diagram Embedding
-Attach generated diagram files to the Confluence page, then reference them:
-```html
-<!-- Attached image (PNG export of diagram) -->
-<ac:image ac:width="900">
-  <ri:attachment ri:filename="<system-id>-context.png" />
-</ac:image>
 
+Discover diagrams from `_index.yaml` before embedding. Use the `formats` map to select the right file:
+
+**For Confluence output** — prefer Draw.io format (`.drawio`), fall back to PNG:
+```html
 <!-- Draw.io macro (if draw.io plugin is installed) -->
 <ac:structured-macro ac:name="drawio">
-  <ac:parameter ac:name="diagramName"><system-id>-context</ac:parameter>
+  <ac:parameter ac:name="diagramName"><scope-id>-context</ac:parameter>
 </ac:structured-macro>
+
+<!-- Fallback: attached PNG image -->
+<ac:image ac:width="900">
+  <ri:attachment ri:filename="<scope-id>-context.png" />
+</ac:image>
 ```
+
+**For Markdown output** — prefer Mermaid format (`.md`), embed inline:
+```markdown
+<!-- Include from diagrams/_index.yaml → formats.mermaid -->
+```
+
 If the draw.io plugin is not available, fall back to embedded PNG images.
+
+**Custom diagrams** — check `custom_diagrams[]` in `_index.yaml` for hand-crafted additions:
+```html
+<ac:image ac:width="900">
+  <ri:attachment ri:filename="custom/<filename>" />
+</ac:image>
+```
 
 ---
 

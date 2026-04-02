@@ -1,0 +1,13 @@
+generated_at: "2026-03-30T15:00:00Z"
+scope_type: deployment
+scope_id: payment-platform
+diagrams:
+  - level: context
+    title: "Payment Platform — System Context"
+    formats:
+      mermaid: payment-platform-context.md
+  - level: containers
+    title: "Payment Platform — Container View"
+    formats:
+      mermaid: payment-platform-containers.md
+custom_diagrams: []

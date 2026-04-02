@@ -228,6 +228,9 @@ def validate_new_format_dir(pattern_dir: Path) -> dict:
     # Validate context hierarchy
     _validate_context_hierarchy(pattern_dir, ptype, errors, warnings)
 
+    # Validate diagrams/ directory if present
+    _validate_diagrams_dir(pattern_dir, errors, warnings)
+
     # Cross-validate: binding_points reference real IDs
     if not errors:
         _cross_validate_bindings(pattern_dir, meta_result, errors, warnings)
@@ -359,6 +362,56 @@ def _validate_product_system(sys_data: dict, fname: str, errors: list, warnings:
         if lref and tgt and tgt in listeners_by_component:
             if lref not in listeners_by_component[tgt]:
                 errors.append(f"{fname}: component_relationship '{relid}': target_listener_ref '{lref}' does not exist on component '{tgt}'")
+
+
+def _validate_diagrams_dir(pattern_dir: Path, errors: list, warnings: list):
+    """Validate the diagrams/ subdirectory of a pattern if present."""
+    diagrams_dir = pattern_dir / "diagrams"
+    dirname = pattern_dir.name
+
+    if not diagrams_dir.exists():
+        return
+
+    index_path = diagrams_dir / "_index.yaml"
+    if not index_path.exists():
+        warnings.append(f"{dirname}/diagrams/: directory exists but missing _index.yaml")
+        return
+
+    try:
+        with open(index_path) as f:
+            idx_data = yaml.safe_load(f) or {}
+    except Exception as e:
+        errors.append(f"{dirname}/diagrams/_index.yaml: cannot load: {e}")
+        return
+
+    # Required fields
+    if not idx_data.get("scope_type"):
+        errors.append(f"{dirname}/diagrams/_index.yaml: missing scope_type")
+    elif idx_data["scope_type"] not in ("deployment", "pattern"):
+        errors.append(f"{dirname}/diagrams/_index.yaml: scope_type must be 'deployment' or 'pattern'")
+
+    if not idx_data.get("scope_id"):
+        errors.append(f"{dirname}/diagrams/_index.yaml: missing scope_id")
+
+    if not isinstance(idx_data.get("diagrams"), list):
+        errors.append(f"{dirname}/diagrams/_index.yaml: 'diagrams' must be a list")
+    else:
+        for i, diag in enumerate(idx_data["diagrams"]):
+            if not isinstance(diag, dict):
+                continue
+            if not diag.get("level"):
+                errors.append(f"{dirname}/diagrams/_index.yaml: diagram[{i}] missing 'level'")
+            if not diag.get("title"):
+                errors.append(f"{dirname}/diagrams/_index.yaml: diagram[{i}] missing 'title'")
+            if not diag.get("formats"):
+                errors.append(f"{dirname}/diagrams/_index.yaml: diagram[{i}] missing 'formats'")
+            elif isinstance(diag["formats"], dict):
+                for fmt, fname in diag["formats"].items():
+                    fpath = diagrams_dir / fname
+                    if not fpath.exists():
+                        warnings.append(
+                            f"{dirname}/diagrams/_index.yaml: diagram[{i}] "
+                            f"format '{fmt}' references '{fname}' but file not found")
 
 
 def _cross_validate_bindings(pattern_dir: Path, meta_result: dict, errors: list, warnings: list):

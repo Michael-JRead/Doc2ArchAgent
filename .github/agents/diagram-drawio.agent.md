@@ -30,13 +30,16 @@ All diagrams flow **left-to-right** with explicit x,y coordinates on every eleme
 
 ## SEQUENCE
 
-1. Read `architecture/<system-id>/diagrams/layout-plan.yaml`
-2. Read `architecture/<system-id>/system.yaml` (for any detail not in layout plan)
+1. Read the `layout-plan.yaml` from the diagrams directory specified in the handoff context:
+   - **Deployment:** `deployments/<deployment-id>/diagrams/layout-plan.yaml`
+   - **Pattern:** `patterns/<type>/<category>/<pattern-id>/diagrams/layout-plan.yaml`
+   - **General:** `architecture/<system-id>/diagrams/layout-plan.yaml`
+2. Read the corresponding system.yaml for any detail not in the layout plan
 3. For each diagram entry in the layout plan:
    a. Compute pixel positions from grid coordinates
    b. Compute boundary bounding boxes from children
    c. Generate draw.io XML following templates below
-   d. Write to `architecture/<system-id>/diagrams/<system-id>-<level>.drawio`
+   d. Write to the same diagrams directory as `<scope-id>-<level>.drawio`
    e. Self-validate: all IDs unique, all source/target refs valid, no geometry overlap
 4. Show progress and confirm each file written:
    ```
