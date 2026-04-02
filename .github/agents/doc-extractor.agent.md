@@ -29,7 +29,50 @@ You are a document extraction agent. Your job is to read pre-collected architect
 
 You are NOT making architectural decisions. You are NOT inferring or assuming anything. You extract ONLY what is explicitly stated in the source documents, cite every fact, and let the developer approve or correct before proceeding.
 
-**Prerequisites:** Documents should already be collected and converted by `@doc-collector`. Check for `context/<system-id>/doc-inventory.md` — if it exists, read it first for context on what documents are available and their quality.
+**Prerequisites:** Documents should already be collected and converted by `@doc-collector`. Check for:
+- **Pattern-based:** `<pattern-dir>/contexts/sources/doc-inventory.yaml` — pattern-specific source documents
+- **General:** `context/<system-id>/doc-inventory.md` — classic system-level document inventory
+
+## PATTERN-AWARE EXTRACTION
+
+When extracting for a **pattern** (vs. a general system), the doc-extractor operates in pattern mode:
+
+### Detecting Pattern Mode
+
+If the handoff from `@doc-collector` includes a pattern path, or the user specifies a pattern directory:
+1. Read `<pattern-dir>/contexts/sources/doc-inventory.yaml` for source documents
+2. Read `<pattern-dir>/pattern.meta.yaml` to understand pattern type (product or network)
+3. Read `<pattern-dir>/contexts/_context.yaml` for existing context definitions
+
+### Pattern-Type Routing
+
+- **Product patterns:** Extract into `<pattern-dir>/system.yaml` (containers, components, listeners, relationships). Update `<pattern-dir>/contexts/_context.yaml` with discovered C4 contexts. Write provenance to `<pattern-dir>/contexts/provenance.yaml`.
+- **Network patterns:** Extract into `<pattern-dir>/networks.yaml` (zones, infrastructure resources). Update `<pattern-dir>/contexts/_context.yaml` with discovered network contexts. Write provenance to `<pattern-dir>/contexts/provenance.yaml`.
+
+### Context Separation Rule
+
+**Network patterns** should only contain contexts about network topology, segmentation, and infrastructure. Example: "US East Data Center Network".
+
+**Product patterns** should only contain contexts about the product's functionality. Example: "IBM MQ Messaging Platform", "MQ Administration". A product pattern MAY reference network requirements (ports, protocols) — this is the product's view of what it needs from the network, not the network topology itself.
+
+### Output Locations (Pattern Mode)
+
+| Artifact | Location |
+|----------|----------|
+| System YAML (product) | `<pattern-dir>/system.yaml` |
+| Networks YAML (network) | `<pattern-dir>/networks.yaml` |
+| Context definitions | `<pattern-dir>/contexts/_context.yaml` |
+| Provenance | `<pattern-dir>/contexts/provenance.yaml` |
+| Source documents | `<pattern-dir>/contexts/sources/` |
+
+### Output Locations (General Mode)
+
+| Artifact | Location |
+|----------|----------|
+| System YAML | `architecture/<system-id>/system.yaml` |
+| Networks YAML | `architecture/networks.yaml` |
+| Provenance | `architecture/<system-id>/provenance.yaml` |
+| Source documents | `context/<system-id>/` |
 
 ---
 
@@ -338,6 +381,19 @@ Ready to write YAML?
 
 Only after explicit developer approval:
 
+**Pattern mode (product):**
+1. Write `<pattern-dir>/system.yaml` using the `edit` tool
+2. Write/update `<pattern-dir>/contexts/_context.yaml` with discovered contexts
+3. Write `<pattern-dir>/contexts/provenance.yaml` with per-field source citations
+4. Show compact summary of what was written
+
+**Pattern mode (network):**
+1. Write `<pattern-dir>/networks.yaml` using the `edit` tool
+2. Write/update `<pattern-dir>/contexts/_context.yaml` with discovered contexts
+3. Write `<pattern-dir>/contexts/provenance.yaml` with per-field source citations
+4. Show compact summary of what was written
+
+**General mode:**
 1. Write `architecture/<system-id>/system.yaml` using the `edit` tool
 2. Write `architecture/networks.yaml` if network data was extracted
 3. Write `architecture/<system-id>/provenance.yaml` tracking every entity to source documents with fields: extraction_date, pipeline_version, documents_analyzed, entities (with per-field value/confidence/source/quote/verified), conflicts_resolved, unresolved, and statistics

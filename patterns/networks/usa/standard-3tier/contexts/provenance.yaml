@@ -1,0 +1,5 @@
+extraction_date: "2026-04-01"
+documents_analyzed: []
+entities: []
+# Provenance records are populated by @doc-extractor during extraction.
+# Each entity maps fields to source citations with confidence scores.

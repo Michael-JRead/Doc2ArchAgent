@@ -1,0 +1,14 @@
+pattern_ref: standard-3tier
+pattern_type: network
+collected_date: "2026-04-01"
+documents: []
+# Add source documents here as they are collected.
+# Example:
+#   - file: datacenter-topology-v3.md
+#     original_name: US_East_DC_Network_Design.pdf
+#     format: pdf
+#     conversion_method: pymupdf
+#     quality: high
+#     classification: network
+#     topics: [zone-topology, waf-config, load-balancer, segmentation]
+#     pages: 28

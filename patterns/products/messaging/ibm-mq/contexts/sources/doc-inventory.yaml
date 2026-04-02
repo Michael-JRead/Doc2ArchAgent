@@ -1,0 +1,14 @@
+pattern_ref: ibm-mq
+pattern_type: product
+collected_date: "2026-04-01"
+documents: []
+# Add source documents here as they are collected.
+# Example:
+#   - file: ibm-mq-deployment-guide.md
+#     original_name: IBM_MQ_v9.3_Deployment_Guide.pdf
+#     format: pdf
+#     conversion_method: pymupdf
+#     quality: high
+#     classification: product
+#     topics: [queue-manager, channels, tls-config, deployment]
+#     pages: 42

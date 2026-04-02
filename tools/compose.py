@@ -89,6 +89,25 @@ def _apply_overrides(entities: list[dict], overrides: dict, prefix: str) -> list
     return entities
 
 
+def _load_pattern_contexts(pattern_dir: Path, prefix: str) -> tuple[list[dict], list[dict]]:
+    """Load and prefix contexts from a pattern's contexts/_context.yaml if it exists."""
+    context_path = pattern_dir / "contexts" / "_context.yaml"
+    if not context_path.exists():
+        return [], []
+
+    with open(context_path) as f:
+        ctx_data = yaml.safe_load(f) or {}
+
+    contexts = _prefix_ids_in_list(
+        ctx_data.get("contexts", []), prefix
+    )
+    context_rels = _prefix_ids_in_list(
+        ctx_data.get("context_relationships", []), prefix,
+        ref_fields=["source_context", "target_context"]
+    )
+    return contexts, context_rels
+
+
 def compose_network(manifest: dict) -> dict:
     """Compose the network portion from the manifest's network pattern."""
     net_spec = manifest["network"]
@@ -134,10 +153,19 @@ def compose_network(manifest: dict) -> dict:
     zones = _apply_overrides(zones, overrides, prefix)
     resources = _apply_overrides(resources, overrides, prefix)
 
-    return {
+    # Load network pattern contexts
+    net_contexts, net_ctx_rels = _load_pattern_contexts(pattern_dir, prefix)
+
+    result = {
         "network_zones": zones,
         "infrastructure_resources": resources,
     }
+    if net_contexts:
+        result["_contexts"] = net_contexts
+    if net_ctx_rels:
+        result["_context_relationships"] = net_ctx_rels
+
+    return result
 
 
 def compose_system(manifest: dict) -> dict:
@@ -151,6 +179,7 @@ def compose_system(manifest: dict) -> dict:
         raise ValueError(f"Duplicate product id_prefix values: {set(dupes)}")
 
     all_contexts = []
+    all_context_relationships = []
     all_containers = []
     all_components = []
     all_relationships = []
@@ -186,10 +215,18 @@ def compose_system(manifest: dict) -> dict:
         with open(system_path) as f:
             sys_data = yaml.safe_load(f)
 
-        # Contexts
-        contexts = _prefix_ids_in_list(
+        # Contexts — merge _context.yaml (if present) with inline contexts from system.yaml
+        # Inline contexts are needed because containers reference them via context_id
+        ctx_from_dir, ctx_rels_from_dir = _load_pattern_contexts(pattern_dir, prefix)
+        inline_contexts = _prefix_ids_in_list(
             sys_data.get("contexts", []), prefix
         )
+        # Merge: start with inline, add any from _context.yaml that aren't duplicates
+        inline_ids = {c["id"] for c in inline_contexts if "id" in c}
+        contexts = list(inline_contexts)
+        for ctx in ctx_from_dir:
+            if ctx.get("id") not in inline_ids:
+                contexts.append(ctx)
         # Apply context_name override
         if product_spec.get("context_name") and contexts:
             contexts[0]["name"] = product_spec["context_name"]
@@ -241,6 +278,7 @@ def compose_system(manifest: dict) -> dict:
         components = _apply_overrides(components, overrides, prefix)
 
         all_contexts.extend(contexts)
+        all_context_relationships.extend(ctx_rels_from_dir)
         all_containers.extend(containers)
         all_components.extend(components)
         all_relationships.extend(relationships)
@@ -252,6 +290,10 @@ def compose_system(manifest: dict) -> dict:
     # Add cross-product relationships from manifest
     for rel in manifest.get("cross_product_relationships", []):
         all_relationships.append(copy.deepcopy(rel))
+
+    # Merge network pattern contexts into the system (if any)
+    # Network contexts come from compose_network's _contexts key
+    # They are injected via compose() after both compose_network and compose_system run
 
     # Build composed system
     composed = {
@@ -267,6 +309,8 @@ def compose_system(manifest: dict) -> dict:
         "component_relationships": all_relationships,
     }
 
+    if all_context_relationships:
+        composed["context_relationships"] = all_context_relationships
     if all_container_relationships:
         composed["container_relationships"] = all_container_relationships
     if all_external_systems:
@@ -337,6 +381,15 @@ def compose(manifest_path: Path, dry_run: bool = False,
     system = compose_system(manifest)
     deployment = compose_deployment(manifest)
 
+    # Inject network pattern contexts into composed system
+    net_contexts = networks.pop("_contexts", [])
+    net_ctx_rels = networks.pop("_context_relationships", [])
+    if net_contexts:
+        system["contexts"] = net_contexts + system.get("contexts", [])
+    if net_ctx_rels:
+        existing_ctx_rels = system.get("context_relationships", [])
+        system["context_relationships"] = net_ctx_rels + existing_ctx_rels
+
     timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     try:
         rel_manifest = str(manifest_path.relative_to(PROJECT_ROOT))
@@ -358,6 +411,10 @@ def compose(manifest_path: Path, dry_run: bool = False,
         "errors": [],
         "warnings": [],
     }
+
+    # Add context_relationships to composed output if present
+    if system.get("context_relationships"):
+        pass  # already set above
 
     if dry_run:
         print(json.dumps({

@@ -92,6 +92,95 @@ def validate_pattern_meta(meta_path: Path) -> dict:
             "pattern_type": ptype, "pattern_id": pid}
 
 
+def _validate_context_hierarchy(pattern_dir: Path, ptype: str,
+                                errors: list, warnings: list):
+    """Validate the contexts/ subdirectory of a pattern."""
+    contexts_dir = pattern_dir / "contexts"
+    dirname = pattern_dir.name
+
+    if not contexts_dir.exists():
+        # Not required, but recommended
+        return
+
+    # Validate _context.yaml if present
+    context_yaml = contexts_dir / "_context.yaml"
+    if context_yaml.exists():
+        try:
+            with open(context_yaml) as f:
+                ctx_data = yaml.safe_load(f) or {}
+        except Exception as e:
+            errors.append(f"{dirname}/contexts/_context.yaml: cannot load: {e}")
+            return
+
+        contexts = ctx_data.get("contexts", [])
+        if not contexts:
+            warnings.append(f"{dirname}/contexts/_context.yaml: no contexts defined")
+
+        context_ids: set[str] = set()
+        for ctx in contexts:
+            if not isinstance(ctx, dict):
+                continue
+            cid = ctx.get("id", "?")
+            for field in ("id", "name", "description", "internal"):
+                if field not in ctx:
+                    errors.append(f"{dirname}/contexts/_context.yaml: context '{cid}': "
+                                  f"required field '{field}' is missing")
+            if cid != "?" and not KEBAB_CASE_RE.match(cid):
+                warnings.append(f"{dirname}/contexts/_context.yaml: context id '{cid}' "
+                                "is not kebab-case")
+            if cid in context_ids:
+                errors.append(f"{dirname}/contexts/_context.yaml: duplicate context id '{cid}'")
+            context_ids.add(cid)
+
+        # Validate context_relationships if present
+        for rel in ctx_data.get("context_relationships", []):
+            if not isinstance(rel, dict):
+                continue
+            relid = rel.get("id", "?")
+            src = rel.get("source_context", "")
+            tgt = rel.get("target_context", "")
+            if src and src not in context_ids:
+                errors.append(f"{dirname}/contexts/_context.yaml: relationship '{relid}': "
+                              f"source_context '{src}' not found")
+            if tgt and tgt not in context_ids:
+                errors.append(f"{dirname}/contexts/_context.yaml: relationship '{relid}': "
+                              f"target_context '{tgt}' not found")
+
+    # Validate sources/ directory
+    sources_dir = contexts_dir / "sources"
+    if sources_dir.exists():
+        inventory_path = sources_dir / "doc-inventory.yaml"
+        if inventory_path.exists():
+            try:
+                with open(inventory_path) as f:
+                    inv_data = yaml.safe_load(f) or {}
+                if not inv_data.get("pattern_ref"):
+                    warnings.append(f"{dirname}/contexts/sources/doc-inventory.yaml: "
+                                    "missing pattern_ref")
+                # Validate referenced files exist
+                for doc in inv_data.get("documents", []):
+                    if isinstance(doc, dict) and doc.get("file"):
+                        doc_path = sources_dir / doc["file"]
+                        if not doc_path.exists():
+                            warnings.append(
+                                f"{dirname}/contexts/sources/doc-inventory.yaml: "
+                                f"document '{doc['file']}' listed but not found in sources/")
+            except Exception as e:
+                errors.append(f"{dirname}/contexts/sources/doc-inventory.yaml: "
+                              f"cannot load: {e}")
+
+    # Validate provenance.yaml if present
+    provenance_path = contexts_dir / "provenance.yaml"
+    if provenance_path.exists():
+        try:
+            with open(provenance_path) as f:
+                prov_data = yaml.safe_load(f) or {}
+            if not prov_data.get("extraction_date"):
+                warnings.append(f"{dirname}/contexts/provenance.yaml: missing extraction_date")
+        except Exception as e:
+            errors.append(f"{dirname}/contexts/provenance.yaml: cannot load: {e}")
+
+
 def validate_new_format_dir(pattern_dir: Path) -> dict:
     """Validate a new-format pattern directory."""
     errors: list[str] = []
@@ -135,6 +224,9 @@ def validate_new_format_dir(pattern_dir: Path) -> dict:
                 _validate_product_system(sys_data, f"{dirname}/system.yaml", errors, warnings)
             except Exception as e:
                 errors.append(f"{dirname}/system.yaml: cannot load: {e}")
+
+    # Validate context hierarchy
+    _validate_context_hierarchy(pattern_dir, ptype, errors, warnings)
 
     # Cross-validate: binding_points reference real IDs
     if not errors:

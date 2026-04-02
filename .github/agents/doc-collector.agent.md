@@ -166,9 +166,64 @@ Context transferred:
 
 ---
 
+## PATTERN-TYPE SELECTION
+
+Before collecting documents, ask the developer what type of pattern they are building:
+
+```
+What are you documenting?
+
+1. Network pattern
+   Documents describe network topology, zones, WAF, load balancers,
+   segmentation, or data center design.
+   → Documents will be stored in patterns/networks/<geo>/<pattern-id>/contexts/sources/
+
+2. Product pattern
+   Documents describe a specific product deployment — containers,
+   components, listeners, configuration, administration.
+   → Documents will be stored in patterns/products/<category>/<pattern-id>/contexts/sources/
+
+3. Mixed — I'll classify and split
+   Documents contain BOTH network topology AND product deployment info.
+   → I'll classify sections and route them to the correct pattern.
+
+4. General / unsorted
+   I'm not building a pattern — just collecting into context/<system-id>/
+   → Classic mode — documents go to context/<system-id>/ as before.
+```
+
+**For options 1 and 2:** Ask for the pattern path (e.g., `patterns/products/messaging/ibm-mq`).
+Store all source documents in `<pattern-dir>/contexts/sources/` and update the `doc-inventory.yaml` there.
+
+**For option 3 (mixed):** After collection, run classification:
+```
+python tools/classify-sections.py <document> --dry-run
+```
+Review the classification output. For each section classified as `network`, route it to the network pattern's `contexts/sources/`. For `product` sections, route to the product pattern's `contexts/sources/`. If confidence < 0.7, ask the developer to confirm the classification.
+
+To split and write classified sections:
+```
+python tools/classify-sections.py <document> --output-dir <pattern-dir>/contexts/sources/
+```
+
+**For option 4 (general):** Use the classic `context/<system-id>/` path as before. This is backwards compatible.
+
+### Classification Signals
+
+| Signal | → Network Pattern | → Product Pattern |
+|--------|-------------------|-------------------|
+| Keywords | firewall, VLAN, subnet, DMZ, zone, routing, segmentation | container, component, queue, API, service, deployment |
+| Content | IP ranges, CIDR blocks, ACL rules, topology diagrams | Port specs, TLS config, auth mechanisms, app architecture |
+| Section titles | "Network Design", "Topology", "Zone Config" | "Installation", "Configuration", "Administration" |
+| Ambiguous | Firewall rules FOR a product → copy to BOTH | Product placement in zones → copy to BOTH |
+
+**Important:** A product's own network requirements (ports, protocols, TLS config) belong in the **product pattern** — they describe what the product needs from the network, not the network topology itself.
+
+---
+
 ## INPUT MODE SELECTION
 
-After the welcome message, ask the developer to choose their input mode:
+After the pattern-type selection, ask the developer to choose their input mode:
 
 ```
 How are your architecture documents formatted?
@@ -324,6 +379,32 @@ Follow this exact sequence. Do not skip steps.
 
 ### STEP 2.5 — Write Document Inventory
 
+**If collecting for a pattern (options 1, 2, or 3):**
+
+Write `<pattern-dir>/contexts/sources/doc-inventory.yaml` in the schema-conformant format:
+```yaml
+pattern_ref: <pattern-id>
+pattern_type: product  # or network
+collected_date: "2026-04-02"
+documents:
+  - file: arch-overview.md
+    original_name: Architecture_Overview.pdf
+    format: pdf
+    conversion_method: pymupdf
+    quality: high
+    classification: product
+    topics: [system-desc, containers, components]
+  - file: network-design.md
+    format: markdown
+    quality: high
+    classification: network
+    topics: [zones, trust-levels, segmentation]
+    split_from: vendor-deployment-guide.pdf
+    section_range: "16-28"
+```
+
+**If collecting in general mode (option 4):**
+
 Write `context/<system-id>/doc-inventory.md` summarizing:
 ```markdown
 # Document Inventory — <system-name>
@@ -352,6 +433,27 @@ Documents: <N> files
 DOCUMENT COLLECTION COMPLETE
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+Documents collected and inventoried.
+```
+
+**If collecting for a pattern:** Include the pattern context in the handoff:
+```
+✓ Handing off to @doc-extractor
+
+Context transferred:
+  Pattern: <pattern-id> (<product|network>)
+  Pattern path: patterns/<type>/<category>/<pattern-id>/
+  Documents: N files in <pattern-dir>/contexts/sources/
+  Inventory: <pattern-dir>/contexts/sources/doc-inventory.yaml
+  Quality: X high, Y medium, Z need review
+  Contexts file: <pattern-dir>/contexts/_context.yaml
+
+@doc-extractor will extract entities and write provenance to:
+  <pattern-dir>/contexts/provenance.yaml
+```
+
+**If collecting in general mode:**
+```
 Documents collected and inventoried. You can now:
 1. Extract entities → @doc-extractor (extract architecture data from these docs)
 2. Continue modeling → @architect (build architecture model manually)

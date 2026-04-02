@@ -99,7 +99,30 @@ Patterns are reusable architecture templates organized in two hierarchies:
 - **Network patterns** contain a standalone `networks.yaml` defining zones and infrastructure resources
 - **Product patterns** contain a standalone `system.yaml` defining contexts, containers, components, and relationships
 
-Each pattern directory has a `pattern.meta.yaml` with metadata, version, composition contract (`provides`/`requires`), and binding points.
+Each pattern directory has:
+- `pattern.meta.yaml` — metadata, version, composition contract (`provides`/`requires`), binding points
+- `networks.yaml` (network) or `system.yaml` (product) — the pattern's architecture content
+- `contexts/` — per-pattern context hierarchy:
+  - `_context.yaml` — C4 Level 1 context definitions for this pattern
+  - `sources/` — source documents used to build this pattern
+  - `sources/doc-inventory.yaml` — inventory of collected documents
+  - `provenance.yaml` — entity-to-source evidence mapping
+
+### Context Separation Rule
+
+- **Network patterns:** contexts describe network topology concerns (e.g., "US East Data Center Network")
+- **Product patterns:** contexts describe product functionality (e.g., "IBM MQ Messaging Platform")
+- A product pattern MAY reference network requirements (ports, protocols) — this is the product's view of what it needs from the network, not the network topology itself
+
+### Document Classification
+
+When vendor documents contain mixed content (both network and product info), use:
+```bash
+python tools/classify-sections.py <document> --dry-run          # Preview classification
+python tools/classify-sections.py <document> --output-dir <dir> # Split and write
+```
+
+The `@doc-collector` agent prompts users to select pattern type and auto-routes documents to the correct pattern's `contexts/sources/`.
 
 ### Composition via Deployment Manifests
 
@@ -112,8 +135,9 @@ python tools/compose.py deployments/<id>/manifest.yaml --validate
 The compose tool:
 1. Resolves pattern references and verifies pinned versions
 2. Applies unique `id_prefix` per pattern to prevent ID conflicts
-3. Merges into composed `system.yaml` + `networks.yaml` + `deployment.yaml`
-4. Validates the composed output
+3. Merges `_context.yaml` files from all patterns into the composed system
+4. Merges into composed `system.yaml` + `networks.yaml` + `deployment.yaml`
+5. Validates the composed output
 
 **Do not hand-edit generated files.** Modify the manifest or source patterns instead.
 
@@ -126,6 +150,8 @@ All YAML files are validated against JSON Schemas in `schemas/`:
 - `provenance.schema.json` — provenance.yaml
 - `pattern-meta.schema.json` — pattern.meta.yaml
 - `manifest.schema.json` — deployment manifest
+- `context.schema.json` — pattern _context.yaml
+- `doc-inventory.schema.json` — pattern doc-inventory.yaml
 
 Run validation: `python tools/validate.py <system.yaml> [networks.yaml] --format table`
 
@@ -277,6 +303,10 @@ python tools/compose.py deployments/<id>/manifest.yaml --validate
 
 # Migrate legacy pattern to directory format
 python tools/migrate-pattern.py patterns/products/messaging/ibm-mq.pattern.yaml
+
+# Classify document sections by concern (network vs product)
+python tools/classify-sections.py <document> --dry-run
+python tools/classify-sections.py <document> --output-dir <pattern-dir>/contexts/sources/
 ```
 
 ## Security Review

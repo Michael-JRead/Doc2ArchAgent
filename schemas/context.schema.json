@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Michael-JRead/Doc2ArchAgent/schemas/context.schema.json",
+  "title": "Doc2ArchAgent Pattern Context Schema",
+  "description": "Schema for patterns/**/contexts/_context.yaml — standalone C4 Level 1 context definitions per pattern. Merged during composition.",
+  "type": "object",
+  "properties": {
+    "contexts": {
+      "type": "array",
+      "description": "C4 Level 1 system context definitions for this pattern.",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+            "description": "Unique context identifier in kebab-case."
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Human-readable context name."
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Description of this system context."
+          },
+          "internal": {
+            "type": "boolean",
+            "description": "True if this context is internally owned, false if external."
+          },
+          "owner": {
+            "type": "string",
+            "description": "Team or person responsible for this context."
+          },
+          "external_system_id": {
+            "type": "string",
+            "description": "Reference to an external_systems entry (for external contexts)."
+          },
+          "out_of_scope": {
+            "type": "boolean",
+            "default": false,
+            "description": "If true, threat rules skip this context."
+          }
+        },
+        "required": ["id", "name", "description", "internal"],
+        "additionalProperties": true
+      }
+    },
+    "context_relationships": {
+      "type": "array",
+      "description": "Relationships between contexts defined in this pattern.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+          },
+          "source_context": {
+            "type": "string",
+            "description": "ID of the source context."
+          },
+          "target_context": {
+            "type": "string",
+            "description": "ID of the target context."
+          },
+          "label": {
+            "type": "string",
+            "description": "Relationship label (e.g., 'sends messages to')."
+          },
+          "bidirectional": {
+            "type": "boolean",
+            "default": false
+          }
+        },
+        "required": ["id", "source_context", "target_context", "label"],
+        "additionalProperties": true
+      }
+    }
+  },
+  "required": ["contexts"],
+  "additionalProperties": true
+}

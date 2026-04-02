@@ -1257,3 +1257,444 @@ class TestCopilotInstructionsPatternDocs:
         content = COPILOT_INSTRUCTIONS_PATH.read_text()
         assert "pattern-meta.schema.json" in content
         assert "manifest.schema.json" in content
+
+
+# ============================================================================
+# L9 — PATTERN CONTEXT HIERARCHY
+# ============================================================================
+
+class TestContextSchema:
+    """Context schema exists and is valid JSON Schema."""
+
+    def test_context_schema_exists(self):
+        assert (SCHEMAS_DIR / "context.schema.json").exists()
+
+    def test_context_schema_valid_json(self):
+        with open(SCHEMAS_DIR / "context.schema.json") as f:
+            schema = json.load(f)
+        assert schema["title"] == "Doc2ArchAgent Pattern Context Schema"
+        assert "contexts" in schema["properties"]
+
+    def test_context_schema_validates_with_jsonschema(self):
+        jsonschema = pytest.importorskip("jsonschema")
+        with open(SCHEMAS_DIR / "context.schema.json") as f:
+            schema = json.load(f)
+        jsonschema.Draft202012Validator.check_schema(schema)
+
+    def test_doc_inventory_schema_exists(self):
+        assert (SCHEMAS_DIR / "doc-inventory.schema.json").exists()
+
+    def test_doc_inventory_schema_valid_json(self):
+        with open(SCHEMAS_DIR / "doc-inventory.schema.json") as f:
+            schema = json.load(f)
+        assert "documents" in schema["properties"]
+        assert "pattern_ref" in schema["properties"]
+
+    def test_doc_inventory_schema_validates_with_jsonschema(self):
+        jsonschema = pytest.importorskip("jsonschema")
+        with open(SCHEMAS_DIR / "doc-inventory.schema.json") as f:
+            schema = json.load(f)
+        jsonschema.Draft202012Validator.check_schema(schema)
+
+
+class TestPatternContextHierarchy:
+    """Each pattern has a contexts/ subdirectory with _context.yaml, sources/, and provenance."""
+
+    # --- Product pattern ---
+
+    def test_product_contexts_dir_exists(self):
+        ctx_dir = PATTERNS_DIR / "products" / "messaging" / "ibm-mq" / "contexts"
+        assert ctx_dir.is_dir(), "ibm-mq/contexts/ must exist"
+
+    def test_product_context_yaml_exists(self):
+        path = PATTERNS_DIR / "products" / "messaging" / "ibm-mq" / "contexts" / "_context.yaml"
+        assert path.exists(), "ibm-mq/contexts/_context.yaml must exist"
+
+    def test_product_context_yaml_valid(self):
+        path = PATTERNS_DIR / "products" / "messaging" / "ibm-mq" / "contexts" / "_context.yaml"
+        with open(path) as f:
+            data = yaml.safe_load(f)
+        assert "contexts" in data
+        assert len(data["contexts"]) >= 1
+        for ctx in data["contexts"]:
+            assert "id" in ctx
+            assert "name" in ctx
+            assert "description" in ctx
+            assert "internal" in ctx
+
+    def test_product_context_ids_kebab_case(self):
+        path = PATTERNS_DIR / "products" / "messaging" / "ibm-mq" / "contexts" / "_context.yaml"
+        with open(path) as f:
+            data = yaml.safe_load(f)
+        kebab = re.compile(r'^[a-z][a-z0-9]*(-[a-z0-9]+)*$')
+        for ctx in data["contexts"]:
+            assert kebab.match(ctx["id"]), f"Context id '{ctx['id']}' is not kebab-case"
+
+    def test_product_sources_dir_exists(self):
+        path = PATTERNS_DIR / "products" / "messaging" / "ibm-mq" / "contexts" / "sources"
+        assert path.is_dir(), "ibm-mq/contexts/sources/ must exist"
+
+    def test_product_doc_inventory_exists(self):
+        path = PATTERNS_DIR / "products" / "messaging" / "ibm-mq" / "contexts" / "sources" / "doc-inventory.yaml"
+        assert path.exists()
+
+    def test_product_doc_inventory_valid(self):
+        path = PATTERNS_DIR / "products" / "messaging" / "ibm-mq" / "contexts" / "sources" / "doc-inventory.yaml"
+        with open(path) as f:
+            data = yaml.safe_load(f)
+        assert data["pattern_ref"] == "ibm-mq"
+        assert data["pattern_type"] == "product"
+
+    def test_product_provenance_exists(self):
+        path = PATTERNS_DIR / "products" / "messaging" / "ibm-mq" / "contexts" / "provenance.yaml"
+        assert path.exists()
+
+    def test_product_provenance_valid(self):
+        path = PATTERNS_DIR / "products" / "messaging" / "ibm-mq" / "contexts" / "provenance.yaml"
+        with open(path) as f:
+            data = yaml.safe_load(f)
+        assert "extraction_date" in data
+        assert "entities" in data
+
+    def test_product_meta_has_contexts_flag(self):
+        path = PATTERNS_DIR / "products" / "messaging" / "ibm-mq" / "pattern.meta.yaml"
+        with open(path) as f:
+            data = yaml.safe_load(f)
+        assert data["pattern"]["has_contexts"] is True
+
+    # --- Network pattern ---
+
+    def test_network_contexts_dir_exists(self):
+        ctx_dir = PATTERNS_DIR / "networks" / "usa" / "standard-3tier" / "contexts"
+        assert ctx_dir.is_dir(), "standard-3tier/contexts/ must exist"
+
+    def test_network_context_yaml_exists(self):
+        path = PATTERNS_DIR / "networks" / "usa" / "standard-3tier" / "contexts" / "_context.yaml"
+        assert path.exists()
+
+    def test_network_context_yaml_valid(self):
+        path = PATTERNS_DIR / "networks" / "usa" / "standard-3tier" / "contexts" / "_context.yaml"
+        with open(path) as f:
+            data = yaml.safe_load(f)
+        assert "contexts" in data
+        assert len(data["contexts"]) >= 1
+        for ctx in data["contexts"]:
+            assert "id" in ctx
+            assert "name" in ctx
+            assert "internal" in ctx
+
+    def test_network_sources_dir_exists(self):
+        path = PATTERNS_DIR / "networks" / "usa" / "standard-3tier" / "contexts" / "sources"
+        assert path.is_dir()
+
+    def test_network_doc_inventory_exists(self):
+        path = PATTERNS_DIR / "networks" / "usa" / "standard-3tier" / "contexts" / "sources" / "doc-inventory.yaml"
+        assert path.exists()
+
+    def test_network_doc_inventory_valid(self):
+        path = PATTERNS_DIR / "networks" / "usa" / "standard-3tier" / "contexts" / "sources" / "doc-inventory.yaml"
+        with open(path) as f:
+            data = yaml.safe_load(f)
+        assert data["pattern_ref"] == "standard-3tier"
+        assert data["pattern_type"] == "network"
+
+    def test_network_provenance_exists(self):
+        path = PATTERNS_DIR / "networks" / "usa" / "standard-3tier" / "contexts" / "provenance.yaml"
+        assert path.exists()
+
+    def test_network_meta_has_contexts_flag(self):
+        path = PATTERNS_DIR / "networks" / "usa" / "standard-3tier" / "pattern.meta.yaml"
+        with open(path) as f:
+            data = yaml.safe_load(f)
+        assert data["pattern"]["has_contexts"] is True
+
+
+class TestValidatePatternsContextHierarchy:
+    """validate-patterns.py validates context hierarchy within patterns."""
+
+    def test_product_pattern_validates_with_contexts(self):
+        result = subprocess.run(
+            [sys.executable, str(TOOLS_DIR / "validate-patterns.py"),
+             str(PATTERNS_DIR / "products" / "messaging" / "ibm-mq")],
+            capture_output=True, text=True, timeout=30,
+        )
+        data = json.loads(result.stdout)
+        assert data["valid"] is True, f"Validation errors: {data['errors']}"
+
+    def test_network_pattern_validates_with_contexts(self):
+        result = subprocess.run(
+            [sys.executable, str(TOOLS_DIR / "validate-patterns.py"),
+             str(PATTERNS_DIR / "networks" / "usa" / "standard-3tier")],
+            capture_output=True, text=True, timeout=30,
+        )
+        data = json.loads(result.stdout)
+        assert data["valid"] is True, f"Validation errors: {data['errors']}"
+
+
+class TestComposeWithContexts:
+    """compose.py merges _context.yaml from patterns into composed output."""
+
+    def test_composed_system_has_both_inline_and_dir_contexts(self, tmp_path):
+        """Composed system should include contexts from both inline and _context.yaml."""
+        import shutil
+
+        # Create a temporary manifest
+        deploy_dir = tmp_path / "test-deployment"
+        deploy_dir.mkdir()
+
+        manifest_data = {
+            "manifest": {
+                "id": "ctx-test",
+                "name": "Context Test Deployment",
+                "environment": "dev",
+                "network": {
+                    "pattern_ref": "standard-3tier",
+                    "id_prefix": "net",
+                },
+                "products": [
+                    {
+                        "pattern_ref": "ibm-mq",
+                        "id_prefix": "mq",
+                    }
+                ],
+                "placements": [
+                    {
+                        "container_ref": "mq-mq-infrastructure",
+                        "zone_ref": "net-private-app-tier",
+                    }
+                ],
+            }
+        }
+
+        manifest_path = deploy_dir / "manifest.yaml"
+        with open(manifest_path, "w") as f:
+            yaml.dump(manifest_data, f)
+
+        # Run compose
+        sys.path.insert(0, str(TOOLS_DIR))
+        from compose import compose
+        result = compose(manifest_path)
+
+        system = result["system"]
+        context_ids = [c["id"] for c in system.get("contexts", [])]
+
+        # Should have inline context (mq-mq-context from system.yaml)
+        assert "mq-mq-context" in context_ids, f"Missing inline context. Got: {context_ids}"
+
+        # Should also have _context.yaml contexts (prefixed)
+        # mq-messaging from ibm-mq _context.yaml → mq-mq-messaging
+        assert "mq-mq-messaging" in context_ids, f"Missing dir context. Got: {context_ids}"
+
+        # Should have network context (net-datacenter-network from standard-3tier _context.yaml)
+        assert "net-datacenter-network" in context_ids, f"Missing network context. Got: {context_ids}"
+
+
+class TestClassifySectionsTool:
+    """classify-sections.py classifies document sections by concern."""
+
+    def test_classify_sections_compiles(self):
+        py_compile.compile(str(TOOLS_DIR / "classify-sections.py"), doraise=True)
+
+    def test_classify_network_document(self, tmp_path):
+        doc = tmp_path / "network-design.md"
+        doc.write_text("""# Network Topology Overview
+
+This document describes the data center network design with VLAN segmentation.
+
+## DMZ Zone Configuration
+
+The DMZ zone uses VLAN 100 with subnet 10.0.1.0/24. Firewall rules allow
+HTTPS ingress from the internet. The WAF inspects all incoming traffic.
+
+## Application Tier
+
+The private application tier uses VLAN 200 with subnet 10.0.2.0/24.
+No internet routing. Egress filtered.
+
+## Data Tier
+
+The data tier uses VLAN 300 for database servers and persistent storage.
+""")
+        result = subprocess.run(
+            [sys.executable, str(TOOLS_DIR / "classify-sections.py"), str(doc)],
+            capture_output=True, text=True, timeout=30,
+        )
+        assert result.returncode == 0
+        data = json.loads(result.stdout)
+        assert data["total_sections"] >= 3
+        # Most sections should be classified as network
+        network_count = sum(1 for s in data["sections"] if s["classification"] == "network")
+        assert network_count >= 2, f"Expected >= 2 network sections, got {network_count}"
+
+    def test_classify_product_document(self, tmp_path):
+        doc = tmp_path / "mq-deployment.md"
+        doc.write_text("""# IBM MQ Deployment Guide
+
+## Queue Manager Configuration
+
+Install the queue manager on the application server. Configure the
+listener on port 1414 with TLS 1.2 encryption.
+
+## Web Console Setup
+
+Deploy the MQ web console on port 9443. Configure LDAP authentication
+for administrator access.
+
+## Channel Configuration
+
+Create server-connection channels for client applications. Each channel
+uses certificate-based authentication.
+""")
+        result = subprocess.run(
+            [sys.executable, str(TOOLS_DIR / "classify-sections.py"), str(doc)],
+            capture_output=True, text=True, timeout=30,
+        )
+        assert result.returncode == 0
+        data = json.loads(result.stdout)
+        assert data["total_sections"] >= 3
+        product_count = sum(1 for s in data["sections"] if s["classification"] == "product")
+        assert product_count >= 2, f"Expected >= 2 product sections, got {product_count}"
+
+    def test_classify_mixed_document(self, tmp_path):
+        doc = tmp_path / "mixed-guide.md"
+        doc.write_text("""# Vendor Deployment Guide
+
+## Network Requirements
+
+Configure the DMZ zone with a WAF and load balancer. The firewall must
+allow traffic on VLAN 100 from the internet. Subnet 10.0.1.0/24.
+
+## Application Installation
+
+Install the queue manager component on the application server.
+Configure the listener endpoint on port 1414.
+
+## Security Configuration
+
+Enable TLS 1.2 on all listeners. Configure certificate authentication
+using the organization's PKI infrastructure.
+""")
+        result = subprocess.run(
+            [sys.executable, str(TOOLS_DIR / "classify-sections.py"), str(doc)],
+            capture_output=True, text=True, timeout=30,
+        )
+        assert result.returncode == 0
+        data = json.loads(result.stdout)
+        classifications = {s["classification"] for s in data["sections"]}
+        # Mixed doc should have at least 2 different classifications
+        assert len(classifications) >= 2, \
+            f"Mixed doc should have multiple classifications, got: {classifications}"
+
+    def test_classify_split_output(self, tmp_path):
+        doc = tmp_path / "vendor-guide.md"
+        doc.write_text("""# Vendor Guide
+
+## Network Design
+
+The DMZ zone with VLAN and subnet configuration for firewall rules.
+
+## Product Setup
+
+Install the application server component and configure the queue manager.
+""")
+        output_dir = tmp_path / "split"
+        result = subprocess.run(
+            [sys.executable, str(TOOLS_DIR / "classify-sections.py"),
+             str(doc), "--output-dir", str(output_dir)],
+            capture_output=True, text=True, timeout=30,
+        )
+        assert result.returncode == 0
+        data = json.loads(result.stdout)
+        assert "files_written" in data
+        assert len(data["files_written"]) >= 1
+
+
+class TestMigratePatternWithContexts:
+    """migrate-pattern.py creates contexts/ hierarchy during migration."""
+
+    def test_migrate_product_creates_contexts(self, tmp_path):
+        import shutil
+        src = PATTERNS_DIR / "products" / "messaging" / "ibm-mq.pattern.yaml"
+        dst = tmp_path / "ibm-mq.pattern.yaml"
+        shutil.copy2(src, dst)
+
+        result = subprocess.run(
+            [sys.executable, str(TOOLS_DIR / "migrate-pattern.py"), str(dst)],
+            capture_output=True, text=True, timeout=30,
+        )
+        assert result.returncode == 0
+        data = json.loads(result.stdout)
+        assert data["valid"] is True
+
+        out_dir = tmp_path / "ibm-mq"
+        assert (out_dir / "contexts" / "_context.yaml").exists()
+        assert (out_dir / "contexts" / "sources" / "doc-inventory.yaml").exists()
+        assert (out_dir / "contexts" / "provenance.yaml").exists()
+
+        # Validate _context.yaml content
+        with open(out_dir / "contexts" / "_context.yaml") as f:
+            ctx_data = yaml.safe_load(f)
+        assert "contexts" in ctx_data
+        assert len(ctx_data["contexts"]) >= 1
+
+    def test_migrate_network_creates_contexts(self, tmp_path):
+        import shutil
+        src = PATTERNS_DIR / "networks" / "usa" / "standard-3tier.pattern.yaml"
+        dst = tmp_path / "standard-3tier.pattern.yaml"
+        shutil.copy2(src, dst)
+
+        result = subprocess.run(
+            [sys.executable, str(TOOLS_DIR / "migrate-pattern.py"), str(dst)],
+            capture_output=True, text=True, timeout=30,
+        )
+        assert result.returncode == 0
+        data = json.loads(result.stdout)
+        assert data["valid"] is True
+
+        out_dir = tmp_path / "standard-3tier"
+        assert (out_dir / "contexts" / "_context.yaml").exists()
+        assert (out_dir / "contexts" / "sources" / "doc-inventory.yaml").exists()
+        assert (out_dir / "contexts" / "provenance.yaml").exists()
+
+        with open(out_dir / "contexts" / "_context.yaml") as f:
+            ctx_data = yaml.safe_load(f)
+        assert ctx_data["contexts"][0]["id"] == "standard-3tier-network"
+
+
+class TestDocAgentPatternAwareness:
+    """Doc agents include pattern-type selection and context routing."""
+
+    def test_doc_collector_has_pattern_type_selection(self):
+        content = (AGENTS_DIR / "doc-collector.agent.md").read_text()
+        assert "PATTERN-TYPE SELECTION" in content
+        assert "Network pattern" in content
+        assert "Product pattern" in content
+        assert "Mixed" in content
+
+    def test_doc_collector_references_classify_tool(self):
+        content = (AGENTS_DIR / "doc-collector.agent.md").read_text()
+        assert "classify-sections.py" in content
+
+    def test_doc_collector_references_pattern_sources(self):
+        content = (AGENTS_DIR / "doc-collector.agent.md").read_text()
+        assert "contexts/sources" in content
+
+    def test_doc_collector_references_doc_inventory_yaml(self):
+        content = (AGENTS_DIR / "doc-collector.agent.md").read_text()
+        assert "doc-inventory.yaml" in content
+
+    def test_doc_extractor_has_pattern_aware_extraction(self):
+        content = (AGENTS_DIR / "doc-extractor.agent.md").read_text()
+        assert "PATTERN-AWARE EXTRACTION" in content
+
+    def test_doc_extractor_references_context_yaml(self):
+        content = (AGENTS_DIR / "doc-extractor.agent.md").read_text()
+        assert "_context.yaml" in content
+
+    def test_doc_extractor_references_provenance_yaml(self):
+        content = (AGENTS_DIR / "doc-extractor.agent.md").read_text()
+        assert "provenance.yaml" in content
+
+    def test_doc_extractor_context_separation_rule(self):
+        content = (AGENTS_DIR / "doc-extractor.agent.md").read_text()
+        assert "Context Separation Rule" in content

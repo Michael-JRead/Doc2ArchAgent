@@ -1267,14 +1267,24 @@ patterns/                                                ← Reusable architectu
 │       ├── standard-3tier.pattern.yaml              ← Legacy single-file format (deprecated)
 │       └── standard-3tier/                          ← New directory format
 │           ├── pattern.meta.yaml                    ← Metadata + composition contract
-│           └── networks.yaml                        ← Standalone (conforms to networks.schema.json)
+│           ├── networks.yaml                        ← Standalone (conforms to networks.schema.json)
+│           └── contexts/                            ← Per-pattern context hierarchy
+│               ├── _context.yaml                    ← C4 Level 1 context definitions
+│               ├── sources/                         ← Source documents for this pattern
+│               │   └── doc-inventory.yaml           ← Inventory of collected documents
+│               └── provenance.yaml                  ← Entity → source evidence mapping
 └── products/
     ├── _catalog.yaml                                ← Product pattern catalog (by capability)
     └── messaging/
         ├── ibm-mq.pattern.yaml                      ← Legacy single-file format (deprecated)
         └── ibm-mq/                                  ← New directory format
             ├── pattern.meta.yaml                    ← Metadata + composition contract
-            └── system.yaml                          ← Standalone (conforms to system.schema.json)
+            ├── system.yaml                          ← Standalone (conforms to system.schema.json)
+            └── contexts/                            ← Per-pattern context hierarchy
+                ├── _context.yaml                    ← C4 Level 1 context definitions
+                ├── sources/                         ← Source documents for this product
+                │   └── doc-inventory.yaml           ← Inventory of collected documents
+                └── provenance.yaml                  ← Entity → source evidence mapping
 
 deployments/                                             ← Manifest-based deployment compositions
 ├── _catalog.yaml                                    ← Catalog of deployment compositions
@@ -1289,8 +1299,19 @@ tools/
 ├── validate-patterns.py                             ← Pattern validation (legacy + directory format)
 ├── compose.py                                       ← Compose deployment from manifest + patterns
 ├── migrate-pattern.py                               ← Migrate legacy .pattern.yaml to directory format
+├── classify-sections.py                             ← Classify document sections (network vs product)
 ├── detect-tools.py                                  ← Cross-platform tool detection
 └── requirements.txt                                 ← Python dependencies (pyyaml)
+
+schemas/
+├── system.schema.json                               ← system.yaml validation
+├── networks.schema.json                             ← networks.yaml validation
+├── deployment.schema.json                           ← deployment YAML validation
+├── provenance.schema.json                           ← provenance.yaml validation
+├── pattern-meta.schema.json                         ← pattern.meta.yaml validation
+├── manifest.schema.json                             ← manifest.yaml validation
+├── context.schema.json                              ← pattern _context.yaml validation
+└── doc-inventory.schema.json                        ← pattern doc-inventory.yaml validation
 
 schemas/
 ├── system.schema.json                               ← System YAML schema
@@ -1516,17 +1537,60 @@ The pattern system enables **platform teams** to maintain reusable architecture 
 1. **Platform teams** create and maintain pattern directories:
    - Network patterns (`patterns/networks/`) — standalone `networks.yaml` files defining topologies
    - Product patterns (`patterns/products/`) — standalone `system.yaml` files defining services
+   - Each pattern has a `contexts/` subdirectory with C4 context definitions, source documents, and provenance
 
-2. **Application teams** compose deployments by selecting patterns:
+2. **Document collection** feeds patterns:
+   - `@doc-collector` prompts for pattern type (network, product, or mixed)
+   - Mixed documents are classified by section using `tools/classify-sections.py`
+   - Sections are routed to the correct pattern's `contexts/sources/`
+   - `@doc-extractor` extracts entities and writes provenance per pattern
+
+3. **Application teams** compose deployments by selecting patterns:
    - Create a `manifest.yaml` referencing 1 network + N products
    - Each pattern gets a unique `id_prefix` to prevent ID conflicts
    - The manifest also defines zone placements and cross-product relationships
 
-3. **Composition** generates the combined output:
+4. **Composition** generates the combined output:
    ```bash
    python tools/compose.py deployments/prod-us-east/manifest.yaml --validate
    ```
-   This produces `networks.yaml`, `system.yaml`, and `deployment.yaml` — all validated and ready for security review and diagram generation.
+   This merges contexts from all patterns and produces `networks.yaml`, `system.yaml`, and `deployment.yaml` — all validated and ready for security review and diagram generation.
+
+### Per-Pattern Context Hierarchy
+
+Each pattern directory contains a `contexts/` subdirectory:
+
+```
+patterns/products/messaging/ibm-mq/
+├── pattern.meta.yaml         # Metadata + composition contract
+├── system.yaml               # Containers, components, listeners
+└── contexts/                 # Self-contained context hierarchy
+    ├── _context.yaml         # C4 Level 1 context definitions
+    ├── sources/              # Source documents for this product
+    │   ├── doc-inventory.yaml
+    │   ├── mq-deployment-guide.md
+    │   └── mq-network-flows.md    # Product's network needs (OK!)
+    └── provenance.yaml       # Entity → source evidence mapping
+```
+
+**Context separation rule:**
+- **Network patterns** → contexts about topology, segmentation, infrastructure
+- **Product patterns** → contexts about product functionality and deployment
+- A product's own network requirements (ports, TLS) belong in the **product pattern**
+
+### Document Classification for Mixed Content
+
+When a vendor document covers both network and product content:
+
+```bash
+# Preview how sections will be classified
+python tools/classify-sections.py vendor-guide.md --dry-run
+
+# Split and write classified sections to a pattern's sources
+python tools/classify-sections.py vendor-guide.md --output-dir patterns/products/messaging/ibm-mq/contexts/sources/
+```
+
+Classification uses keyword signals (firewall/VLAN → network, queue/component → product) with title-weighted scoring and confidence thresholds.
 
 ### Example Workflow
 
@@ -1558,6 +1622,9 @@ The pattern system enables **platform teams** to maintain reusable architecture 
 | Manifest is **declarative** (what to compose, not how) | Same manifest always produces same output |
 | Generated files have **"DO NOT EDIT" header** | Forces changes through manifest or source patterns |
 | Legacy `.pattern.yaml` format **still works** | Gradual migration; deprecation warnings guide users |
+| **Per-pattern `contexts/`** with source docs + provenance | Each pattern is a self-contained, portable, shareable unit |
+| **Product network info stays in product pattern** | Product's port/TLS needs ≠ network topology — no confusion |
+| **Section-level document classification** | Mixed vendor docs auto-split to correct pattern hierarchy |
 
 ### Validating Patterns
 
@@ -1586,6 +1653,9 @@ python tools/migrate-pattern.py patterns/products/messaging/ibm-mq.pattern.yaml
 This creates `patterns/products/messaging/ibm-mq/` with:
 - `pattern.meta.yaml` — metadata, composition contract, binding points
 - `system.yaml` — full system.schema.json-conformant architecture
+- `contexts/_context.yaml` — auto-generated C4 context definitions
+- `contexts/sources/doc-inventory.yaml` — empty document inventory (ready for collection)
+- `contexts/provenance.yaml` — empty provenance (ready for extraction)
 
 ---
 
@@ -1625,6 +1695,8 @@ These commands can be typed in any agent's chat session. The agent will either h
 | `Swap network` / `Swap product` | Pop-and-swap a loaded pattern for another | @pattern-manager |
 | `Create deployment` | Compose network + products into a deployment manifest | @pattern-manager |
 | `Compose deployment <id>` | Run compose.py on an existing manifest | @pattern-manager |
+| `Classify document <file>` | Classify document sections as network/product/security | @doc-collector |
+| `Collect for pattern <path>` | Collect documents into a pattern's contexts/sources/ | @doc-collector |
 
 ---
 

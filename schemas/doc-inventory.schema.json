@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Michael-JRead/Doc2ArchAgent/schemas/doc-inventory.schema.json",
+  "title": "Doc2ArchAgent Document Inventory Schema",
+  "description": "Schema for patterns/**/contexts/sources/doc-inventory.yaml — inventory of source documents collected for a pattern.",
+  "type": "object",
+  "properties": {
+    "pattern_ref": {
+      "type": "string",
+      "description": "Pattern ID this inventory belongs to."
+    },
+    "pattern_type": {
+      "type": "string",
+      "enum": ["product", "network"],
+      "description": "Whether this is a product or network pattern."
+    },
+    "collected_date": {
+      "type": "string",
+      "format": "date",
+      "description": "Date documents were collected."
+    },
+    "documents": {
+      "type": "array",
+      "description": "List of source documents collected for this pattern.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "file": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Filename of the document in sources/."
+          },
+          "original_name": {
+            "type": "string",
+            "description": "Original filename before conversion/renaming."
+          },
+          "format": {
+            "type": "string",
+            "description": "File format (pdf, docx, md, txt, image)."
+          },
+          "conversion_method": {
+            "type": "string",
+            "description": "How the document was converted (e.g., pymupdf, python-docx, manual, ocr)."
+          },
+          "quality": {
+            "type": "string",
+            "enum": ["high", "medium", "low"],
+            "description": "Conversion quality assessment."
+          },
+          "classification": {
+            "type": "string",
+            "enum": ["product", "network", "security", "integration", "operational", "mixed"],
+            "description": "Primary content classification."
+          },
+          "topics": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Architecture topics detected in this document."
+          },
+          "pages": {
+            "type": "integer",
+            "description": "Number of pages."
+          },
+          "hash": {
+            "type": "string",
+            "description": "SHA-256 hash of the source document."
+          },
+          "split_from": {
+            "type": "string",
+            "description": "If this document was split from a mixed-content original, the original filename."
+          },
+          "section_range": {
+            "type": "string",
+            "description": "Pages or sections from the original (e.g., '16-28')."
+          }
+        },
+        "required": ["file"],
+        "additionalProperties": true
+      }
+    }
+  },
+  "required": ["pattern_ref", "documents"],
+  "additionalProperties": true
+}

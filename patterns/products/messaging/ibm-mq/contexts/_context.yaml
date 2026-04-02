@@ -1,0 +1,16 @@
+contexts:
+  - id: mq-messaging
+    name: IBM MQ Messaging Platform
+    description: >
+      Enterprise message queuing infrastructure providing asynchronous
+      communication with queue managers, channels, and TLS-secured connections.
+    internal: true
+    owner: platform-messaging-team
+
+  - id: mq-admin
+    name: MQ Administration
+    description: >
+      Web-based administration console for managing queue managers,
+      channels, and monitoring message flows.
+    internal: true
+    owner: platform-messaging-team

@@ -1,0 +1,9 @@
+contexts:
+  - id: datacenter-network
+    name: US Data Center Network
+    description: >
+      Standard 3-tier network topology with DMZ for public-facing services,
+      application tier for business logic, and data tier for persistent storage.
+      Provides zone-based segmentation with WAF and load balancer infrastructure.
+    internal: true
+    owner: network-infrastructure-team

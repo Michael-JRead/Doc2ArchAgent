@@ -99,6 +99,11 @@
             "additionalProperties": true
           }
         },
+        "has_contexts": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether this pattern has a contexts/ subdirectory with _context.yaml and source documents."
+        },
         "version_tracking_enabled": { "type": "boolean" },
         "version_history": {
           "type": "array",

@@ -159,6 +159,65 @@ def migrate_pattern(pattern_path: Path, remove_old: bool = False) -> dict:
             yaml.dump(system_data, f, default_flow_style=False, sort_keys=False,
                       allow_unicode=True)
 
+    # Create contexts/ hierarchy
+    contexts_dir = output_dir / "contexts"
+    contexts_dir.mkdir(exist_ok=True)
+    sources_dir = contexts_dir / "sources"
+    sources_dir.mkdir(exist_ok=True)
+
+    files_created = [str(meta_path), str(yaml_path)]
+
+    # Generate _context.yaml
+    context_yaml_path = contexts_dir / "_context.yaml"
+    if is_product:
+        context_data = {
+            "contexts": [{
+                "id": f"{pattern_id}-context",
+                "name": f"{metadata.get('name', pattern_id)} Context",
+                "description": metadata.get("description", ""),
+                "internal": True,
+                "owner": f"pattern-{pattern_id}",
+            }]
+        }
+    elif is_network:
+        context_data = {
+            "contexts": [{
+                "id": f"{pattern_id}-network",
+                "name": f"{metadata.get('name', pattern_id)} Network",
+                "description": metadata.get("description", ""),
+                "internal": True,
+                "owner": "network-infrastructure-team",
+            }]
+        }
+    with open(context_yaml_path, "w") as f:
+        yaml.dump(context_data, f, default_flow_style=False, sort_keys=False,
+                  allow_unicode=True)
+    files_created.append(str(context_yaml_path))
+
+    # Generate empty doc-inventory.yaml
+    inventory_path = sources_dir / "doc-inventory.yaml"
+    inventory_data = {
+        "pattern_ref": pattern_id,
+        "pattern_type": pattern_type,
+        "documents": [],
+    }
+    with open(inventory_path, "w") as f:
+        yaml.dump(inventory_data, f, default_flow_style=False, sort_keys=False,
+                  allow_unicode=True)
+    files_created.append(str(inventory_path))
+
+    # Generate empty provenance.yaml
+    provenance_path = contexts_dir / "provenance.yaml"
+    provenance_data = {
+        "extraction_date": "",
+        "documents_analyzed": [],
+        "entities": [],
+    }
+    with open(provenance_path, "w") as f:
+        yaml.dump(provenance_data, f, default_flow_style=False, sort_keys=False,
+                  allow_unicode=True)
+    files_created.append(str(provenance_path))
+
     if remove_old:
         pattern_path.unlink()
 
@@ -166,10 +225,7 @@ def migrate_pattern(pattern_path: Path, remove_old: bool = False) -> dict:
         "valid": True,
         "errors": errors,
         "output_dir": str(output_dir),
-        "files_created": [
-            str(meta_path),
-            str(yaml_path),
-        ],
+        "files_created": files_created,
     }
 
 
