@@ -1,0 +1,7 @@
+catalog:
+  type: deployments
+  description: Deployment compositions combining network and product patterns
+  tree:
+    - name: Examples
+      key: examples
+      deployments: []

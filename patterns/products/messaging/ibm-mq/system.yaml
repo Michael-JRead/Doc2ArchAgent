@@ -1,0 +1,66 @@
+metadata:
+  name: IBM MQ Messaging
+  description: >
+    IBM MQ messaging infrastructure with queue manager, channels, and
+    web console. Provides enterprise-grade asynchronous messaging with
+    TLS encryption and certificate-based authentication.
+  owner: platform-messaging-team
+  status: active
+
+contexts:
+  - id: mq-context
+    name: MQ Messaging Context
+    description: IBM MQ messaging infrastructure
+    internal: true
+
+containers:
+  - id: mq-infrastructure
+    name: MQ Infrastructure
+    context_id: mq-context
+    container_type: message_queue
+    technology: IBM MQ 9.3
+    description: Queue manager and channel infrastructure
+    status: active
+
+components:
+  - id: queue-manager
+    name: Queue Manager
+    container_id: mq-infrastructure
+    component_type: message_queue
+    technology: IBM MQ 9.3
+    platform: Linux
+    resiliency: active-passive
+    description: Core queue manager handling message routing and persistence
+    listeners:
+      - id: mq-listener
+        protocol: MQ
+        port: 1414
+        tls_enabled: true
+        tls_version_min: "1.2"
+        authn_mechanism: certificate
+        authz_required: true
+
+  - id: mq-console
+    name: MQ Console
+    container_id: mq-infrastructure
+    component_type: web_app
+    technology: IBM MQ Console
+    platform: Linux
+    resiliency: active-passive
+    description: Web-based administration console for queue manager
+    listeners:
+      - id: mq-console-https
+        protocol: HTTPS
+        port: 9443
+        tls_enabled: true
+        tls_version_min: "1.2"
+        authn_mechanism: ldap
+        authz_required: true
+
+component_relationships:
+  - id: console-to-qm
+    source_component: mq-console
+    target_component: queue-manager
+    target_listener_ref: mq-listener
+    label: manages
+    synchronous: true

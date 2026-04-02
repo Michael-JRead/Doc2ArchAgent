@@ -8,6 +8,7 @@ catalog:
           key: usa
           patterns:
             - id: standard-3tier
+              dir: usa/standard-3tier
               file: usa/standard-3tier.pattern.yaml
         - name: Canada
           key: canada

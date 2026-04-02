@@ -1,0 +1,38 @@
+pattern:
+  id: ibm-mq
+  type: product
+  name: IBM MQ Messaging
+  category: messaging
+  version: 1.0.0
+  description: >
+    IBM MQ messaging infrastructure with queue manager, channels, and
+    web console. Provides enterprise-grade asynchronous messaging with
+    TLS encryption and certificate-based authentication.
+  tags: [enterprise, messaging, async, ibm]
+
+  provides:
+    - capability: message-queue
+      containers: [mq-infrastructure]
+
+  requires:
+    - capability: network-zones
+
+  binding_points:
+    - id: mq-infrastructure
+      type: container
+      description: "Queue manager container — must be placed in a zone"
+    - id: queue-manager
+      type: component
+      bind_to: mq-infrastructure
+      description: "Core queue manager handling message routing"
+    - id: mq-console
+      type: component
+      bind_to: mq-infrastructure
+      description: "Web-based administration console"
+
+  version_tracking_enabled: true
+  version_history:
+    - version: 1.0.0
+      date: 2026-04-01
+      author: mjread
+      description: Initial pattern

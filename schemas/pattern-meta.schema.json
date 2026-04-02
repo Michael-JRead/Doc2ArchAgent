@@ -1,0 +1,124 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Michael-JRead/Doc2ArchAgent/schemas/pattern-meta.schema.json",
+  "title": "Doc2ArchAgent Pattern Metadata Schema",
+  "description": "Schema for pattern.meta.yaml — metadata and composition contract for reusable architecture patterns.",
+  "type": "object",
+  "properties": {
+    "pattern": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+          "description": "Unique pattern identifier in kebab-case."
+        },
+        "type": {
+          "type": "string",
+          "enum": ["product", "network"],
+          "description": "Pattern type. Product patterns contain system.yaml; network patterns contain networks.yaml."
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Human-readable pattern name."
+        },
+        "category": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Organizational category (e.g., 'messaging', 'usa')."
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+$",
+          "description": "Semantic version (X.Y.Z)."
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Description of the pattern's purpose and contents."
+        },
+        "tags": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Tags for filtering and search."
+        },
+        "provides": {
+          "type": "array",
+          "description": "Capabilities this pattern provides for composition.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "capability": { "type": "string", "minLength": 1 },
+              "containers": {
+                "type": "array",
+                "items": { "type": "string" },
+                "description": "Container IDs that fulfill this capability."
+              },
+              "zones": {
+                "type": "array",
+                "items": { "type": "string" },
+                "description": "Zone IDs that fulfill this capability (network patterns)."
+              }
+            },
+            "required": ["capability"],
+            "additionalProperties": true
+          }
+        },
+        "requires": {
+          "type": "array",
+          "description": "Capabilities this pattern requires from other patterns.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "capability": { "type": "string", "minLength": 1 }
+            },
+            "required": ["capability"],
+            "additionalProperties": true
+          }
+        },
+        "binding_points": {
+          "type": "array",
+          "description": "IDs that consumers must map during composition.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string", "minLength": 1 },
+              "type": {
+                "type": "string",
+                "enum": ["container", "component", "zone", "infrastructure_resource"],
+                "description": "Entity type of the binding point."
+              },
+              "bind_to": {
+                "type": "string",
+                "description": "Parent entity ID (e.g., container ID for a component binding point)."
+              },
+              "description": { "type": "string" }
+            },
+            "required": ["id", "type"],
+            "additionalProperties": true
+          }
+        },
+        "version_tracking_enabled": { "type": "boolean" },
+        "version_history": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "version": { "type": "string" },
+              "date": { "type": "string", "format": "date" },
+              "author": { "type": "string" },
+              "description": { "type": "string" }
+            },
+            "required": ["version", "date"],
+            "additionalProperties": true
+          }
+        }
+      },
+      "required": ["id", "type", "name", "version", "description"],
+      "additionalProperties": true
+    }
+  },
+  "required": ["pattern"],
+  "additionalProperties": true
+}

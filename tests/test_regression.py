@@ -893,3 +893,367 @@ class TestShellConfiguration:
         assert "## Shell Configuration" in content, (
             "copilot-instructions.md must contain a '## Shell Configuration' section"
         )
+
+
+# ============================================================================
+# L8 — PATTERN HIERARCHY: Separate network/product pattern architecture
+# ============================================================================
+
+DEPLOYMENTS_DIR = PROJECT_ROOT / "deployments"
+
+
+class TestPatternDirectoryFormat:
+    """New directory-format patterns with pattern.meta.yaml + system/networks YAML."""
+
+    # --- Network pattern directory tests ---
+
+    def test_network_pattern_dir_exists(self):
+        pattern_dir = PATTERNS_DIR / "networks" / "usa" / "standard-3tier"
+        assert pattern_dir.exists(), "Network pattern directory must exist"
+        assert (pattern_dir / "pattern.meta.yaml").exists(), "Missing pattern.meta.yaml"
+        assert (pattern_dir / "networks.yaml").exists(), "Missing networks.yaml"
+
+    def test_network_pattern_meta_valid(self):
+        meta_path = PATTERNS_DIR / "networks" / "usa" / "standard-3tier" / "pattern.meta.yaml"
+        with open(meta_path) as f:
+            data = yaml.safe_load(f)
+        pattern = data["pattern"]
+        assert pattern["id"] == "standard-3tier"
+        assert pattern["type"] == "network"
+        assert pattern["version"] == "1.0.0"
+        assert "provides" in pattern
+        assert "binding_points" in pattern
+
+    def test_network_pattern_networks_yaml_valid(self):
+        networks_path = PATTERNS_DIR / "networks" / "usa" / "standard-3tier" / "networks.yaml"
+        with open(networks_path) as f:
+            data = yaml.safe_load(f)
+        assert "network_zones" in data
+        assert len(data["network_zones"]) >= 1
+        zone_ids = {z["id"] for z in data["network_zones"]}
+        assert "dmz" in zone_ids
+
+    def test_network_pattern_standalone_validation(self):
+        """Network pattern validates independently via validate-patterns.py."""
+        pattern_dir = PATTERNS_DIR / "networks" / "usa" / "standard-3tier"
+        result = subprocess.run(
+            [sys.executable, str(TOOLS_DIR / "validate-patterns.py"), str(pattern_dir)],
+            capture_output=True, text=True, timeout=30,
+        )
+        assert result.returncode == 0, f"Validation failed: {result.stdout}"
+        data = json.loads(result.stdout)
+        assert data["valid"] is True, f"Pattern invalid: {data['errors']}"
+
+    # --- Product pattern directory tests ---
+
+    def test_product_pattern_dir_exists(self):
+        pattern_dir = PATTERNS_DIR / "products" / "messaging" / "ibm-mq"
+        assert pattern_dir.exists(), "Product pattern directory must exist"
+        assert (pattern_dir / "pattern.meta.yaml").exists(), "Missing pattern.meta.yaml"
+        assert (pattern_dir / "system.yaml").exists(), "Missing system.yaml"
+
+    def test_product_pattern_meta_valid(self):
+        meta_path = PATTERNS_DIR / "products" / "messaging" / "ibm-mq" / "pattern.meta.yaml"
+        with open(meta_path) as f:
+            data = yaml.safe_load(f)
+        pattern = data["pattern"]
+        assert pattern["id"] == "ibm-mq"
+        assert pattern["type"] == "product"
+        assert pattern["version"] == "1.0.0"
+        assert "provides" in pattern
+        assert "requires" in pattern
+        assert "binding_points" in pattern
+
+    def test_product_pattern_system_yaml_valid(self):
+        system_path = PATTERNS_DIR / "products" / "messaging" / "ibm-mq" / "system.yaml"
+        with open(system_path) as f:
+            data = yaml.safe_load(f)
+        assert "metadata" in data
+        assert "contexts" in data
+        assert "containers" in data
+        assert "components" in data
+        assert "component_relationships" in data
+
+    def test_product_pattern_standalone_validation(self):
+        """Product pattern validates independently via validate-patterns.py."""
+        pattern_dir = PATTERNS_DIR / "products" / "messaging" / "ibm-mq"
+        result = subprocess.run(
+            [sys.executable, str(TOOLS_DIR / "validate-patterns.py"), str(pattern_dir)],
+            capture_output=True, text=True, timeout=30,
+        )
+        assert result.returncode == 0, f"Validation failed: {result.stdout}"
+        data = json.loads(result.stdout)
+        assert data["valid"] is True, f"Pattern invalid: {data['errors']}"
+
+    def test_product_pattern_system_validates_with_validate_py(self):
+        """Product system.yaml validates with the main validate.py tool."""
+        from validate import validate
+        system_path = str(PATTERNS_DIR / "products" / "messaging" / "ibm-mq" / "system.yaml")
+        result = validate(system_path)
+        assert result["valid"] is True, f"system.yaml validation failed: {result['errors']}"
+
+
+class TestPatternSchemas:
+    """New schemas for pattern metadata and deployment manifests."""
+
+    def test_pattern_meta_schema_exists(self):
+        assert (SCHEMAS_DIR / "pattern-meta.schema.json").exists()
+
+    def test_pattern_meta_schema_valid_json(self):
+        with open(SCHEMAS_DIR / "pattern-meta.schema.json") as f:
+            data = json.load(f)
+        assert "$schema" in data
+        assert data["properties"]["pattern"]["required"] == ["id", "type", "name", "version", "description"]
+
+    def test_manifest_schema_exists(self):
+        assert (SCHEMAS_DIR / "manifest.schema.json").exists()
+
+    def test_manifest_schema_valid_json(self):
+        with open(SCHEMAS_DIR / "manifest.schema.json") as f:
+            data = json.load(f)
+        assert "$schema" in data
+        assert "manifest" in data["properties"]
+
+    def test_pattern_meta_validates_with_jsonschema(self):
+        from jsonschema import Draft202012Validator
+        with open(SCHEMAS_DIR / "pattern-meta.schema.json") as f:
+            schema = json.load(f)
+        Draft202012Validator.check_schema(schema)
+
+    def test_manifest_validates_with_jsonschema(self):
+        from jsonschema import Draft202012Validator
+        with open(SCHEMAS_DIR / "manifest.schema.json") as f:
+            schema = json.load(f)
+        Draft202012Validator.check_schema(schema)
+
+
+class TestComposeTool:
+    """tools/compose.py produces correct composed output."""
+
+    @pytest.fixture(autouse=True)
+    def _setup_manifest(self, tmp_path):
+        """Create a temporary manifest for testing."""
+        self.manifest_dir = tmp_path / "test-deployment"
+        self.manifest_dir.mkdir()
+        manifest = {
+            "manifest": {
+                "id": "test-deployment",
+                "name": "Test Deployment",
+                "description": "Test deployment for regression testing",
+                "environment": "development",
+                "region": "us-east-1",
+                "status": "proposed",
+                "network": {
+                    "pattern_ref": "standard-3tier",
+                    "id_prefix": "test",
+                },
+                "products": [
+                    {
+                        "pattern_ref": "ibm-mq",
+                        "id_prefix": "mq",
+                    },
+                ],
+                "placements": [
+                    {
+                        "container_ref": "mq-mq-infrastructure",
+                        "zone_ref": "test-private-app-tier",
+                        "replicas": 2,
+                        "runtime_user": "non_root",
+                    },
+                ],
+            }
+        }
+        self.manifest_path = self.manifest_dir / "manifest.yaml"
+        with open(self.manifest_path, "w") as f:
+            yaml.dump(manifest, f)
+
+    def test_compose_dry_run(self):
+        result = subprocess.run(
+            [sys.executable, str(TOOLS_DIR / "compose.py"),
+             str(self.manifest_path), "--dry-run"],
+            capture_output=True, text=True, timeout=30,
+        )
+        assert result.returncode == 0, f"compose.py --dry-run failed: {result.stderr}"
+        data = json.loads(result.stdout)
+        assert data["dry_run"] is True
+        assert data["networks_zones_count"] == 3
+        assert data["system_containers_count"] == 1
+        assert data["system_components_count"] == 2
+
+    def test_compose_writes_files(self):
+        result = subprocess.run(
+            [sys.executable, str(TOOLS_DIR / "compose.py"),
+             str(self.manifest_path)],
+            capture_output=True, text=True, timeout=30,
+        )
+        assert result.returncode == 0, f"compose.py failed: {result.stderr}"
+        # Check files were written
+        assert (self.manifest_dir / "networks.yaml").exists()
+        assert (self.manifest_dir / "system.yaml").exists()
+        assert (self.manifest_dir / "deployment.yaml").exists()
+
+    def test_composed_networks_has_prefixed_ids(self):
+        subprocess.run(
+            [sys.executable, str(TOOLS_DIR / "compose.py"),
+             str(self.manifest_path)],
+            capture_output=True, text=True, timeout=30,
+        )
+        with open(self.manifest_dir / "networks.yaml") as f:
+            content = f.read()
+        # Skip the header comment lines
+        data = yaml.safe_load(content)
+        zone_ids = {z["id"] for z in data["network_zones"]}
+        assert "test-dmz" in zone_ids, f"Expected prefixed zone ID 'test-dmz', got: {zone_ids}"
+        assert "test-private-app-tier" in zone_ids
+
+    def test_composed_system_has_prefixed_ids(self):
+        subprocess.run(
+            [sys.executable, str(TOOLS_DIR / "compose.py"),
+             str(self.manifest_path)],
+            capture_output=True, text=True, timeout=30,
+        )
+        with open(self.manifest_dir / "system.yaml") as f:
+            content = f.read()
+        data = yaml.safe_load(content)
+        container_ids = {c["id"] for c in data["containers"]}
+        assert "mq-mq-infrastructure" in container_ids
+
+    def test_composed_system_validates(self):
+        subprocess.run(
+            [sys.executable, str(TOOLS_DIR / "compose.py"),
+             str(self.manifest_path)],
+            capture_output=True, text=True, timeout=30,
+        )
+        from validate import validate
+        result = validate(
+            str(self.manifest_dir / "system.yaml"),
+            str(self.manifest_dir / "networks.yaml"),
+        )
+        assert result["valid"] is True, f"Composed output failed validation: {result['errors']}"
+
+    def test_composed_deployment_has_placements(self):
+        subprocess.run(
+            [sys.executable, str(TOOLS_DIR / "compose.py"),
+             str(self.manifest_path)],
+            capture_output=True, text=True, timeout=30,
+        )
+        with open(self.manifest_dir / "deployment.yaml") as f:
+            content = f.read()
+        data = yaml.safe_load(content)
+        assert "deployment_metadata" in data
+        assert data["deployment_metadata"]["id"] == "test-deployment"
+        assert "zone_placements" in data
+        assert len(data["zone_placements"]) >= 1
+
+    def test_generated_files_have_header(self):
+        subprocess.run(
+            [sys.executable, str(TOOLS_DIR / "compose.py"),
+             str(self.manifest_path)],
+            capture_output=True, text=True, timeout=30,
+        )
+        with open(self.manifest_dir / "system.yaml") as f:
+            first_line = f.readline()
+        assert first_line.startswith("# GENERATED by compose.py"), \
+            "Generated files must have compose.py header"
+
+
+class TestMigratePatternTool:
+    """tools/migrate-pattern.py correctly converts legacy patterns."""
+
+    def test_migrate_product_pattern(self, tmp_path):
+        """Migrating a product .pattern.yaml creates directory format."""
+        # Copy legacy pattern to temp
+        import shutil
+        src = PATTERNS_DIR / "products" / "messaging" / "ibm-mq.pattern.yaml"
+        dst = tmp_path / "ibm-mq.pattern.yaml"
+        shutil.copy2(src, dst)
+
+        result = subprocess.run(
+            [sys.executable, str(TOOLS_DIR / "migrate-pattern.py"), str(dst)],
+            capture_output=True, text=True, timeout=30,
+        )
+        assert result.returncode == 0, f"migrate-pattern.py failed: {result.stderr}"
+        data = json.loads(result.stdout)
+        assert data["valid"] is True
+
+        # Check output
+        out_dir = tmp_path / "ibm-mq"
+        assert out_dir.exists()
+        assert (out_dir / "pattern.meta.yaml").exists()
+        assert (out_dir / "system.yaml").exists()
+
+    def test_migrate_network_pattern(self, tmp_path):
+        """Migrating a network .pattern.yaml creates directory format."""
+        import shutil
+        src = PATTERNS_DIR / "networks" / "usa" / "standard-3tier.pattern.yaml"
+        dst = tmp_path / "standard-3tier.pattern.yaml"
+        shutil.copy2(src, dst)
+
+        result = subprocess.run(
+            [sys.executable, str(TOOLS_DIR / "migrate-pattern.py"), str(dst)],
+            capture_output=True, text=True, timeout=30,
+        )
+        assert result.returncode == 0, f"migrate-pattern.py failed: {result.stderr}"
+        data = json.loads(result.stdout)
+        assert data["valid"] is True
+
+        out_dir = tmp_path / "standard-3tier"
+        assert out_dir.exists()
+        assert (out_dir / "pattern.meta.yaml").exists()
+        assert (out_dir / "networks.yaml").exists()
+
+
+class TestCatalogDirectoryReferences:
+    """Catalog files reference both legacy files and new directory patterns."""
+
+    def test_networks_catalog_references_dir(self):
+        with open(PATTERNS_DIR / "networks" / "_catalog.yaml") as f:
+            data = yaml.safe_load(f)
+        # Walk tree to find standard-3tier
+        found = False
+        def walk(nodes):
+            nonlocal found
+            for node in nodes:
+                for pat in node.get("patterns", []):
+                    if pat.get("id") == "standard-3tier":
+                        assert "dir" in pat, "standard-3tier should have 'dir' reference"
+                        found = True
+                walk(node.get("children", []))
+        walk(data["catalog"]["tree"])
+        assert found, "standard-3tier not found in networks catalog"
+
+    def test_products_catalog_references_dir(self):
+        with open(PATTERNS_DIR / "products" / "_catalog.yaml") as f:
+            data = yaml.safe_load(f)
+        found = False
+        for node in data["catalog"]["tree"]:
+            for pat in node.get("patterns", []):
+                if pat.get("id") == "ibm-mq":
+                    assert "dir" in pat, "ibm-mq should have 'dir' reference"
+                    found = True
+        assert found, "ibm-mq not found in products catalog"
+
+    def test_deployments_catalog_exists(self):
+        assert DEPLOYMENTS_DIR.exists(), "deployments/ directory must exist"
+        assert (DEPLOYMENTS_DIR / "_catalog.yaml").exists(), "deployments/_catalog.yaml must exist"
+
+
+class TestCopilotInstructionsPatternDocs:
+    """Copilot instructions document the new pattern system."""
+
+    def test_has_pattern_system_section(self):
+        content = COPILOT_INSTRUCTIONS_PATH.read_text()
+        assert "## Pattern System" in content
+
+    def test_has_manifest_reference(self):
+        content = COPILOT_INSTRUCTIONS_PATH.read_text()
+        assert "manifest.yaml" in content
+
+    def test_has_compose_command(self):
+        content = COPILOT_INSTRUCTIONS_PATH.read_text()
+        assert "tools/compose.py" in content
+
+    def test_has_new_schemas_listed(self):
+        content = COPILOT_INSTRUCTIONS_PATH.read_text()
+        assert "pattern-meta.schema.json" in content
+        assert "manifest.schema.json" in content

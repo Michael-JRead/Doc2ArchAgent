@@ -1,0 +1,153 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Michael-JRead/Doc2ArchAgent/schemas/manifest.schema.json",
+  "title": "Doc2ArchAgent Deployment Manifest Schema",
+  "description": "Schema for deployment manifests that compose network + product patterns into a deployment.",
+  "type": "object",
+  "properties": {
+    "manifest": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+          "description": "Deployment identifier in kebab-case."
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Human-readable deployment name."
+        },
+        "description": { "type": "string" },
+        "environment": {
+          "type": "string",
+          "enum": ["development", "staging", "production", "dr"],
+          "description": "Target environment."
+        },
+        "region": { "type": "string" },
+        "status": {
+          "type": "string",
+          "enum": ["proposed", "approved", "active", "deprecated"]
+        },
+        "cloud_provider": {
+          "type": "string",
+          "description": "Cloud provider (e.g., AWS, Azure, GCP, on-prem)."
+        },
+        "network": {
+          "type": "object",
+          "description": "Network pattern selection (exactly one).",
+          "properties": {
+            "pattern_ref": {
+              "type": "string",
+              "description": "Pattern ID referencing a network pattern directory."
+            },
+            "version": {
+              "type": "string",
+              "description": "Pinned pattern version."
+            },
+            "id_prefix": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+              "description": "Prefix applied to all network entity IDs."
+            },
+            "overrides": {
+              "type": "object",
+              "description": "Per-entity field overrides keyed by original entity ID.",
+              "additionalProperties": { "type": "object" }
+            }
+          },
+          "required": ["pattern_ref", "id_prefix"],
+          "additionalProperties": true
+        },
+        "products": {
+          "type": "array",
+          "description": "Product pattern selections (one or more).",
+          "items": {
+            "type": "object",
+            "properties": {
+              "pattern_ref": {
+                "type": "string",
+                "description": "Pattern ID referencing a product pattern directory."
+              },
+              "version": {
+                "type": "string",
+                "description": "Pinned pattern version."
+              },
+              "id_prefix": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                "description": "Prefix applied to all product entity IDs. Must be unique per product."
+              },
+              "context_name": {
+                "type": "string",
+                "description": "Override display name for the product's context."
+              },
+              "overrides": {
+                "type": "object",
+                "description": "Per-entity field overrides keyed by original entity ID.",
+                "additionalProperties": { "type": "object" }
+              }
+            },
+            "required": ["pattern_ref", "id_prefix"],
+            "additionalProperties": true
+          },
+          "minItems": 1
+        },
+        "placements": {
+          "type": "array",
+          "description": "Zone placement rules mapping containers to zones.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "container_ref": {
+                "type": "string",
+                "description": "Prefixed container ID."
+              },
+              "zone_ref": {
+                "type": "string",
+                "description": "Prefixed zone ID."
+              },
+              "replicas": { "type": "integer", "minimum": 1 },
+              "runtime_user": {
+                "type": "string",
+                "enum": ["root", "non_root", "unknown"]
+              },
+              "read_only_filesystem": { "type": "boolean" },
+              "resource_limits_set": { "type": "boolean" },
+              "network_policy_enforced": { "type": "boolean" },
+              "image_signed": { "type": "boolean" }
+            },
+            "required": ["container_ref", "zone_ref"],
+            "additionalProperties": true
+          }
+        },
+        "cross_product_relationships": {
+          "type": "array",
+          "description": "Relationships connecting components across different products.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "source_component": { "type": "string" },
+              "target_component": { "type": "string" },
+              "target_listener_ref": { "type": "string" },
+              "label": { "type": "string" },
+              "synchronous": { "type": "boolean" },
+              "data_classification": { "type": "string" },
+              "data_entities": {
+                "type": "array",
+                "items": { "type": "string" }
+              }
+            },
+            "required": ["id", "source_component", "target_component"],
+            "additionalProperties": true
+          }
+        }
+      },
+      "required": ["id", "name", "environment", "network", "products"],
+      "additionalProperties": true
+    }
+  },
+  "required": ["manifest"],
+  "additionalProperties": true
+}

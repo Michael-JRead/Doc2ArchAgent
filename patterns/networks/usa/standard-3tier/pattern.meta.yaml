@@ -1,0 +1,43 @@
+pattern:
+  id: standard-3tier
+  type: network
+  name: Standard 3-Tier Network
+  category: usa
+  version: 1.0.0
+  description: >
+    Standard DMZ / application / data tier topology for US data center
+    deployments. Includes WAF in DMZ, application tier for business logic,
+    and isolated data tier for databases and persistent storage.
+  tags: [production, standard, us]
+
+  provides:
+    - capability: network-zones
+      zones: [dmz, private-app-tier, private-data-tier]
+    - capability: waf
+      zones: [dmz]
+    - capability: load-balancer
+      zones: [dmz]
+
+  binding_points:
+    - id: dmz
+      type: zone
+      description: "Public-facing zone for edge services and ingress"
+    - id: private-app-tier
+      type: zone
+      description: "Internal zone for application servers and business logic"
+    - id: private-data-tier
+      type: zone
+      description: "Isolated zone for databases and persistent storage"
+    - id: edge-waf
+      type: infrastructure_resource
+      description: "Web application firewall at DMZ ingress"
+    - id: app-lb
+      type: infrastructure_resource
+      description: "Load balancer distributing traffic to application tier"
+
+  version_tracking_enabled: true
+  version_history:
+    - version: 1.0.0
+      date: 2026-04-01
+      author: mjread
+      description: Initial pattern

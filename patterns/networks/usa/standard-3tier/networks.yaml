@@ -1,0 +1,36 @@
+network_zones:
+  - id: dmz
+    name: DMZ
+    zone_type: dmz
+    internet_routable: true
+    trust: semi_trusted
+    description: Public-facing zone for edge services and ingress
+
+  - id: private-app-tier
+    name: Application Tier
+    zone_type: private
+    internet_routable: false
+    trust: trusted
+    description: Internal zone for application servers and business logic
+
+  - id: private-data-tier
+    name: Data Tier
+    zone_type: private
+    internet_routable: false
+    trust: trusted
+    description: Isolated zone for databases and persistent storage
+
+infrastructure_resources:
+  - id: edge-waf
+    name: Edge WAF
+    resource_type: waf
+    technology: F5 BIG-IP ASM
+    zone_id: dmz
+    description: Web application firewall at DMZ ingress
+
+  - id: app-lb
+    name: Application Load Balancer
+    resource_type: load_balancer
+    technology: F5 BIG-IP LTM
+    zone_id: dmz
+    description: Load balancer distributing traffic to application tier

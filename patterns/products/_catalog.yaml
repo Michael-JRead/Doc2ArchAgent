@@ -6,6 +6,7 @@ catalog:
       key: messaging
       patterns:
         - id: ibm-mq
+          dir: messaging/ibm-mq
           file: messaging/ibm-mq.pattern.yaml
     - name: Streaming
       key: streaming
