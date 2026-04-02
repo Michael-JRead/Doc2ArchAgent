@@ -1,7 +1,7 @@
 ---
 description: Validates architecture YAML for structural correctness, referential integrity, and naming conventions.
 argument-hint: Which system to validate? Or say "validate all"
-tools: ['read', 'search']
+tools: ['read', 'search', 'execute']
 handoffs:
   - label: "Fix issues in architecture"
     agent: architect

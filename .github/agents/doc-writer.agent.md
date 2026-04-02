@@ -1,7 +1,7 @@
 ---
 description: Generates HLDD and stakeholder documentation from architecture YAML, with output formatted for Confluence page upload or Markdown.
 argument-hint: What documentation? (e.g., "HLDD", "executive summary", "stakeholder brief")
-tools: ['read', 'edit', 'search']
+tools: ['read', 'edit', 'search', 'vscode']
 handoffs:
   - label: "Back to architecture"
     agent: architect

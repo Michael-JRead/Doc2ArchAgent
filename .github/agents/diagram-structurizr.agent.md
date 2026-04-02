@@ -1,6 +1,7 @@
 ---
 description: Generates Structurizr DSL (.dsl) files from the layout plan for interoperability with the Structurizr ecosystem.
-tools: ['read', 'edit']
+tools: ['read', 'edit', 'execute']
+disable-model-invocation: true
 handoffs:
   - label: "Generate Mermaid diagrams"
     agent: diagram-mermaid

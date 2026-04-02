@@ -1,7 +1,7 @@
 ---
 description: Security reviewer that analyzes architecture YAML for vulnerabilities, trust boundary issues, blast radius, and network crossing risks.
 argument-hint: Which system to review? Or say "review all"
-tools: ['read', 'search', 'edit']
+tools: ['read', 'search', 'web']
 handoffs:
   - label: "Fix in architecture"
     agent: architect

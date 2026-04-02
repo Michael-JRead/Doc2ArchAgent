@@ -1,6 +1,7 @@
 ---
 description: Generates Mermaid graph/subgraph diagrams from the layout plan.
-tools: ['read', 'edit']
+tools: ['read', 'edit', 'execute']
+disable-model-invocation: true
 handoffs:
   - label: "Generate PlantUML diagrams"
     agent: diagram-plantuml

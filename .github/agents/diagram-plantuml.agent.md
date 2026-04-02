@@ -1,6 +1,7 @@
 ---
 description: Generates PlantUML C4 diagrams from the layout plan.
-tools: ['read', 'edit']
+tools: ['read', 'edit', 'execute']
+disable-model-invocation: true
 handoffs:
   - label: "Generate Mermaid diagrams"
     agent: diagram-mermaid

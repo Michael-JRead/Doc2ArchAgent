@@ -1,6 +1,7 @@
 ---
 description: Generates draw.io XML diagrams for Lucidchart import from the layout plan.
 tools: ['read', 'edit']
+disable-model-invocation: true
 handoffs:
   - label: "Generate Mermaid diagrams"
     agent: diagram-mermaid

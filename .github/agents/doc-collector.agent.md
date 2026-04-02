@@ -1,7 +1,7 @@
 ---
 description: Collects, converts, and inventories architecture documents for extraction. Handles PDF, DOCX, images, text with automated conversion and quality tracking. Zero hallucinations — every fact is cited.
 argument-hint: Point to a folder with architecture documents (e.g., "collect from ./context")
-tools: ['read', 'edit', 'execute', 'search']
+tools: ['read', 'edit', 'execute', 'search', 'web']
 handoffs:
   - label: "Extract architecture entities"
     agent: doc-extractor

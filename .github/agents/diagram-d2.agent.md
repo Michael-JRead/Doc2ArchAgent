@@ -1,6 +1,7 @@
 ---
 description: Generates D2 diagram files (.d2) from the layout plan with native C4 model support and layers.
-tools: ['read', 'edit']
+tools: ['read', 'edit', 'execute']
+disable-model-invocation: true
 handoffs:
   - label: "Generate Mermaid diagrams"
     agent: diagram-mermaid
