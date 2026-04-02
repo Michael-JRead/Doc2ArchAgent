@@ -159,15 +159,27 @@ Color scheme:
 
 To compare against git history, use the `execute` tool:
 
+Adapt the commands below based on the shell configured in `.github/shell-config.yaml`:
+
+**linux/mac (bash/zsh):**
 ```bash
-# Get previous version from git
 git show HEAD~1:architecture/<system-id>/system.yaml > /tmp/system-prev.yaml
-
-# Get version from specific commit
 git show abc123:architecture/<system-id>/system.yaml > /tmp/system-prev.yaml
-
-# Get version from another branch
 git show main:architecture/<system-id>/system.yaml > /tmp/system-prev.yaml
+```
+
+**windows (PowerShell):**
+```powershell
+git show HEAD~1:architecture/<system-id>/system.yaml | Out-File $env:TEMP/system-prev.yaml
+git show abc123:architecture/<system-id>/system.yaml | Out-File $env:TEMP/system-prev.yaml
+git show main:architecture/<system-id>/system.yaml | Out-File $env:TEMP/system-prev.yaml
+```
+
+**cmd:**
+```cmd
+git show HEAD~1:architecture/<system-id>/system.yaml > %TEMP%\system-prev.yaml
+git show abc123:architecture/<system-id>/system.yaml > %TEMP%\system-prev.yaml
+git show main:architecture/<system-id>/system.yaml > %TEMP%\system-prev.yaml
 ```
 
 Parse both the current file and the git-retrieved version, then run the diff process.

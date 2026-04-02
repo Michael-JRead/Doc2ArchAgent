@@ -14,6 +14,41 @@ Every architecture entity extracted from documents MUST have a verifiable source
 - **Validation:** Deterministic Python code (`tools/validate.py`, `tools/threat-rules.py`) — same input always produces same output
 - **Rendering:** Template-based agents (`@diagram-*`)
 
+## Shell Configuration
+
+**Before running any `execute` commands**, read `.github/shell-config.yaml` to determine the user's shell.
+
+- If the file does **not** exist, ask the user:
+  > What shell/CLI does your VS Code terminal use?
+  > 1. Linux (bash/sh/zsh)
+  > 2. Mac (zsh/bash)
+  > 3. Windows (PowerShell)
+  > 4. Windows (cmd.exe)
+  > 5. Other (describe it)
+
+  Then create `.github/shell-config.yaml` with their choice.
+
+- If the file exists, read `shell_type` and adapt commands per the table below.
+
+### Command Translation Table
+
+| Action | linux / mac | windows (PowerShell) | cmd |
+|--------|-------------|----------------------|-----|
+| List files | `ls <dir>` | `Get-ChildItem <dir>` | `dir <dir>` |
+| Detect tools | `python tools/detect-tools.py` | `python tools/detect-tools.py` | `python tools/detect-tools.py` |
+| Temp directory | `/tmp/` | `$env:TEMP/` | `%TEMP%\` |
+| File redirect | `> /tmp/file.yaml` | `\| Out-File $env:TEMP/file.yaml` | `> %TEMP%\file.yaml` |
+| Path separator | `/` | `/` (PowerShell handles both) | `\` |
+| Python | `python` | `python` | `python` |
+| Pip install | `pip install X` | `pip install X` | `pip install X` |
+
+### When shell_type is "other"
+Read `custom_shell_notes` for guidance. Default to Python-only execution (safest).
+Ask the user before running any non-Python command.
+
+### Universal Rule
+All `tools/*.py` scripts are cross-platform. **Always prefer `python tools/X.py` over shell-specific commands.**
+
 ### Confidence Threshold
 The default confidence threshold is **0.95** (95%). Entities below this threshold require human verification before inclusion. Users can adjust this in `metadata.confidence_threshold`.
 
@@ -182,6 +217,9 @@ python -m pytest tests/ -v
 
 # Sync ATT&CK data
 python tools/sync-attack-data.py
+
+# Detect available tools (cross-platform — replaces detect-tools.sh)
+python tools/detect-tools.py
 ```
 
 ## Security Review

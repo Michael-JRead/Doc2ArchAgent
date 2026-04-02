@@ -1,0 +1,17 @@
+# Shell/CLI preference for Doc2ArchAgent.
+# Set this ONCE per workspace. All agents read this file.
+#
+# shell_type options:
+#   linux    — bash/sh/zsh (default)
+#   mac      — zsh/bash (macOS)
+#   windows  — PowerShell (Windows 10+)
+#   cmd      — cmd.exe (legacy Windows)
+#   other    — Custom shell (describe in custom_shell_notes)
+
+shell_type: linux
+
+# Only used when shell_type is "other".
+# Describe your shell so agents can adapt commands.
+# Examples: "Nix shell with bash", "Docker devcontainer",
+#           "Corporate PowerShell with custom aliases"
+custom_shell_notes: ""

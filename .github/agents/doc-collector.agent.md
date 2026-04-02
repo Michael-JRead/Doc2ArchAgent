@@ -193,7 +193,10 @@ How are your architecture documents formatted?
 The developer has placed `.txt`, `.md`, `.csv`, `.json`, or `.yaml` files in `context/<system-id>/`.
 
 1. Ask for the folder path. Default: `context/<system-id>/`
-2. Use `execute` to list files: `ls context/<system-id>/`
+2. Use `execute` to list files (adapt to the user's shell from `.github/shell-config.yaml`):
+   - **linux/mac:** `ls context/<system-id>/`
+   - **windows (PowerShell):** `Get-ChildItem context/<system-id>/`
+   - **cmd:** `dir context\<system-id>\`
 3. Use `read` to read each text file directly
 4. Present summary of files loaded, then proceed to STEP 2.
 
@@ -206,7 +209,7 @@ The developer points to a folder containing binary docs (PDF, DOCX, HTML, images
 **Step A: Detect available tools**
 Run via `execute`:
 ```
-bash tools/detect-tools.sh
+python tools/detect-tools.py
 ```
 Parse the JSON output to determine which conversion tools are available. Report findings to the developer.
 

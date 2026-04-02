@@ -818,3 +818,78 @@ class TestSchemaCodeSync:
         assert mod.VALID_TRUST_LEVELS == schema_trust, (
             f"Pattern trust {mod.VALID_TRUST_LEVELS} != schema {schema_trust}"
         )
+
+
+# ============================================================================
+# L7 — SHELL CONFIGURATION: Cross-platform shell support
+# ============================================================================
+
+SHELL_CONFIG_PATH = PROJECT_ROOT / ".github" / "shell-config.yaml"
+COPILOT_INSTRUCTIONS_PATH = PROJECT_ROOT / ".github" / "copilot-instructions.md"
+VALID_SHELL_TYPES = {"linux", "mac", "windows", "cmd", "other"}
+
+
+class TestShellConfiguration:
+    """Shell configuration for cross-platform agent support."""
+
+    def test_shell_config_is_valid_yaml(self):
+        assert SHELL_CONFIG_PATH.exists(), ".github/shell-config.yaml must exist"
+        with open(SHELL_CONFIG_PATH) as f:
+            data = yaml.safe_load(f)
+        assert isinstance(data, dict), "shell-config.yaml must be a YAML mapping"
+
+    def test_shell_config_has_required_fields(self):
+        with open(SHELL_CONFIG_PATH) as f:
+            data = yaml.safe_load(f)
+        assert "shell_type" in data, "shell-config.yaml must have 'shell_type' key"
+
+    def test_shell_config_valid_shell_types(self):
+        with open(SHELL_CONFIG_PATH) as f:
+            data = yaml.safe_load(f)
+        assert data["shell_type"] in VALID_SHELL_TYPES, (
+            f"shell_type must be one of {VALID_SHELL_TYPES}, got: {data['shell_type']}"
+        )
+
+    def test_detect_tools_py_exists(self):
+        assert (TOOLS_DIR / "detect-tools.py").exists(), "tools/detect-tools.py must exist"
+
+    def test_detect_tools_py_runs(self):
+        result = subprocess.run(
+            [sys.executable, str(TOOLS_DIR / "detect-tools.py")],
+            capture_output=True, text=True, timeout=30,
+        )
+        assert result.returncode == 0, f"detect-tools.py failed: {result.stderr}"
+        data = json.loads(result.stdout)
+        assert "tools" in data, "Output must have 'tools' key"
+        assert isinstance(data["tools"], list), "'tools' must be a list"
+        assert len(data["tools"]) > 0, "'tools' list must not be empty"
+
+    def test_detect_tools_output_matches_format(self):
+        """JSON keys must match detect-tools.sh format."""
+        result = subprocess.run(
+            [sys.executable, str(TOOLS_DIR / "detect-tools.py")],
+            capture_output=True, text=True, timeout=30,
+        )
+        data = json.loads(result.stdout)
+        required_keys = {"name", "command", "available", "path", "version"}
+        for tool in data["tools"]:
+            assert required_keys.issubset(tool.keys()), (
+                f"Tool {tool.get('name', '?')} missing keys: "
+                f"{required_keys - tool.keys()}"
+            )
+
+    def test_agents_use_detect_tools_py_not_sh(self):
+        """Agent files should reference detect-tools.py, not detect-tools.sh."""
+        for agent_file in AGENTS_DIR.glob("*.agent.md"):
+            content = agent_file.read_text()
+            # Should not contain active bash invocations of detect-tools.sh
+            assert "bash tools/detect-tools.sh" not in content, (
+                f"{agent_file.name} still references 'bash tools/detect-tools.sh' — "
+                "use 'python tools/detect-tools.py' instead"
+            )
+
+    def test_copilot_instructions_has_shell_section(self):
+        content = COPILOT_INSTRUCTIONS_PATH.read_text()
+        assert "## Shell Configuration" in content, (
+            "copilot-instructions.md must contain a '## Shell Configuration' section"
+        )
