@@ -28,7 +28,7 @@ KEBAB_CASE_RE = re.compile(r'^[a-z][a-z0-9]*(-[a-z0-9]+)*$')
 SEMVER_RE = re.compile(r'^\d+\.\d+\.\d+$')
 
 VALID_TRUST_LEVELS = {'trusted', 'semi_trusted', 'untrusted'}
-VALID_ZONE_TYPES = {'external', 'dmz', 'private', 'management', 'custom'}
+VALID_ZONE_TYPES = {'external', 'dmz', 'private', 'management', 'data', 'custom'}
 VALID_RESOURCE_TYPES = {'waf', 'secrets_manager', 'logging', 'monitoring', 'load_balancer', 'custom'}
 
 REQUIRED_METADATA = ('id', 'name', 'category', 'version', 'description')

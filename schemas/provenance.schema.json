@@ -2,49 +2,49 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/Michael-JRead/Doc2ArchAgent/schemas/provenance.schema.json",
   "title": "Doc2ArchAgent Provenance YAML Schema",
-  "description": "Schema for architecture/*/provenance.yaml — per-field source citations, confidence scores, and extraction metadata.",
+  "description": "Schema for architecture/*/provenance.yaml — per-field source citations, confidence scores, and extraction metadata. Validated by tools/validate-provenance.py.",
   "type": "object",
   "properties": {
-    "provenance_metadata": {
-      "type": "object",
-      "properties": {
-        "system_id": { "type": "string", "minLength": 1 },
-        "extracted_at": { "type": "string", "format": "date-time" },
-        "extraction_model": { "type": "string" },
-        "confidence_threshold": {
-          "type": "number", "minimum": 0, "maximum": 1, "default": 0.95,
-          "description": "Minimum confidence for auto-inclusion. Default 0.95."
+    "extraction_date": {
+      "type": "string",
+      "description": "ISO 8601 date when extraction was performed."
+    },
+    "pipeline_version": {
+      "type": "string",
+      "description": "Version of the extraction pipeline used."
+    },
+    "documents_analyzed": {
+      "type": "array",
+      "description": "Source documents that were analyzed for entity extraction.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "file": { "type": "string", "minLength": 1, "description": "Filename of the source document." },
+          "format": { "type": "string", "description": "File format (pdf, docx, html, image, etc.)." },
+          "pages": { "type": "integer", "description": "Number of pages in the document." },
+          "extraction_method": {
+            "type": "string",
+            "description": "Method used to extract text (e.g., pymupdf, pdfplumber, ocr, python-docx, html2text)."
+          },
+          "hash": { "type": "string", "description": "SHA-256 of source document for integrity verification." }
         },
-        "source_documents": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "id": { "type": "string" },
-              "filename": { "type": "string" },
-              "format": { "type": "string" },
-              "pages": { "type": "integer" },
-              "hash": { "type": "string", "description": "SHA-256 of source document for integrity." }
-            },
-            "required": ["id", "filename"],
-            "additionalProperties": true
-          }
-        }
-      },
-      "required": ["system_id", "extracted_at"],
-      "additionalProperties": true
+        "required": ["file"],
+        "additionalProperties": true
+      }
     },
     "entities": {
       "type": "array",
-      "description": "Per-entity provenance records.",
+      "description": "Per-entity provenance records with per-field citations.",
       "items": {
         "type": "object",
         "properties": {
           "entity_type": {
             "type": "string",
-            "enum": ["context", "container", "component", "listener", "relationship", "data_entity", "external_system", "trust_boundary"]
+            "enum": ["context", "container", "component", "listener", "relationship",
+                     "zone", "external_system", "data_entity", "trust_boundary", "metadata"],
+            "description": "Type of architecture entity."
           },
-          "entity_id": { "type": "string" },
+          "entity_id": { "type": "string", "minLength": 1, "description": "ID of the entity in system.yaml." },
           "fields": {
             "type": "object",
             "description": "Per-field provenance. Keys are field names, values are citation objects.",
@@ -52,45 +52,34 @@
               "type": "object",
               "properties": {
                 "value": { "description": "The extracted value." },
-                "source_id": { "type": "string", "description": "References provenance_metadata.source_documents[].id" },
-                "section": { "type": "string" },
-                "page": { "type": "integer" },
-                "quote": { "type": "string", "description": "Exact quote from source document supporting this value." },
-                "source_span": {
-                  "type": "object",
-                  "description": "Character offsets in the source document for instant verification.",
-                  "properties": {
-                    "char_start": { "type": "integer", "minimum": 0 },
-                    "char_end": { "type": "integer", "minimum": 0 }
-                  }
-                },
                 "confidence": {
-                  "type": "number", "minimum": 0, "maximum": 1,
-                  "description": "Composite confidence score (0.0–1.0). Computed as min(source_clarity, extraction_method_cap, cross_doc_boost, self_verification_penalty)."
+                  "type": "string",
+                  "enum": ["HIGH", "MEDIUM", "LOW", "UNCERTAIN", "NOT_STATED"],
+                  "description": "Confidence level of the extraction."
                 },
-                "confidence_factors": {
-                  "type": "object",
-                  "properties": {
-                    "source_clarity": { "type": "number", "minimum": 0, "maximum": 1 },
-                    "extraction_method": { "type": "string", "enum": ["explicit_text", "table", "diagram", "inferred"] },
-                    "extraction_method_cap": { "type": "number", "minimum": 0, "maximum": 1 },
-                    "cross_doc_count": { "type": "integer", "minimum": 0, "description": "Number of corroborating sources." },
-                    "cross_doc_boost": { "type": "number", "minimum": 0, "maximum": 1 },
-                    "self_verification": { "type": "string", "enum": ["passed", "failed", "skipped"] },
-                    "self_verification_penalty": { "type": "number", "minimum": 0, "maximum": 1 }
-                  }
+                "source": {
+                  "type": "string",
+                  "description": "Source reference in 'filename, section' format."
+                },
+                "quote": {
+                  "type": "string",
+                  "description": "Exact quote from source document supporting this value."
+                },
+                "pass": {
+                  "type": "string",
+                  "enum": ["prose", "table", "diagram", "cross-ref", "user-provided"],
+                  "description": "Which extraction pass produced this value."
+                },
+                "verified": {
+                  "type": "boolean",
+                  "default": false,
+                  "description": "Whether a human has verified this extraction."
                 },
                 "nli_status": {
                   "type": "string",
                   "enum": ["entailed", "contradicted", "neutral", "not_checked"],
                   "description": "NLI verification result from verify-claims.py."
-                },
-                "extraction_pass": {
-                  "type": "string",
-                  "enum": ["prose", "table", "diagram", "cross_reference"],
-                  "description": "Which extraction pass produced this value."
-                },
-                "human_verified": { "type": "boolean", "default": false }
+                }
               },
               "required": ["value", "confidence"],
               "additionalProperties": true
@@ -100,8 +89,49 @@
         "required": ["entity_type", "entity_id", "fields"],
         "additionalProperties": true
       }
+    },
+    "conflicts_resolved": {
+      "type": "array",
+      "description": "Conflicts found between sources that were resolved during extraction.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "entity_id": { "type": "string" },
+          "field_name": { "type": "string" },
+          "competing_values": { "type": "array", "items": { "type": "string" } },
+          "resolution": { "type": "string" },
+          "reason": { "type": "string" }
+        },
+        "required": ["entity_id", "resolution"],
+        "additionalProperties": true
+      }
+    },
+    "unresolved": {
+      "type": "array",
+      "description": "Entities or fields that could not be confidently extracted.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "entity_id": { "type": "string" },
+          "field_name": { "type": "string" },
+          "reason": { "type": "string" }
+        },
+        "additionalProperties": true
+      }
+    },
+    "statistics": {
+      "type": "object",
+      "description": "Summary statistics for the extraction run.",
+      "properties": {
+        "total_fields_extracted": { "type": "integer", "minimum": 0 },
+        "high_confidence": { "type": "integer", "minimum": 0 },
+        "medium_confidence": { "type": "integer", "minimum": 0 },
+        "low_confidence": { "type": "integer", "minimum": 0 },
+        "uncertain": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": true
     }
   },
-  "required": ["provenance_metadata", "entities"],
+  "required": ["extraction_date", "documents_analyzed", "entities"],
   "additionalProperties": true
 }

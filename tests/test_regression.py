@@ -209,8 +209,6 @@ class TestExampleSchemaConformance:
         data = self._load_yaml(deploy_file)
         validate(instance=data, schema=schema, cls=Draft202012Validator)
 
-    @pytest.mark.xfail(reason="Known issue: example provenance.yaml uses legacy keys "
-                        "(extraction_timestamp) instead of schema-required provenance_metadata")
     def test_example_provenance_conforms_to_schema(self):
         from jsonschema import validate, Draft202012Validator
         prov_file = EXAMPLES_DIR / "payment-platform" / "provenance.yaml"
@@ -787,27 +785,22 @@ class TestSchemaCodeSync:
                     f"not in stride-to-attack.yaml: {valid_stride}"
                 )
 
-    def test_pattern_zone_types_are_consistent(self):
-        """Zone types in pattern validation must match what example YAML files use."""
+    def test_pattern_zone_types_subset_of_schema(self):
+        """Zone types in pattern validation must be a subset of network schema enums."""
+        with open(SCHEMAS_DIR / "networks.schema.json") as f:
+            schema = json.load(f)
+        zone_props = schema["properties"]["network_zones"]["items"]["properties"]
+        schema_zone_types = set(zone_props["zone_type"]["enum"])
+
         from importlib.util import spec_from_file_location, module_from_spec
         spec = spec_from_file_location("validate_patterns",
                                        str(TOOLS_DIR / "validate-patterns.py"))
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
 
-        # Verify the pattern validator has a non-empty set of zone types
-        assert len(mod.VALID_ZONE_TYPES) >= 3, "Should have at least 3 zone types"
-
-        # Verify example networks.yaml uses only known zone types
-        with open(EXAMPLES_DIR / "networks.yaml") as f:
-            networks = yaml.safe_load(f)
-        for zone in networks.get("network_zones", []):
-            zt = zone.get("zone_type", "")
-            # The schema allows free-form strings; validate against known types + 'data'
-            known = mod.VALID_ZONE_TYPES | {"data", "custom", "vpc", "subnet"}
-            assert zt in known, (
-                f"Example zone '{zone['id']}' has zone_type '{zt}' not in known set"
-            )
+        assert mod.VALID_ZONE_TYPES == schema_zone_types, (
+            f"Pattern zone types {mod.VALID_ZONE_TYPES} != schema {schema_zone_types}"
+        )
 
     def test_pattern_trust_levels_match_schema(self):
         """Trust levels in pattern validation must match network schema."""
