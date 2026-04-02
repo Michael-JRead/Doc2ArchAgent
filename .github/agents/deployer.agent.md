@@ -144,8 +144,10 @@ A system may have many deployments, each with its own zone/container/component p
 ## SEQUENCE
 
 1. **Read existing architecture**
-   - Read `architecture/networks.yaml` to understand available network zones and infrastructure
+   - Read `architecture/networks.yaml` to understand available network zones
+   - Read `architecture/networks-security.yaml` (if present) to understand zone security posture and infrastructure resources
    - Read `architecture/<system-id>/system.yaml` to understand containers, components, and relationships
+   - Read `architecture/<system-id>/system-security.yaml` (if present) for security context
    - List what exists and confirm with the developer
 
 2. **Deployment metadata**
@@ -234,8 +236,11 @@ Context:
   Source: deployments/<deployment-id>/ (or architecture/<system-id>/)
   Diagrams directory: <source-dir>/diagrams/
   System YAML: <source-dir>/system.yaml
+  System Security: <source-dir>/system-security.yaml (if present)
   Networks YAML: <source-dir>/networks.yaml
+  Networks Security: <source-dir>/networks-security.yaml (if present)
   Deployment YAML: <source-dir>/deployment.yaml
+  Deployment Security: <source-dir>/deployment-security.yaml (if present)
 ```
 
 ---

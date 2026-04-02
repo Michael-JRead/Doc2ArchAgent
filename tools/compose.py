@@ -366,6 +366,48 @@ def compose_deployment(manifest: dict) -> dict:
     return deployment
 
 
+def _build_system_security_stub(manifest: dict, system: dict) -> dict:
+    """Build system-security.yaml stub from composed data."""
+    stub: dict = {
+        "security_metadata": {
+            "system_ref": manifest.get("name", ""),
+        },
+        "component_security": [],
+    }
+    # Move data_entities and trust_boundaries to security stub if present
+    if system.get("data_entities"):
+        stub["data_entities"] = system.pop("data_entities")
+    if system.get("trust_boundaries"):
+        stub["trust_boundaries"] = system.pop("trust_boundaries")
+    return stub
+
+
+def _build_networks_security_stub(manifest: dict, networks: dict) -> dict:
+    """Build networks-security.yaml stub from composed data."""
+    net_ref = manifest.get("network", {}).get("pattern_ref", "")
+    stub: dict = {
+        "network_security_metadata": {
+            "networks_ref": net_ref,
+        },
+        "zone_security": [],
+    }
+    # Move infrastructure_resources to security stub if present
+    if networks.get("infrastructure_resources"):
+        stub["infrastructure_resources"] = networks.pop("infrastructure_resources")
+    return stub
+
+
+def _build_deployment_security_stub(manifest: dict, deployment: dict) -> dict:
+    """Build deployment-security.yaml stub from composed data."""
+    stub: dict = {
+        "deployment_security_metadata": {
+            "deployment_ref": manifest.get("id", ""),
+        },
+        "container_security": [],
+    }
+    return stub
+
+
 def compose(manifest_path: Path, dry_run: bool = False,
             validate: bool = False) -> dict:
     """Main composition pipeline."""
@@ -389,6 +431,11 @@ def compose(manifest_path: Path, dry_run: bool = False,
     if net_ctx_rels:
         existing_ctx_rels = system.get("context_relationships", [])
         system["context_relationships"] = net_ctx_rels + existing_ctx_rels
+
+    # Build security overlay stubs from composed data
+    system_security = _build_system_security_stub(manifest, system)
+    networks_security = _build_networks_security_stub(manifest, networks)
+    deployment_security = _build_deployment_security_stub(manifest, deployment)
 
     timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     try:
@@ -427,14 +474,19 @@ def compose(manifest_path: Path, dry_run: bool = False,
             "system_components_count": len(system.get("components", [])),
             "system_relationships_count": len(system.get("component_relationships", [])),
             "deployment_placements_count": len(deployment.get("zone_placements", [])),
+            "security_data_entities_count": len(system_security.get("data_entities", [])),
+            "security_trust_boundaries_count": len(system_security.get("trust_boundaries", [])),
             "output_dir": str(output_dir),
         }, indent=2))
         return result
 
-    # Write output files
+    # Write output files (base + security overlays)
     for fname, data in [("networks.yaml", networks),
                         ("system.yaml", system),
-                        ("deployment.yaml", deployment)]:
+                        ("deployment.yaml", deployment),
+                        ("system-security.yaml", system_security),
+                        ("networks-security.yaml", networks_security),
+                        ("deployment-security.yaml", deployment_security)]:
         out_path = output_dir / fname
         with open(out_path, "w") as f:
             f.write(header)
@@ -485,6 +537,9 @@ def compose(manifest_path: Path, dry_run: bool = False,
             str(output_dir / "networks.yaml"),
             str(output_dir / "system.yaml"),
             str(output_dir / "deployment.yaml"),
+            str(output_dir / "system-security.yaml"),
+            str(output_dir / "networks-security.yaml"),
+            str(output_dir / "deployment-security.yaml"),
             str(output_dir / "diagrams" / "_index.yaml"),
         ],
     }, indent=2))

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/Michael-JRead/Doc2ArchAgent/schemas/system.schema.json",
   "title": "Doc2ArchAgent System YAML Schema",
-  "description": "Schema for architecture/*/system.yaml — the core C4 architecture model with security-enriched fields for threat modeling, compliance validation, and attack surface analysis.",
+  "description": "Schema for architecture/*/system.yaml — the core C4 architecture model. Security-enrichment fields are deprecated here; use system-security.yaml instead.",
   "type": "object",
   "properties": {
     "metadata": {
@@ -50,6 +50,11 @@
         "reviewer": {
           "type": "string",
           "description": "Person or team who conducted the last review."
+        },
+        "modeling_stage": {
+          "type": "string",
+          "enum": ["discovery", "draft", "reviewed", "deployed"],
+          "description": "Lifecycle stage of this system model. Controls agent behavior and field requirements."
         }
       },
       "required": ["name", "description", "owner", "status"],
@@ -339,7 +344,7 @@
                   "description": "CORS policy strictness. Wildcard CORS on authenticated endpoints is a vulnerability."
                 }
               },
-              "required": ["id", "protocol", "port", "tls_enabled", "authn_mechanism", "authz_required"],
+              "required": ["id", "protocol", "port"],
               "additionalProperties": true
             }
           }

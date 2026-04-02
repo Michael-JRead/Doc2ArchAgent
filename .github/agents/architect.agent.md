@@ -154,12 +154,16 @@ Always include a blank line between entities.
 
 ```
 architecture/
-    networks.yaml                — shared: network zones, infrastructure resources
+    networks.yaml                — shared: network zone topology (id, name, zone_type, trust)
+    networks-security.yaml       — zone security posture, infrastructure resources (WAF, IDS, logging)
     <system-id>/
-        system.yaml              — system-specific: metadata, contexts, containers,
-                                   components, external systems, all relationships
+        system.yaml              — architecture core: metadata, contexts, containers,
+                                   components (id, name, tech, ports), relationships
+        system-security.yaml     — security enrichment: CIA triad, TLS details, auth,
+                                   encryption, data entities, trust boundaries, accepted risks
         deployments/
-            <deployment-id>.yaml — deployment: container/component placements in zones
+            <deployment-id>.yaml           — structural: container/component placements in zones
+            <deployment-id>-security.yaml  — runtime security: image signing, filesystem, network policy
         diagrams/
             <system-id>-context.md / .puml        — C4 Context (Level 1)
             <system-id>-context-graph.md           — Mermaid graph/subgraph Context

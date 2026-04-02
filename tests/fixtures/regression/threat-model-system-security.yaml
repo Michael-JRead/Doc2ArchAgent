@@ -1,0 +1,37 @@
+security_metadata:
+  system_ref: Threat Test System
+  compliance_frameworks:
+    - SOC2
+  business_criticality: important
+  data_sensitivity_level: confidential
+
+component_security:
+  - component_id: public-api
+    confidentiality: high
+    integrity: high
+    availability: medium
+    dfd_element_type: process
+    stores_data: false
+    processes_pii: false
+    listener_security:
+      - listener_id: http-listener
+        tls_enabled: false
+        authn_mechanism: none
+        authz_required: false
+        exposure: public
+        api_type: rest
+
+  - component_id: admin-panel
+    confidentiality: high
+    integrity: high
+    availability: low
+    dfd_element_type: process
+    stores_data: false
+    processes_pii: false
+    listener_security:
+      - listener_id: admin-listener
+        tls_enabled: true
+        authn_mechanism: basic
+        authz_required: true
+        admin_interface: true
+        exposure: internal

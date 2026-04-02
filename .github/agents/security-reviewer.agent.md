@@ -125,9 +125,10 @@ Always include a blank line between findings.
 ## SEQUENCE
 
 1. **Read all architecture files**
-   - Read `architecture/networks.yaml`
+   - Read `architecture/networks.yaml` and `architecture/networks-security.yaml` (if present)
    - Search for all `system.yaml` files under `architecture/`
-   - Search for all deployment YAML files under `architecture/*/deployments/`
+   - For each `system.yaml`, also read the corresponding `system-security.yaml` (if present — security fields may be inline or in a separate overlay file)
+   - Search for all deployment YAML files under `architecture/*/deployments/` and their corresponding `deployment-security.yaml` files
    - Summarize what was found
 
 2. **Run security analysis**

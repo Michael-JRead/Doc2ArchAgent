@@ -1,0 +1,105 @@
+# Security enrichment overlay for networks.yaml
+# Linked by zone_id to networks.yaml.
+# Consumed by: threat-rules.py, security-reviewer agent.
+# NOT consumed by: diagram pipeline.
+
+network_security_metadata:
+  networks_ref: payment-platform-network
+
+zone_security:
+  - zone_id: internet
+    segmentation_type: none
+    egress_filtered: false
+    ids_ips_enabled: false
+    dlp_enabled: false
+    default_deny: false
+
+  - zone_id: dmz
+    segmentation_type: vpc
+    egress_filtered: true
+    ids_ips_enabled: true
+    dlp_enabled: false
+    default_deny: true
+    allowed_ingress_zones:
+      - internet
+    allowed_egress_zones:
+      - private-app-tier
+
+  - zone_id: private-app-tier
+    segmentation_type: vpc
+    egress_filtered: true
+    ids_ips_enabled: true
+    dlp_enabled: false
+    default_deny: true
+    allowed_ingress_zones:
+      - dmz
+    allowed_egress_zones:
+      - private-data-tier
+      - management
+
+  - zone_id: private-data-tier
+    segmentation_type: vpc
+    egress_filtered: true
+    ids_ips_enabled: true
+    dlp_enabled: true
+    default_deny: true
+    allowed_ingress_zones:
+      - private-app-tier
+    allowed_egress_zones:
+      - management
+
+  - zone_id: management
+    segmentation_type: vpc
+    egress_filtered: true
+    ids_ips_enabled: true
+    dlp_enabled: false
+    default_deny: true
+    allowed_ingress_zones:
+      - private-app-tier
+      - private-data-tier
+
+infrastructure_resources:
+  - id: f5-waf
+    name: F5 Web Application Firewall
+    resource_type: waf
+    technology: F5 BIG-IP ASM
+    zone_id: dmz
+    version: "16.1"
+    high_availability: true
+    compliance_certified: true
+
+  - id: hashicorp-vault
+    name: HashiCorp Vault
+    resource_type: secrets_manager
+    technology: HashiCorp Vault Enterprise
+    zone_id: management
+    version: "1.15"
+    high_availability: true
+    encryption_key_management: hsm
+    compliance_certified: true
+
+  - id: elk-stack
+    name: ELK Logging Stack
+    resource_type: logging
+    technology: Elasticsearch / Logstash / Kibana
+    zone_id: management
+    version: "8.12"
+    high_availability: true
+    compliance_certified: false
+
+  - id: palo-alto-ids
+    name: Palo Alto IDS/IPS
+    resource_type: ids_ips
+    technology: Palo Alto Networks PA-5200
+    zone_id: dmz
+    version: "11.1"
+    high_availability: true
+    compliance_certified: true
+
+  - id: prometheus-monitoring
+    name: Prometheus Monitoring
+    resource_type: monitoring
+    technology: Prometheus / Grafana
+    zone_id: management
+    version: "2.50"
+    high_availability: true

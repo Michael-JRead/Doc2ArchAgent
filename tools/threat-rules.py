@@ -40,6 +40,181 @@ SEVERITY_ORDER = {"critical": 4, "high": 3, "medium": 2, "low": 1, "info": 0}
 
 
 # =============================================================================
+# Security Overlay Merge
+# =============================================================================
+
+
+def merge_security_overlays(system: dict, networks: dict | None,
+                            deployment: dict | None,
+                            sys_security: dict | None = None,
+                            net_security: dict | None = None,
+                            dep_security: dict | None = None) -> tuple[dict, dict | None, dict | None]:
+    """Merge security overlay files into their base dicts by ID-matching.
+
+    This is additive-only: existing inline fields are preserved. The merged
+    result is identical in structure to the old inline format so ArchModel
+    and rule evaluation require zero changes.
+    """
+    if sys_security:
+        system = _merge_system_security(system, sys_security)
+    if net_security and networks is not None:
+        networks = _merge_network_security(networks, net_security)
+    if dep_security and deployment is not None:
+        deployment = _merge_deployment_security(deployment, dep_security)
+    return system, networks, deployment
+
+
+def _merge_system_security(system: dict, sec: dict) -> dict:
+    """Merge system-security.yaml into system dict."""
+    import copy
+    system = copy.deepcopy(system)
+
+    # Merge security_metadata into metadata
+    sec_meta = sec.get("security_metadata", {})
+    meta = system.setdefault("metadata", {})
+    for key in ("compliance_frameworks", "business_criticality",
+                "data_sensitivity_level", "threat_model_version",
+                "last_review_date", "reviewer"):
+        if key in sec_meta and key not in meta:
+            meta[key] = sec_meta[key]
+
+    # Index components and listeners by ID for fast lookup
+    comp_index = {}
+    for comp in system.get("components", []):
+        comp_index[comp.get("id", "")] = comp
+        for listener in comp.get("listeners", []):
+            listener_key = (comp.get("id", ""), listener.get("id", ""))
+            comp_index[listener_key] = listener
+
+    # Merge component_security
+    for cs in sec.get("component_security", []):
+        comp_id = cs.get("component_id", "")
+        comp = comp_index.get(comp_id)
+        if not comp:
+            continue
+        for key, val in cs.items():
+            if key in ("component_id", "listener_security"):
+                continue
+            if key not in comp:
+                comp[key] = val
+        # Merge listener_security
+        for ls in cs.get("listener_security", []):
+            lid = ls.get("listener_id", "")
+            listener = comp_index.get((comp_id, lid))
+            if not listener:
+                continue
+            for key, val in ls.items():
+                if key == "listener_id":
+                    continue
+                if key not in listener:
+                    listener[key] = val
+
+    # Merge relationship_security
+    rel_index = {r.get("id", ""): r for r in system.get("component_relationships", [])}
+    for rs in sec.get("relationship_security", []):
+        rel = rel_index.get(rs.get("relationship_id", ""))
+        if not rel:
+            continue
+        for key, val in rs.items():
+            if key == "relationship_id":
+                continue
+            if key not in rel:
+                rel[key] = val
+
+    # Merge external_system_security
+    ext_index = {e.get("id", ""): e for e in system.get("external_systems", [])}
+    for es in sec.get("external_system_security", []):
+        ext = ext_index.get(es.get("external_system_id", ""))
+        if not ext:
+            continue
+        for key, val in es.items():
+            if key == "external_system_id":
+                continue
+            if key not in ext:
+                ext[key] = val
+
+    # Merge top-level security sections (additive)
+    for section in ("data_entities", "trust_boundaries", "accepted_risks"):
+        sec_items = sec.get(section, [])
+        if sec_items:
+            existing = system.get(section, [])
+            existing_ids = {item.get("id") for item in existing if isinstance(item, dict)}
+            for item in sec_items:
+                if item.get("id") not in existing_ids:
+                    existing.append(item)
+            system[section] = existing
+
+    return system
+
+
+def _merge_network_security(networks: dict, sec: dict) -> dict:
+    """Merge networks-security.yaml into networks dict."""
+    import copy
+    networks = copy.deepcopy(networks)
+
+    # Merge zone_security by zone_id
+    zone_index = {z.get("id", ""): z for z in networks.get("network_zones", [])}
+    for zs in sec.get("zone_security", []):
+        zone = zone_index.get(zs.get("zone_id", ""))
+        if not zone:
+            continue
+        for key, val in zs.items():
+            if key == "zone_id":
+                continue
+            if key not in zone:
+                zone[key] = val
+
+    # Merge infrastructure_resources (additive)
+    sec_resources = sec.get("infrastructure_resources", [])
+    if sec_resources:
+        existing = networks.get("infrastructure_resources", [])
+        existing_ids = {r.get("id") for r in existing if isinstance(r, dict)}
+        for res in sec_resources:
+            if res.get("id") not in existing_ids:
+                existing.append(res)
+        networks["infrastructure_resources"] = existing
+
+    return networks
+
+
+def _merge_deployment_security(deployment: dict, sec: dict) -> dict:
+    """Merge deployment-security.yaml into deployment dict."""
+    import copy
+    deployment = copy.deepcopy(deployment)
+
+    # Merge deployment_posture into deployment_metadata
+    posture = sec.get("deployment_posture", {})
+    dep_meta = deployment.setdefault("deployment_metadata", {})
+    for key, val in posture.items():
+        if key not in dep_meta:
+            dep_meta[key] = val
+
+    # Merge container_security by container_id (and optionally zone_id)
+    # Build index: container_id -> container dict in zone_placements
+    container_index = {}
+    for placement in deployment.get("zone_placements", []):
+        zone_id = placement.get("zone_id", "")
+        for container in placement.get("containers", []):
+            cid = container.get("container_id", "")
+            container_index[(cid, zone_id)] = container
+            container_index[cid] = container  # fallback without zone
+
+    for cs in sec.get("container_security", []):
+        cid = cs.get("container_id", "")
+        zid = cs.get("zone_id", "")
+        container = container_index.get((cid, zid)) or container_index.get(cid)
+        if not container:
+            continue
+        for key, val in cs.items():
+            if key in ("container_id", "zone_id"):
+                continue
+            if key not in container:
+                container[key] = val
+
+    return deployment
+
+
+# =============================================================================
 # Model Loading
 # =============================================================================
 
@@ -766,18 +941,39 @@ def format_sarif(findings: list[Finding], file_path: str = "") -> str:
 # CLI
 # =============================================================================
 
+def _load_security_file(explicit_path: str | None, base_path: str | None,
+                        default_name: str) -> dict | None:
+    """Load a security overlay YAML file. Auto-detects sibling if not explicit."""
+    if explicit_path:
+        try:
+            with open(explicit_path) as f:
+                return yaml.safe_load(f) or {}
+        except Exception as e:
+            print(f"Warning: Cannot load security file {explicit_path}: {e}", file=sys.stderr)
+            return None
+    if base_path:
+        candidate = Path(base_path).parent / default_name
+        if candidate.exists():
+            with open(candidate) as f:
+                return yaml.safe_load(f) or {}
+    return None
+
+
 def main():
     parser = argparse.ArgumentParser(description="Deterministic threat rule engine for Doc2ArchAgent.")
     parser.add_argument("system_yaml", help="Path to system.yaml")
     parser.add_argument("--networks", help="Path to networks.yaml")
     parser.add_argument("--deployment", help="Path to deployment YAML")
+    parser.add_argument("--security", help="Path to system-security.yaml")
+    parser.add_argument("--networks-security", help="Path to networks-security.yaml")
+    parser.add_argument("--deployment-security", help="Path to deployment-security.yaml")
     parser.add_argument("--format", choices=["json", "table", "sarif"], default="table")
     parser.add_argument("--environment", choices=["development", "staging", "production", "dr"])
     parser.add_argument("--confidence-threshold", type=float, default=0.95,
                         help="Confidence threshold (0.0-1.0). Default 0.95")
     args = parser.parse_args()
 
-    # Load files
+    # Load base files
     try:
         with open(args.system_yaml) as f:
             system = yaml.safe_load(f) or {}
@@ -794,6 +990,19 @@ def main():
     if args.deployment:
         with open(args.deployment) as f:
             deployment = yaml.safe_load(f) or {}
+
+    # Load security overlay files (explicit or auto-detect)
+    sys_sec = _load_security_file(args.security, args.system_yaml, "system-security.yaml")
+    net_sec = _load_security_file(
+        getattr(args, "networks_security", None),
+        args.networks, "networks-security.yaml") if args.networks else None
+    dep_sec = _load_security_file(
+        getattr(args, "deployment_security", None),
+        args.deployment, "deployment-security.yaml") if args.deployment else None
+
+    # Merge security overlays into base dicts (additive, before model construction)
+    system, networks, deployment = merge_security_overlays(
+        system, networks, deployment, sys_sec, net_sec, dep_sec)
 
     # Build model
     model = ArchModel(system, networks, deployment)

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/Michael-JRead/Doc2ArchAgent/schemas/deployment.schema.json",
   "title": "Doc2ArchAgent Deployment YAML Schema",
-  "description": "Schema for architecture/*/deployments/*.yaml — deployment mapping of containers and components to network zones with runtime security context.",
+  "description": "Schema for architecture/*/deployments/*.yaml — deployment mapping of containers and components to network zones. Runtime security fields are deprecated here; use deployment-security.yaml instead.",
   "type": "object",
   "properties": {
     "deployment_metadata": {

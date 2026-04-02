@@ -1,0 +1,110 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Michael-JRead/Doc2ArchAgent/schemas/deployment-security.schema.json",
+  "title": "Doc2ArchAgent Deployment Security YAML Schema",
+  "description": "Schema for deployment-security.yaml — runtime security enrichment overlay for deployment.yaml. Container hardening, image provenance, and deployment posture linked by container_id and zone_id.",
+  "type": "object",
+  "properties": {
+    "deployment_security_metadata": {
+      "type": "object",
+      "description": "Security-specific metadata linked to a deployment.yaml.",
+      "properties": {
+        "deployment_ref": {
+          "type": "string",
+          "minLength": 1,
+          "description": "ID of the deployment.yaml this security overlay enriches."
+        }
+      },
+      "required": ["deployment_ref"],
+      "additionalProperties": true
+    },
+    "deployment_posture": {
+      "type": "object",
+      "description": "Deployment-level security posture fields.",
+      "properties": {
+        "cloud_provider": {
+          "type": "string",
+          "description": "Cloud provider (e.g., AWS, Azure, GCP, on-prem). Enables cloud-specific threat rules."
+        },
+        "data_residency_region": {
+          "type": "string",
+          "description": "Data residency region for this deployment. Enables GDPR Art 44 checks."
+        },
+        "data_residency_required": {
+          "type": "boolean",
+          "description": "Whether data must remain in the specified region."
+        },
+        "shared_responsibility_model": {
+          "type": "string",
+          "enum": ["iaas", "paas", "saas", "on_prem"],
+          "description": "Cloud shared responsibility model. Determines customer vs. provider managed controls."
+        },
+        "tenant_isolation": {
+          "type": "string",
+          "enum": ["dedicated", "shared", "hybrid"],
+          "description": "Multi-tenancy isolation model for this deployment."
+        }
+      },
+      "additionalProperties": true
+    },
+    "container_security": {
+      "type": "array",
+      "description": "Runtime security enrichment for container placements. Matched by container_id and zone_id.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "container_id": {
+            "type": "string",
+            "description": "References a container_id in deployment.yaml zone_placements."
+          },
+          "zone_id": {
+            "type": "string",
+            "description": "References the zone_id where this container is placed."
+          },
+          "runtime_user": {
+            "type": "string",
+            "enum": ["root", "non_root", "unknown"],
+            "description": "Runtime user. root=privilege escalation risk."
+          },
+          "read_only_filesystem": {
+            "type": "boolean",
+            "description": "Whether the container runs with a read-only root filesystem."
+          },
+          "resource_limits_set": {
+            "type": "boolean",
+            "description": "Whether CPU/memory resource limits are configured."
+          },
+          "network_policy_enforced": {
+            "type": "boolean",
+            "description": "Whether NetworkPolicy or equivalent restricts pod-to-pod traffic."
+          },
+          "image_registry": {
+            "type": "string",
+            "description": "Container image registry URL."
+          },
+          "image_tag": {
+            "type": "string",
+            "description": "Container image tag. 'latest' is a supply chain risk."
+          },
+          "image_digest": {
+            "type": "string",
+            "description": "Container image SHA256 digest for immutable reference."
+          },
+          "image_signed": {
+            "type": "boolean",
+            "description": "Whether the container image is signed (cosign/Notary)."
+          },
+          "vulnerability_scan_date": {
+            "type": "string",
+            "format": "date",
+            "description": "Date of last container vulnerability scan."
+          }
+        },
+        "required": ["container_id"],
+        "additionalProperties": true
+      }
+    }
+  },
+  "required": ["deployment_security_metadata"],
+  "additionalProperties": true
+}

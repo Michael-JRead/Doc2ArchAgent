@@ -1,33 +1,38 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/Michael-JRead/Doc2ArchAgent/schemas/networks.schema.json",
-  "title": "Doc2ArchAgent Networks YAML Schema",
-  "description": "Schema for architecture/networks.yaml — shared network zones and topology. Security enrichment fields are deprecated here; use networks-security.yaml instead.",
+  "$id": "https://github.com/Michael-JRead/Doc2ArchAgent/schemas/networks-security.schema.json",
+  "title": "Doc2ArchAgent Networks Security YAML Schema",
+  "description": "Schema for networks-security.yaml — security enrichment overlay for networks.yaml. Zone security posture and infrastructure resources linked by zone_id.",
   "type": "object",
   "properties": {
-    "network_zones": {
+    "network_security_metadata": {
+      "type": "object",
+      "description": "Security-specific metadata linked to a networks.yaml.",
+      "properties": {
+        "networks_ref": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Name or ID of the networks.yaml this security overlay enriches."
+        }
+      },
+      "required": ["networks_ref"],
+      "additionalProperties": true
+    },
+    "zone_security": {
       "type": "array",
-      "description": "Network zones defining trust boundaries and segmentation.",
+      "description": "Security posture enrichment for network zones. Matched by zone_id.",
       "items": {
         "type": "object",
         "properties": {
-          "id": { "type": "string", "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$" },
-          "name": { "type": "string", "minLength": 1 },
-          "zone_type": {
+          "zone_id": {
             "type": "string",
-            "enum": ["external", "dmz", "private", "management", "data", "custom"],
-            "description": "Zone classification. Custom values permitted for non-standard topologies."
+            "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+            "description": "References a network_zone ID in networks.yaml."
           },
-          "internet_routable": { "type": "boolean" },
-          "trust": {
-            "type": "string",
-            "enum": ["trusted", "semi_trusted", "untrusted"]
-          },
-          "description": { "type": "string" },
           "segmentation_type": {
             "type": "string",
             "enum": ["physical", "vlan", "vpc", "subnet", "namespace", "security_group", "microsegment", "none"],
-            "description": "Network segmentation enforcement mechanism. none=logical-only, higher risk."
+            "description": "Network segmentation enforcement mechanism."
           },
           "egress_filtered": {
             "type": "boolean",
@@ -48,21 +53,21 @@
           "allowed_ingress_zones": {
             "type": "array",
             "items": { "type": "string" },
-            "description": "Zone IDs allowed to send traffic into this zone. Enables firewall ACL validation."
+            "description": "Zone IDs allowed to send traffic into this zone."
           },
           "allowed_egress_zones": {
             "type": "array",
             "items": { "type": "string" },
-            "description": "Zone IDs this zone is allowed to send traffic to. Enables egress policy validation."
+            "description": "Zone IDs this zone is allowed to send traffic to."
           }
         },
-        "required": ["id", "name", "zone_type", "internet_routable", "trust"],
+        "required": ["zone_id"],
         "additionalProperties": true
       }
     },
     "infrastructure_resources": {
       "type": "array",
-      "description": "Infrastructure resources deployed into network zones — WAFs, load balancers, logging, secrets managers, etc.",
+      "description": "Security infrastructure resources deployed into network zones — WAFs, IDS/IPS, logging, secrets managers, etc.",
       "items": {
         "type": "object",
         "properties": {
@@ -75,28 +80,19 @@
           },
           "technology": { "type": "string", "minLength": 1 },
           "zone_id": { "type": "string" },
-          "version": {
-            "type": "string",
-            "description": "Product version. Enables CVE-aware vulnerability checks."
-          },
-          "high_availability": {
-            "type": "boolean",
-            "description": "Whether this resource is deployed in HA mode."
-          },
+          "version": { "type": "string" },
+          "high_availability": { "type": "boolean" },
           "encryption_key_management": {
             "type": "string",
-            "enum": ["provider_managed", "customer_managed", "byok", "hsm"],
-            "description": "Key management model for encryption resources."
+            "enum": ["provider_managed", "customer_managed", "byok", "hsm"]
           },
-          "compliance_certified": {
-            "type": "boolean",
-            "description": "Whether this resource has relevant compliance certifications (SOC2, ISO 27001, etc.)."
-          }
+          "compliance_certified": { "type": "boolean" }
         },
         "required": ["id", "name", "resource_type", "technology", "zone_id"],
         "additionalProperties": true
       }
     }
   },
+  "required": ["network_security_metadata"],
   "additionalProperties": true
 }

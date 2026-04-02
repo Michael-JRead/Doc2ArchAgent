@@ -1317,9 +1317,12 @@ tools/
 └── requirements.txt                                 ← Python dependencies (pyyaml)
 
 schemas/
-├── system.schema.json                               ← system.yaml validation
-├── networks.schema.json                             ← networks.yaml validation
-├── deployment.schema.json                           ← deployment YAML validation
+├── system.schema.json                               ← system.yaml validation (architecture core)
+├── system-security.schema.json                      ← system-security.yaml validation (security overlay)
+├── networks.schema.json                             ← networks.yaml validation (zone topology)
+├── networks-security.schema.json                    ← networks-security.yaml validation (security overlay)
+├── deployment.schema.json                           ← deployment YAML validation (zone placements)
+├── deployment-security.schema.json                  ← deployment-security.yaml validation (security overlay)
 ├── provenance.schema.json                           ← provenance.yaml validation
 ├── pattern-meta.schema.json                         ← pattern.meta.yaml validation
 ├── manifest.schema.json                             ← manifest.yaml validation
@@ -1327,9 +1330,12 @@ schemas/
 └── doc-inventory.schema.json                        ← pattern doc-inventory.yaml validation
 
 schemas/
-├── system.schema.json                               ← System YAML schema
-├── networks.schema.json                             ← Networks YAML schema
-├── deployment.schema.json                           ← Deployment YAML schema
+├── system.schema.json                               ← System YAML schema (architecture core)
+├── system-security.schema.json                      ← System security overlay schema (CIA, TLS, auth, compliance)
+├── networks.schema.json                             ← Networks YAML schema (zone topology)
+├── networks-security.schema.json                    ← Networks security overlay schema (zone posture, infra resources)
+├── deployment.schema.json                           ← Deployment YAML schema (zone placements)
+├── deployment-security.schema.json                  ← Deployment security overlay schema (runtime hardening)
 ├── provenance.schema.json                           ← Provenance YAML schema
 ├── pattern-meta.schema.json                         ← Pattern metadata schema
 ├── manifest.schema.json                             ← Deployment manifest schema

@@ -1,0 +1,361 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Michael-JRead/Doc2ArchAgent/schemas/system-security.schema.json",
+  "title": "Doc2ArchAgent System Security YAML Schema",
+  "description": "Schema for system-security.yaml — security enrichment overlay for system.yaml. Linked by component, listener, and relationship IDs.",
+  "type": "object",
+  "properties": {
+    "security_metadata": {
+      "type": "object",
+      "description": "Security-specific metadata linked to a system.yaml.",
+      "properties": {
+        "system_ref": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Name or ID of the system.yaml this security overlay enriches."
+        },
+        "compliance_frameworks": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Regulatory frameworks this system must comply with (e.g., PCI-DSS, SOC2, GDPR, HIPAA, ISO27001)."
+        },
+        "business_criticality": {
+          "type": "string",
+          "enum": ["mission_critical", "critical", "important", "operational", "archive"],
+          "description": "Business criticality tier. Drives risk impact scoring and SLA expectations."
+        },
+        "data_sensitivity_level": {
+          "type": "string",
+          "enum": ["public", "internal", "confidential", "restricted"],
+          "description": "System-wide default data sensitivity. Individual data_entities may override."
+        },
+        "threat_model_version": {
+          "type": "string",
+          "description": "Version identifier for the threat model (e.g., 1.0, 2024-Q4-review)."
+        },
+        "last_review_date": {
+          "type": "string",
+          "format": "date",
+          "description": "ISO 8601 date of last security/architecture review."
+        },
+        "reviewer": {
+          "type": "string",
+          "description": "Person or team who conducted the last review."
+        }
+      },
+      "required": ["system_ref"],
+      "additionalProperties": true
+    },
+    "component_security": {
+      "type": "array",
+      "description": "Security enrichment for components defined in system.yaml. Matched by component_id.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "component_id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+            "description": "References a component ID in system.yaml."
+          },
+          "confidentiality": {
+            "type": "string",
+            "enum": ["critical", "high", "medium", "low"],
+            "description": "Confidentiality requirement (CIA triad). Critical components require encryption and strong access control."
+          },
+          "integrity": {
+            "type": "string",
+            "enum": ["critical", "high", "medium", "low"],
+            "description": "Integrity requirement. Critical components trigger tampering risk rules."
+          },
+          "availability": {
+            "type": "string",
+            "enum": ["critical", "high", "medium", "low"],
+            "description": "Availability requirement. Critical components trigger DoS risk rules."
+          },
+          "dfd_element_type": {
+            "type": "string",
+            "enum": ["process", "data_store", "external_entity"],
+            "description": "Data Flow Diagram element type for STRIDE-per-element applicability."
+          },
+          "stores_data": {
+            "type": "boolean",
+            "default": false,
+            "description": "Whether this component persists data. Enables encryption-at-rest and data retention rules."
+          },
+          "processes_pii": {
+            "type": "boolean",
+            "default": false,
+            "description": "Whether this component processes PII. Triggers GDPR/privacy compliance rules."
+          },
+          "audit_logging": {
+            "type": "boolean",
+            "description": "Whether this component emits audit logs. Required for HIPAA and PCI-DSS."
+          },
+          "audit_log_destination": {
+            "type": "string",
+            "description": "Reference to a logging infrastructure_resource ID where audit logs are sent."
+          },
+          "encryption_at_rest": {
+            "type": "string",
+            "enum": ["none", "aes-256", "aes-128", "rsa", "envelope", "platform_managed", "customer_managed"],
+            "description": "At-rest encryption for data-storing components."
+          },
+          "encryption_key_management": {
+            "type": "string",
+            "enum": ["provider_managed", "customer_managed", "byok", "hsm", "vault"],
+            "description": "How encryption keys are managed."
+          },
+          "secrets_manager_ref": {
+            "type": "string",
+            "description": "Reference to an infrastructure_resource ID for secrets management."
+          },
+          "rto_minutes": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Recovery Time Objective in minutes."
+          },
+          "rpo_minutes": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Recovery Point Objective in minutes."
+          },
+          "slsa_level": {
+            "type": "integer",
+            "enum": [0, 1, 2, 3],
+            "description": "SLSA supply chain integrity level (0=none, 3=highest)."
+          },
+          "sbom_available": {
+            "type": "boolean",
+            "default": false,
+            "description": "Whether an SBOM exists for this component."
+          },
+          "listener_security": {
+            "type": "array",
+            "description": "Security enrichment for listeners on this component. Matched by listener_id.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "listener_id": {
+                  "type": "string",
+                  "description": "References a listener ID on the parent component in system.yaml."
+                },
+                "tls_enabled": { "type": "boolean" },
+                "tls_version_min": { "type": "string" },
+                "tls_version_max": { "type": "string" },
+                "cipher_suite_policy": {
+                  "type": "string",
+                  "enum": ["modern", "intermediate", "legacy", "custom"]
+                },
+                "forward_secrecy_required": { "type": "boolean" },
+                "certificate_type": {
+                  "type": "string",
+                  "enum": ["dv", "ov", "ev", "self_signed", "internal_ca", "none"]
+                },
+                "mtls_mode": {
+                  "type": "string",
+                  "enum": ["none", "optional", "strict"]
+                },
+                "tls_termination_point": {
+                  "type": "string",
+                  "enum": ["self", "load_balancer", "api_gateway", "service_mesh", "cdn"]
+                },
+                "authn_mechanism": {
+                  "type": "string",
+                  "enum": [
+                    "none", "api_key", "basic", "oauth2", "oidc", "saml",
+                    "mtls", "certificate", "jwt", "mfa", "password", "custom"
+                  ]
+                },
+                "authz_required": { "type": "boolean" },
+                "rate_limiting_enabled": { "type": "boolean" },
+                "rate_limit_rps": { "type": "integer", "minimum": 1 },
+                "throttle_by": {
+                  "type": "string",
+                  "enum": ["ip", "api_key", "user", "tenant", "none"]
+                },
+                "exposure": {
+                  "type": "string",
+                  "enum": ["public", "partner", "internal", "localhost"]
+                },
+                "api_type": {
+                  "type": "string",
+                  "enum": ["rest", "graphql", "grpc", "soap", "websocket", "tcp_raw", "udp"]
+                },
+                "admin_interface": { "type": "boolean", "default": false },
+                "session_timeout_minutes": { "type": "integer", "minimum": 1 },
+                "error_detail_exposure": {
+                  "type": "string",
+                  "enum": ["none", "generic", "detailed", "stack_trace"]
+                },
+                "cors_policy": {
+                  "type": "string",
+                  "enum": ["none", "restrictive", "permissive", "wildcard"]
+                }
+              },
+              "required": ["listener_id"],
+              "additionalProperties": true
+            }
+          }
+        },
+        "required": ["component_id"],
+        "additionalProperties": true
+      }
+    },
+    "relationship_security": {
+      "type": "array",
+      "description": "Security enrichment for component relationships. Matched by relationship_id.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "relationship_id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+            "description": "References a component_relationship ID in system.yaml."
+          },
+          "interaction_type": {
+            "type": "string",
+            "enum": ["request_response", "publish_subscribe", "fire_and_forget", "streaming", "batch"]
+          },
+          "mutual_authentication": { "type": "boolean" },
+          "input_validation": {
+            "type": "string",
+            "enum": ["none", "schema", "allowlist", "waf", "custom"]
+          },
+          "replay_protection": { "type": "boolean" },
+          "data_masking": { "type": "boolean" }
+        },
+        "required": ["relationship_id"],
+        "additionalProperties": true
+      }
+    },
+    "external_system_security": {
+      "type": "array",
+      "description": "Security enrichment for external systems. Matched by external_system_id.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "external_system_id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+            "description": "References an external_system ID in system.yaml."
+          },
+          "trust_level": {
+            "type": "string",
+            "enum": ["trusted", "semi_trusted", "untrusted"]
+          },
+          "data_classification": {
+            "type": "string",
+            "enum": ["public", "internal", "confidential", "restricted"]
+          },
+          "authn_mechanism": {
+            "type": "string",
+            "enum": [
+              "none", "api_key", "basic", "oauth2", "oidc", "saml",
+              "mtls", "certificate", "jwt", "mfa", "password", "custom"
+            ]
+          },
+          "tls_required": { "type": "boolean" },
+          "sla_tier": {
+            "type": "string",
+            "enum": ["platinum", "gold", "silver", "bronze", "none"]
+          },
+          "vendor_security_assessed": { "type": "boolean" },
+          "vendor_security_assessment_date": {
+            "type": "string",
+            "format": "date"
+          },
+          "data_residency": { "type": "string" }
+        },
+        "required": ["external_system_id"],
+        "additionalProperties": true
+      }
+    },
+    "data_entities": {
+      "type": "array",
+      "description": "Data entities with regulatory annotations for compliance rules.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$" },
+          "name": { "type": "string", "minLength": 1 },
+          "description": { "type": "string" },
+          "classification": {
+            "type": "string",
+            "enum": ["public", "internal", "confidential", "restricted"]
+          },
+          "contains_pii": { "type": "boolean", "default": false },
+          "contains_phi": { "type": "boolean", "default": false },
+          "contains_pci": { "type": "boolean", "default": false },
+          "data_subject_type": {
+            "type": "string",
+            "enum": ["customer", "employee", "partner", "public", "system"]
+          },
+          "retention_days": { "type": "integer", "minimum": 0 },
+          "residency_requirements": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "masking_required": { "type": "boolean", "default": false },
+          "origin": {
+            "type": "string",
+            "enum": ["user_input", "system_generated", "third_party", "derived"]
+          },
+          "volume": {
+            "type": "string",
+            "enum": ["low", "medium", "high", "very_high"]
+          }
+        },
+        "required": ["id", "name"],
+        "additionalProperties": true
+      }
+    },
+    "trust_boundaries": {
+      "type": "array",
+      "description": "Trust boundaries between network zones with enforcement details.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$" },
+          "name": { "type": "string", "minLength": 1 },
+          "description": { "type": "string" },
+          "source_zone": { "type": "string" },
+          "target_zone": { "type": "string" },
+          "boundary_type": {
+            "type": "string",
+            "enum": ["network", "process", "privilege", "jurisdiction", "vendor"]
+          },
+          "enforcement_mechanism": {
+            "type": "string",
+            "enum": ["firewall", "api_gateway", "service_mesh", "iam_policy", "physical", "none"]
+          },
+          "inspection_enabled": { "type": "boolean" },
+          "bidirectional": { "type": "boolean", "default": true }
+        },
+        "required": ["id", "name", "source_zone", "target_zone"],
+        "additionalProperties": true
+      }
+    },
+    "accepted_risks": {
+      "type": "array",
+      "description": "Risks reviewed and accepted by stakeholders.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$" },
+          "finding_pattern": { "type": "string" },
+          "entity_id": { "type": "string" },
+          "justification": { "type": "string", "minLength": 10 },
+          "accepted_by": { "type": "string", "minLength": 1 },
+          "review_date": { "type": "string", "format": "date" },
+          "expires": { "type": "string", "format": "date" },
+          "compensating_controls": { "type": "string" },
+          "risk_score": { "type": "integer", "minimum": 1, "maximum": 16 }
+        },
+        "required": ["id", "finding_pattern", "justification", "accepted_by", "review_date"],
+        "additionalProperties": true
+      }
+    }
+  },
+  "required": ["security_metadata"],
+  "additionalProperties": true
+}

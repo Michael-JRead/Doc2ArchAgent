@@ -112,6 +112,7 @@ Fallback for non-deployment, non-pattern diagram discovery.
 1. Read `architecture/<system-id>/system.yaml` (or `deployments/<id>/system.yaml` for composed deployments)
 2. Read `architecture/networks.yaml` (or `deployments/<id>/networks.yaml`)
 3. Read any deployment files under `architecture/<system-id>/deployments/` or `deployments/<id>/deployment.yaml`
+3b. If security overlay files exist (`system-security.yaml`, `networks-security.yaml`, `deployment-security.yaml`), read them for the Security Considerations section. If absent, note "Security analysis not yet performed."
 4. Read `diagrams/_index.yaml` from the appropriate scope to discover available diagrams
 5. If `provenance.yaml` exists, read it for confidence data
 6. Ask user which document type and format
@@ -137,7 +138,7 @@ Sections (in order):
 | 6 | Component Design | components + component_relationships |
 | 7 | Data Flow | relationships with data_classification |
 | 8 | Deployment Architecture | deployments/ files + networks.yaml |
-| 9 | Security Considerations | security fields, compliance_frameworks |
+| 9 | Security Considerations | system-security.yaml, networks-security.yaml (falls back to inline fields in system.yaml) |
 | 10 | Technology Stack | extracted from all technology fields |
 | 11 | Assumptions & Constraints | from metadata or provenance gaps |
 | 12 | Appendix: Glossary | auto-generated from entity names |

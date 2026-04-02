@@ -1974,3 +1974,184 @@ class TestDiagramNamingConvention:
     def test_copilot_instructions_lists_diagram_index_schema(self):
         content = COPILOT_INSTRUCTIONS_PATH.read_text()
         assert "diagram-index.schema.json" in content
+
+
+# ==========================================================================
+# L7 — Security Schema Split
+# ==========================================================================
+
+
+class TestSecuritySchemaSplit:
+    """Tests for the system/networks/deployment security overlay split."""
+
+    # --- Schema existence and validity ---
+
+    def test_system_security_schema_exists(self):
+        assert (SCHEMAS_DIR / "system-security.schema.json").exists()
+
+    def test_networks_security_schema_exists(self):
+        assert (SCHEMAS_DIR / "networks-security.schema.json").exists()
+
+    def test_deployment_security_schema_exists(self):
+        assert (SCHEMAS_DIR / "deployment-security.schema.json").exists()
+
+    # --- Example security files exist ---
+
+    def test_example_system_security_exists(self):
+        assert (EXAMPLES_DIR / "payment-platform" / "system-security.yaml").exists()
+
+    def test_example_networks_security_exists(self):
+        assert (EXAMPLES_DIR / "networks-security.yaml").exists()
+
+    # --- Example security files are valid YAML ---
+
+    def test_example_system_security_valid_yaml(self):
+        path = EXAMPLES_DIR / "payment-platform" / "system-security.yaml"
+        data = yaml.safe_load(path.read_text())
+        assert "security_metadata" in data
+        assert "component_security" in data
+
+    def test_example_networks_security_valid_yaml(self):
+        path = EXAMPLES_DIR / "networks-security.yaml"
+        data = yaml.safe_load(path.read_text())
+        assert "network_security_metadata" in data
+        assert "zone_security" in data
+
+    # --- Example security files conform to schemas ---
+
+    def test_example_system_security_conforms_to_schema(self):
+        try:
+            import jsonschema
+        except ImportError:
+            pytest.skip("jsonschema not installed")
+        schema = json.loads((SCHEMAS_DIR / "system-security.schema.json").read_text())
+        data = yaml.safe_load(
+            (EXAMPLES_DIR / "payment-platform" / "system-security.yaml").read_text())
+        jsonschema.validate(data, schema)
+
+    def test_example_networks_security_conforms_to_schema(self):
+        try:
+            import jsonschema
+        except ImportError:
+            pytest.skip("jsonschema not installed")
+        schema = json.loads((SCHEMAS_DIR / "networks-security.schema.json").read_text())
+        data = yaml.safe_load(
+            (EXAMPLES_DIR / "networks-security.yaml").read_text())
+        jsonschema.validate(data, schema)
+
+    # --- Stripped system.yaml still valid ---
+
+    def test_stripped_system_yaml_still_valid(self):
+        """system.yaml without inline security fields still passes validation."""
+        result = subprocess.run(
+            [sys.executable, str(TOOLS_DIR / "validate.py"),
+             str(EXAMPLES_DIR / "payment-platform" / "system.yaml"),
+             str(EXAMPLES_DIR / "networks.yaml"),
+             "--format", "json"],
+            capture_output=True, text=True)
+        data = json.loads(result.stdout)
+        assert data["valid"] is True, f"Errors: {data.get('errors')}"
+
+    # --- Cross-reference validation works ---
+
+    def test_validate_with_security_files_passes(self):
+        """validate.py with --security flag produces no errors."""
+        result = subprocess.run(
+            [sys.executable, str(TOOLS_DIR / "validate.py"),
+             str(EXAMPLES_DIR / "payment-platform" / "system.yaml"),
+             str(EXAMPLES_DIR / "networks.yaml"),
+             "--security", str(EXAMPLES_DIR / "payment-platform" / "system-security.yaml"),
+             "--networks-security", str(EXAMPLES_DIR / "networks-security.yaml"),
+             "--format", "json"],
+            capture_output=True, text=True)
+        data = json.loads(result.stdout)
+        assert data["valid"] is True, f"Errors: {data.get('errors')}"
+
+    # --- Merge function works ---
+
+    def test_merge_security_overlay_function(self):
+        """merge_security_overlays() produces unified dict with security fields."""
+        from importlib.util import spec_from_file_location, module_from_spec
+        spec = spec_from_file_location("threat_rules", TOOLS_DIR / "threat-rules.py")
+        mod = module_from_spec(spec)
+        spec.loader.exec_module(mod)
+
+        base_system = yaml.safe_load(
+            (EXAMPLES_DIR / "payment-platform" / "system.yaml").read_text())
+        sys_sec = yaml.safe_load(
+            (EXAMPLES_DIR / "payment-platform" / "system-security.yaml").read_text())
+
+        merged, _, _ = mod.merge_security_overlays(base_system, None, None, sys_sec)
+
+        # Check security fields were merged onto components
+        comp_index = {c["id"]: c for c in merged.get("components", [])}
+        assert "confidentiality" in comp_index["payment-api"]
+        assert comp_index["payment-api"]["confidentiality"] == "high"
+        assert comp_index["payment-db"]["encryption_at_rest"] == "aes-256"
+
+        # Check listener security merged
+        for listener in comp_index["payment-api"].get("listeners", []):
+            if listener["id"] == "payment-api-https":
+                assert listener["tls_enabled"] is True
+                assert listener["authn_mechanism"] == "oauth2"
+                break
+        else:
+            pytest.fail("payment-api-https listener not found")
+
+        # Check data_entities merged
+        assert len(merged.get("data_entities", [])) == 2
+
+    # --- Threat rules work with split files ---
+
+    def test_threat_rules_with_security_flag(self):
+        """threat-rules.py with --security flag produces findings."""
+        result = subprocess.run(
+            [sys.executable, str(TOOLS_DIR / "threat-rules.py"),
+             str(EXAMPLES_DIR / "payment-platform" / "system.yaml"),
+             "--networks", str(EXAMPLES_DIR / "networks.yaml"),
+             "--security", str(EXAMPLES_DIR / "payment-platform" / "system-security.yaml"),
+             "--networks-security", str(EXAMPLES_DIR / "networks-security.yaml"),
+             "--format", "json"],
+            capture_output=True, text=True)
+        assert result.returncode in (0, 1), f"Crash: {result.stderr}"
+        output = json.loads(result.stdout)
+        # JSON format may be a bare list or {"findings": [...]}
+        if isinstance(output, dict):
+            findings = output.get("findings", [])
+        else:
+            findings = output
+        assert isinstance(findings, list)
+        assert len(findings) > 0, "Expected at least one finding"
+
+    # --- Test fixture security overlay ---
+
+    def test_fixture_security_overlay_exists(self):
+        assert (REGRESSION_DIR / "threat-model-system-security.yaml").exists()
+
+    def test_fixture_security_overlay_valid(self):
+        data = yaml.safe_load(
+            (REGRESSION_DIR / "threat-model-system-security.yaml").read_text())
+        assert "security_metadata" in data
+        assert "component_security" in data
+
+    # --- Compose generates security stubs ---
+
+    def test_compose_generates_security_stubs(self, tmp_path):
+        """compose.py generates system-security.yaml and networks-security.yaml."""
+        from importlib.util import spec_from_file_location, module_from_spec
+        spec = spec_from_file_location("compose", TOOLS_DIR / "compose.py")
+        mod = module_from_spec(spec)
+        spec.loader.exec_module(mod)
+
+        manifest_src = PROJECT_ROOT / "examples" / "payment-platform" / "manifest.yaml"
+        if not manifest_src.exists():
+            pytest.skip("No example manifest.yaml")
+
+        import shutil
+        test_manifest = tmp_path / "manifest.yaml"
+        shutil.copy(manifest_src, test_manifest)
+        result = mod.compose(test_manifest, dry_run=False)
+
+        assert (tmp_path / "system-security.yaml").exists()
+        assert (tmp_path / "networks-security.yaml").exists()
+        assert (tmp_path / "deployment-security.yaml").exists()

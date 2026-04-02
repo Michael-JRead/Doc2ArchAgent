@@ -1,0 +1,173 @@
+# Security enrichment overlay for system.yaml — Payment Processing Platform
+# Linked by component/listener/relationship IDs to system.yaml.
+# Consumed by: threat-rules.py, security-reviewer agent, doc-writer agent.
+# NOT consumed by: diagram pipeline, compose.py, ingestion tools.
+
+security_metadata:
+  system_ref: Payment Processing Platform
+  compliance_frameworks:
+    - PCI-DSS
+    - SOC2
+    - GDPR
+  business_criticality: mission_critical
+  data_sensitivity_level: restricted
+  threat_model_version: "2.0"
+  last_review_date: "2026-03-15"
+  reviewer: "Security Architecture Team"
+
+component_security:
+  - component_id: payment-api
+    confidentiality: high
+    integrity: critical
+    availability: critical
+    dfd_element_type: process
+    stores_data: false
+    processes_pii: true
+    audit_logging: true
+    audit_log_destination: elk-stack
+    slsa_level: 2
+    sbom_available: true
+    listener_security:
+      - listener_id: payment-api-https
+        tls_enabled: true
+        tls_version_min: "1.3"
+        tls_version_max: "1.3"
+        cipher_suite_policy: modern
+        forward_secrecy_required: true
+        certificate_type: internal_ca
+        mtls_mode: none
+        tls_termination_point: self
+        authn_mechanism: oauth2
+        authz_required: true
+        rate_limiting_enabled: true
+        rate_limit_rps: 1000
+        throttle_by: tenant
+        exposure: partner
+        api_type: rest
+        admin_interface: false
+        session_timeout_minutes: 30
+        error_detail_exposure: generic
+        cors_policy: restrictive
+
+  - component_id: payment-db
+    confidentiality: critical
+    integrity: critical
+    availability: critical
+    dfd_element_type: data_store
+    stores_data: true
+    processes_pii: true
+    encryption_at_rest: aes-256
+    encryption_key_management: customer_managed
+    secrets_manager_ref: hashicorp-vault
+    audit_logging: true
+    audit_log_destination: elk-stack
+    rto_minutes: 15
+    rpo_minutes: 5
+    slsa_level: 1
+    sbom_available: false
+    listener_security:
+      - listener_id: payment-db-pg
+        tls_enabled: true
+        tls_version_min: "1.2"
+        cipher_suite_policy: intermediate
+        forward_secrecy_required: true
+        certificate_type: internal_ca
+        mtls_mode: strict
+        tls_termination_point: self
+        authn_mechanism: certificate
+        authz_required: true
+        rate_limiting_enabled: false
+        exposure: internal
+        admin_interface: false
+        error_detail_exposure: none
+
+relationship_security:
+  - relationship_id: api-to-db
+    interaction_type: request_response
+    mutual_authentication: true
+    input_validation: schema
+    replay_protection: false
+    data_masking: true
+
+external_system_security:
+  - external_system_id: visa-mastercard
+    trust_level: semi_trusted
+    data_classification: restricted
+    authn_mechanism: mtls
+    tls_required: true
+    sla_tier: platinum
+    vendor_security_assessed: true
+    vendor_security_assessment_date: "2025-11-01"
+    data_residency: US
+
+data_entities:
+  - id: transaction-record
+    name: Transaction Record
+    description: Payment transaction with card details
+    classification: restricted
+    contains_pii: true
+    contains_phi: false
+    contains_pci: true
+    data_subject_type: customer
+    retention_days: 2555
+    residency_requirements:
+      - US
+      - EU
+    masking_required: true
+    origin: user_input
+    volume: high
+
+  - id: cardholder-data
+    name: Cardholder Data
+    description: Primary Account Number (PAN), expiry date, CVV
+    classification: restricted
+    contains_pii: true
+    contains_phi: false
+    contains_pci: true
+    data_subject_type: customer
+    retention_days: 0
+    masking_required: true
+    origin: user_input
+    volume: high
+
+trust_boundaries:
+  - id: internet-to-dmz
+    name: Internet to DMZ
+    description: Boundary between public internet and DMZ network
+    source_zone: internet
+    target_zone: dmz
+    boundary_type: network
+    enforcement_mechanism: firewall
+    inspection_enabled: true
+    bidirectional: true
+
+  - id: dmz-to-app
+    name: DMZ to Application Tier
+    description: Boundary between DMZ and private application network
+    source_zone: dmz
+    target_zone: private-app-tier
+    boundary_type: network
+    enforcement_mechanism: firewall
+    inspection_enabled: false
+    bidirectional: false
+
+  - id: app-to-data
+    name: Application to Data Tier
+    description: Boundary between application and data networks
+    source_zone: private-app-tier
+    target_zone: private-data-tier
+    boundary_type: network
+    enforcement_mechanism: firewall
+    inspection_enabled: false
+    bidirectional: false
+
+accepted_risks:
+  - id: accept-no-replay-protection
+    finding_pattern: no-replay-protection
+    entity_id: api-to-db
+    justification: "Internal database connections use certificate mTLS which provides sufficient replay protection at the transport layer."
+    accepted_by: "Security Architecture Team"
+    review_date: "2026-03-15"
+    expires: "2027-03-15"
+    compensating_controls: "mTLS with certificate rotation every 90 days"
+    risk_score: 4

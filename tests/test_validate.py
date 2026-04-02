@@ -142,6 +142,68 @@ class TestNamingConventions:
 
 # --- Output format tests ---
 
+class TestSecurityOverlayValidation:
+    """Tests for system-security.yaml cross-reference validation."""
+
+    def test_valid_security_cross_references(self):
+        """Valid security file should produce no ARCH012 errors."""
+        examples = Path(__file__).parent.parent / "examples"
+        result = validate(
+            str(examples / "payment-platform" / "system.yaml"),
+            str(examples / "networks.yaml"),
+            security_path=str(examples / "payment-platform" / "system-security.yaml"),
+            networks_security_path=str(examples / "networks-security.yaml"),
+        )
+        arch012_errors = [e for e in result["errors"] if e.get("rule_id") == "ARCH012"]
+        assert arch012_errors == [], f"Unexpected ARCH012 errors: {arch012_errors}"
+
+    def test_invalid_component_id_detected(self, tmp_path):
+        """Security file with non-existent component_id should produce ARCH012."""
+        system = tmp_path / "system.yaml"
+        system.write_text("metadata:\n  name: test\n  description: t\n  owner: t\n  status: active\n"
+                          "components:\n  - id: real-comp\n    name: Real\n    container_id: c\n"
+                          "    component_type: api\n    technology: X\n")
+        sec = tmp_path / "system-security.yaml"
+        sec.write_text("security_metadata:\n  system_ref: test\n"
+                       "component_security:\n  - component_id: fake-comp\n    confidentiality: high\n")
+        result = validate(str(system), security_path=str(sec))
+        arch012 = [e for e in result["errors"] if e.get("rule_id") == "ARCH012"]
+        assert len(arch012) == 1
+        assert "fake-comp" in arch012[0]["message"]
+
+    def test_missing_security_annotation_warning(self, tmp_path):
+        """Components without security annotation should produce ARCH013 warning."""
+        system = tmp_path / "system.yaml"
+        system.write_text("metadata:\n  name: test\n  description: t\n  owner: t\n  status: active\n"
+                          "components:\n  - id: comp-a\n    name: A\n    container_id: c\n"
+                          "    component_type: api\n    technology: X\n"
+                          "  - id: comp-b\n    name: B\n    container_id: c\n"
+                          "    component_type: api\n    technology: X\n")
+        sec = tmp_path / "system-security.yaml"
+        sec.write_text("security_metadata:\n  system_ref: test\n"
+                       "component_security:\n  - component_id: comp-a\n    confidentiality: high\n")
+        result = validate(str(system), security_path=str(sec))
+        arch013 = [w for w in result["warnings"] if w.get("rule_id") == "ARCH013"]
+        assert len(arch013) == 1
+        assert "comp-b" in arch013[0]["message"]
+
+    def test_invalid_zone_id_in_networks_security(self, tmp_path):
+        """Networks security with non-existent zone_id should produce ARCH012."""
+        system = tmp_path / "system.yaml"
+        system.write_text("metadata:\n  name: test\n  description: t\n  owner: t\n  status: active\n")
+        networks = tmp_path / "networks.yaml"
+        networks.write_text("network_zones:\n  - id: real-zone\n    name: Real\n    zone_type: private\n"
+                            "    internet_routable: false\n    trust: trusted\n")
+        net_sec = tmp_path / "networks-security.yaml"
+        net_sec.write_text("network_security_metadata:\n  networks_ref: test\n"
+                           "zone_security:\n  - zone_id: fake-zone\n    segmentation_type: vpc\n")
+        result = validate(str(system), str(networks),
+                          networks_security_path=str(net_sec))
+        arch012 = [e for e in result["errors"] if e.get("rule_id") == "ARCH012"]
+        assert len(arch012) == 1
+        assert "fake-zone" in arch012[0]["message"]
+
+
 class TestOutputFormats:
     """Test all three output formatters."""
 

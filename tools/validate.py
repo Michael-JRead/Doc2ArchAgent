@@ -116,10 +116,27 @@ SARIF_RULES = {
         "help": {"text": "Review the architecture model for correct abstraction levels."},
         "defaultConfiguration": {"level": "warning"},
     },
+    "ARCH012": {
+        "id": "ARCH012",
+        "shortDescription": {"text": "Security cross-reference violation"},
+        "fullDescription": {"text": "A security overlay file references an ID that does not exist in the base file."},
+        "help": {"text": "Ensure all IDs in security files match entities in the corresponding base file."},
+        "defaultConfiguration": {"level": "error"},
+    },
+    "ARCH013": {
+        "id": "ARCH013",
+        "shortDescription": {"text": "Missing security annotation"},
+        "fullDescription": {"text": "A component in system.yaml has no corresponding entry in system-security.yaml."},
+        "help": {"text": "Add a component_security entry for this component."},
+        "defaultConfiguration": {"level": "warning"},
+    },
 }
 
 
-def validate(system_path: str, networks_path: str | None = None) -> dict:
+def validate(system_path: str, networks_path: str | None = None,
+             security_path: str | None = None,
+             networks_security_path: str | None = None,
+             deployment_security_path: str | None = None) -> dict:
     """Run all validation checks and return results as dict."""
     errors: list[dict] = []
     warnings: list[dict] = []
@@ -230,7 +247,7 @@ def validate(system_path: str, networks_path: str | None = None) -> dict:
         for listener in comp.get('listeners', []):
             if not isinstance(listener, dict):
                 continue
-            for field in ('id', 'protocol', 'port', 'tls_enabled', 'authn_mechanism', 'authz_required'):
+            for field in ('id', 'protocol', 'port'):
                 if field not in listener:
                     add_error(
                         f"listener '{listener.get('id', '?')}' on component '{comp.get('id', '?')}': "
@@ -413,6 +430,80 @@ def validate(system_path: str, networks_path: str | None = None) -> dict:
                 rule_id="ARCH011",
             )
 
+    # --- 14. Security overlay cross-reference validation ---
+    if security_path:
+        try:
+            with open(security_path) as f:
+                sec_data = yaml.safe_load(f) or {}
+        except Exception as e:
+            add_error(f"Cannot load security YAML: {e}", rule_id="ARCH001", file=security_path)
+            sec_data = {}
+
+        # Build listener index: (comp_id, listener_id) -> True
+        listener_ids: set[tuple[str, str]] = set()
+        for comp in system.get('components', []):
+            if isinstance(comp, dict):
+                cid = comp.get('id', '')
+                for listener in comp.get('listeners', []):
+                    if isinstance(listener, dict):
+                        listener_ids.add((cid, listener.get('id', '')))
+
+        rel_ids = {r.get('id', '') for r in system.get('component_relationships', []) if isinstance(r, dict)}
+        ext_ids = {e.get('id', '') for e in system.get('external_systems', []) if isinstance(e, dict)}
+        sec_comp_ids: set[str] = set()
+
+        for cs in sec_data.get('component_security', []):
+            cid = cs.get('component_id', '')
+            sec_comp_ids.add(cid)
+            if cid and cid not in components:
+                add_error(
+                    f"system-security.yaml: component_id '{cid}' does not exist in system.yaml",
+                    rule_id="ARCH012", file=security_path)
+            for ls in cs.get('listener_security', []):
+                lid = ls.get('listener_id', '')
+                if lid and (cid, lid) not in listener_ids:
+                    add_error(
+                        f"system-security.yaml: listener_id '{lid}' on component '{cid}' "
+                        f"does not exist in system.yaml",
+                        rule_id="ARCH012", file=security_path)
+
+        for rs in sec_data.get('relationship_security', []):
+            rid = rs.get('relationship_id', '')
+            if rid and rid not in rel_ids:
+                add_error(
+                    f"system-security.yaml: relationship_id '{rid}' does not exist in system.yaml",
+                    rule_id="ARCH012", file=security_path)
+
+        for es in sec_data.get('external_system_security', []):
+            eid = es.get('external_system_id', '')
+            if eid and eid not in ext_ids:
+                add_error(
+                    f"system-security.yaml: external_system_id '{eid}' does not exist in system.yaml",
+                    rule_id="ARCH012", file=security_path)
+
+        # Coverage warnings — components without security annotations
+        for comp_id in components:
+            if comp_id not in sec_comp_ids:
+                add_warning(
+                    f"component '{comp_id}' has no security annotation in system-security.yaml",
+                    rule_id="ARCH013", file=security_path)
+
+    if networks_security_path and networks:
+        try:
+            with open(networks_security_path) as f:
+                net_sec = yaml.safe_load(f) or {}
+        except Exception as e:
+            add_error(f"Cannot load networks-security YAML: {e}", rule_id="ARCH001",
+                      file=networks_security_path)
+            net_sec = {}
+
+        for zs in net_sec.get('zone_security', []):
+            zid = zs.get('zone_id', '')
+            if zid and zid not in zones:
+                add_error(
+                    f"networks-security.yaml: zone_id '{zid}' does not exist in networks.yaml",
+                    rule_id="ARCH012", file=networks_security_path)
+
     return {
         "valid": len(errors) == 0,
         "errors": errors,
@@ -554,6 +645,12 @@ def main():
     )
     parser.add_argument("system_yaml", help="Path to system.yaml file")
     parser.add_argument("networks_yaml", nargs="?", default=None, help="Path to networks.yaml file (optional)")
+    parser.add_argument("--security", dest="security_yaml", default=None,
+                        help="Path to system-security.yaml (optional)")
+    parser.add_argument("--networks-security", dest="networks_security_yaml", default=None,
+                        help="Path to networks-security.yaml (optional)")
+    parser.add_argument("--deployment-security", dest="deployment_security_yaml", default=None,
+                        help="Path to deployment-security.yaml (optional)")
     parser.add_argument(
         "--format", dest="output_format", choices=["json", "table", "sarif"],
         default="json", help="Output format (default: json)",
@@ -573,7 +670,25 @@ def main():
         if candidate.exists():
             networks_path = str(candidate)
 
-    result = validate(args.system_yaml, networks_path)
+    # Auto-detect security files if not provided
+    security_path = args.security_yaml
+    if not security_path:
+        candidate = Path(args.system_yaml).parent / 'system-security.yaml'
+        if candidate.exists():
+            security_path = str(candidate)
+
+    networks_security_path = args.networks_security_yaml
+    if not networks_security_path and networks_path:
+        candidate = Path(networks_path).parent / 'networks-security.yaml'
+        if candidate.exists():
+            networks_security_path = str(candidate)
+
+    deployment_security_path = args.deployment_security_yaml
+
+    result = validate(args.system_yaml, networks_path,
+                      security_path=security_path,
+                      networks_security_path=networks_security_path,
+                      deployment_security_path=deployment_security_path)
 
     # Format output
     formatters = {
