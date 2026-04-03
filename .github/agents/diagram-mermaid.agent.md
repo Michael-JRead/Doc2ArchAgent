@@ -2,6 +2,7 @@
 description: Generates Mermaid graph/subgraph diagrams from the layout plan.
 tools: ['read', 'edit', 'execute']
 disable-model-invocation: true
+agents: ['diagram-plantuml', 'diagram-drawio', 'diagram-generator', 'validator']
 handoffs:
   - label: "Generate PlantUML diagrams"
     agent: diagram-plantuml
@@ -14,7 +15,7 @@ handoffs:
     prompt: "Return to the diagram orchestrator for layout plan changes."
   - label: "Validate"
     agent: validator
-    prompt: "Validate the generated diagrams and architecture artifacts."
+    prompt: "Validate the generated diagrams and architecture YAML for structural correctness and referential integrity. Include security overlay files in validation scope."
 ---
 
 <!-- Copyright (c) 2026 Michael J. Read. All rights reserved. -->

@@ -2,7 +2,7 @@
 description: Reads architecture YAML and generates a layout plan, then dispatches to diagram renderers.
 argument-hint: Which diagrams? (context, container, component, deployment, or all)
 tools: ['agent', 'read', 'edit', 'search', 'todo']
-agents: ['diagram-mermaid', 'diagram-plantuml', 'diagram-drawio', 'diagram-structurizr', 'diagram-d2']
+agents: ['diagram-mermaid', 'diagram-plantuml', 'diagram-drawio', 'diagram-structurizr', 'diagram-d2', 'diagram-diff', 'doc-writer', 'architect', 'security-reviewer', 'validator']
 handoffs:
   - label: "Generate Mermaid diagrams"
     agent: diagram-mermaid

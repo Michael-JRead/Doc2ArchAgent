@@ -2,6 +2,7 @@
 description: Security reviewer that analyzes architecture YAML for vulnerabilities, trust boundary issues, blast radius, and network crossing risks.
 argument-hint: Which system to review? Or say "review all"
 tools: ['read', 'search', 'web']
+agents: ['architect', 'deployer', 'diagram-generator', 'validator', 'doc-writer']
 handoffs:
   - label: "Fix in architecture"
     agent: architect
@@ -14,7 +15,10 @@ handoffs:
     prompt: "Generate architecture diagrams including security overlays."
   - label: "Validate"
     agent: validator
-    prompt: "Validate architecture YAML for structural correctness."
+    prompt: "Validate architecture YAML for structural correctness and referential integrity. Include security overlay files in validation scope."
+  - label: "Generate security documentation"
+    agent: doc-writer
+    prompt: "Generate security findings documentation including STRIDE analysis results and compliance mapping."
 ---
 
 <!-- Copyright (c) 2026 Michael J. Read. All rights reserved. -->

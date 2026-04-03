@@ -1,0 +1,31 @@
+# Setup steps for GitHub Copilot coding agent
+# This workflow configures the cloud agent's environment so it can run
+# Doc2ArchAgent's deterministic Python tools (validate, threat-rules, compose, etc.)
+
+name: "Copilot Setup Steps"
+on: workflow_dispatch
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install core + dev dependencies
+        run: pip install -e ".[dev]"
+
+      - name: Verify tools are available
+        run: python tools/detect-tools.py
+
+      - name: Configure shell for cloud agent
+        run: |
+          cat > .github/shell-config.yaml << 'EOF'
+          shell_type: linux
+          custom_shell_notes: "GitHub Actions Ubuntu runner — bash shell"
+          EOF

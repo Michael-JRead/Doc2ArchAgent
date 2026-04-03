@@ -2,6 +2,7 @@
 description: Validates architecture YAML for structural correctness, referential integrity, and naming conventions.
 argument-hint: Which system to validate? Or say "validate all"
 tools: ['read', 'search', 'execute']
+agents: ['architect', 'deployer', 'security-reviewer', 'pattern-manager', 'diagram-generator']
 handoffs:
   - label: "Fix issues in architecture"
     agent: architect
@@ -11,10 +12,13 @@ handoffs:
     prompt: "Return to the deployer agent to fix deployment validation errors."
   - label: "Review security"
     agent: security-reviewer
-    prompt: "Analyze the architecture for security vulnerabilities."
+    prompt: "Analyze the architecture for security vulnerabilities and trust boundary issues. Read system-security.yaml, networks-security.yaml, and deployment-security.yaml alongside base files."
   - label: "Fix pattern issues"
     agent: pattern-manager
     prompt: "Return to pattern manager to fix pattern-related validation errors."
+  - label: "Generate diagrams"
+    agent: diagram-generator
+    prompt: "Generate architecture diagrams from the validated YAML model."
 ---
 
 <!-- Copyright (c) 2026 Michael J. Read. All rights reserved. -->

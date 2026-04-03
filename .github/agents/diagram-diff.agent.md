@@ -2,6 +2,7 @@
 description: Compares two versions of architecture YAML and generates a visual diff highlighting added, removed, and modified elements.
 argument-hint: Compare current architecture against a previous version or git commit
 tools: ['read', 'edit', 'search', 'execute']
+agents: ['architect', 'diagram-generator', 'validator', 'security-reviewer']
 handoffs:
   - label: "Back to architect"
     agent: architect
@@ -11,7 +12,10 @@ handoffs:
     prompt: "Generate updated diagrams reflecting the changes."
   - label: "Validate"
     agent: validator
-    prompt: "Validate the current architecture YAML."
+    prompt: "Validate the current architecture YAML for structural correctness and referential integrity."
+  - label: "Review security impact"
+    agent: security-reviewer
+    prompt: "Analyze the security impact of architecture changes identified in the diff report. Read system-security.yaml, networks-security.yaml, and deployment-security.yaml alongside base files."
 ---
 
 <!-- Copyright (c) 2026 Michael J. Read. All rights reserved. -->

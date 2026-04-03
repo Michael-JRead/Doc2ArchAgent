@@ -338,6 +338,127 @@ def _run_confidence(input_path: Path, output_dir: Path, **kwargs) -> StageResult
         )
 
 
+def _run_threat(input_path: Path, output_dir: Path, **kwargs) -> StageResult:
+    """Run threat rule evaluation stage."""
+    import time
+    start = time.monotonic()
+
+    try:
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "threat_rules", Path(__file__).parent / "threat-rules.py"
+        )
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+
+        # Find system.yaml
+        system_yaml = None
+        for candidate in [
+            output_dir / "system.yaml",
+            output_dir.parent / "system.yaml",
+            input_path if input_path.suffix in (".yaml", ".yml") else None,
+        ]:
+            if candidate and candidate.exists():
+                system_yaml = candidate
+                break
+
+        if not system_yaml:
+            return StageResult(
+                stage=PipelineStage.THREAT,
+                status="skipped",
+                duration_ms=int((time.monotonic() - start) * 1000),
+                errors=["No system.yaml found for threat analysis"],
+            )
+
+        # Find networks.yaml
+        networks_yaml = None
+        for candidate in [
+            output_dir / "networks.yaml",
+            output_dir.parent / "networks.yaml",
+        ]:
+            if candidate.exists():
+                networks_yaml = candidate
+                break
+
+        result = mod.evaluate_threats(
+            str(system_yaml),
+            networks_path=str(networks_yaml) if networks_yaml else None,
+            environment=kwargs.get("environment", "production"),
+        )
+        elapsed = int((time.monotonic() - start) * 1000)
+
+        findings = result.get("findings", [])
+        by_severity = {}
+        for f in findings:
+            sev = f.get("severity", "info")
+            by_severity[sev] = by_severity.get(sev, 0) + 1
+
+        return StageResult(
+            stage=PipelineStage.THREAT,
+            status="success" if not findings else "warning",
+            duration_ms=elapsed,
+            summary={
+                "total_findings": len(findings),
+                **by_severity,
+            },
+        )
+    except Exception as e:
+        return StageResult(
+            stage=PipelineStage.THREAT,
+            status="error",
+            duration_ms=int((time.monotonic() - start) * 1000),
+            errors=[str(e)],
+        )
+
+
+def _run_resolve(input_path: Path, output_dir: Path, **kwargs) -> StageResult:
+    """Run cross-document entity resolution stage."""
+    import time
+    start = time.monotonic()
+
+    try:
+        from tools.entity_resolver import resolve_entities
+
+        # Find provenance.yaml
+        prov_path = None
+        for candidate in [
+            output_dir / "provenance.yaml",
+            output_dir.parent / "provenance.yaml",
+        ]:
+            if candidate.exists():
+                prov_path = candidate
+                break
+
+        if not prov_path:
+            return StageResult(
+                stage=PipelineStage.RESOLVE,
+                status="skipped",
+                duration_ms=int((time.monotonic() - start) * 1000),
+                errors=["No provenance.yaml found for entity resolution"],
+            )
+
+        result = resolve_entities(prov_path)
+        elapsed = int((time.monotonic() - start) * 1000)
+
+        return StageResult(
+            stage=PipelineStage.RESOLVE,
+            status="success",
+            duration_ms=elapsed,
+            summary={
+                "entities_resolved": result.get("resolved", 0),
+                "conflicts": result.get("conflicts", 0),
+                "merges": result.get("merges", 0),
+            },
+        )
+    except Exception as e:
+        return StageResult(
+            stage=PipelineStage.RESOLVE,
+            status="error",
+            duration_ms=int((time.monotonic() - start) * 1000),
+            errors=[str(e)],
+        )
+
+
 # Stage runner registry
 STAGE_RUNNERS = {
     PipelineStage.CONVERT: _run_convert,
@@ -345,7 +466,9 @@ STAGE_RUNNERS = {
     PipelineStage.CLASSIFY: _run_classify,
     PipelineStage.VALIDATE: _run_validate,
     PipelineStage.CONFIDENCE: _run_confidence,
-    # EXTRACT, RESOLVE, THREAT, DIAGRAM — run via their respective tool scripts
+    PipelineStage.THREAT: _run_threat,
+    PipelineStage.RESOLVE: _run_resolve,
+    # EXTRACT, DIAGRAM — require LLM interaction, run via Copilot agents
 }
 
 
@@ -435,6 +558,10 @@ def main():
     parser.add_argument("--threshold", type=int, default=95,
                         help="Confidence threshold (0-100, default: 95)")
     parser.add_argument("--format", choices=["json", "text"], default="text")
+    parser.add_argument("--output-json", type=Path, default=None,
+                        help="Write JSON results to file (for agent consumption)")
+    parser.add_argument("--report", type=Path, default=None,
+                        help="Write markdown summary report to file")
 
     args = parser.parse_args()
 
@@ -494,6 +621,56 @@ def main():
             print(f"\nArtifacts:")
             for a in result.artifacts:
                 print(f"  → {a}")
+
+    # Write JSON output for agent consumption
+    if args.output_json:
+        json_output = {
+            "overall_status": result.overall_status,
+            "total_duration_ms": result.total_duration_ms,
+            "artifacts": result.artifacts,
+            "stages": [
+                {
+                    "stage": s.stage,
+                    "status": s.status,
+                    "duration_ms": s.duration_ms,
+                    "summary": s.summary,
+                    "errors": s.errors,
+                    "artifacts": s.artifacts,
+                }
+                for s in result.stages
+            ],
+        }
+        args.output_json.parent.mkdir(parents=True, exist_ok=True)
+        args.output_json.write_text(json.dumps(json_output, indent=2))
+
+    # Write markdown report
+    if args.report:
+        lines = [
+            f"# Pipeline Report",
+            f"",
+            f"**Status:** {result.overall_status.upper()}  ",
+            f"**Duration:** {result.total_duration_ms}ms  ",
+            f"",
+            f"## Stages",
+            f"",
+            f"| Stage | Status | Duration | Details |",
+            f"|-------|--------|----------|---------|",
+        ]
+        for s in result.stages:
+            icon = {"success": "pass", "error": "FAIL", "skipped": "skip",
+                    "warning": "warn"}.get(s.status, s.status)
+            details = ", ".join(f"{k}={v}" for k, v in s.summary.items()) if s.summary else ""
+            if s.errors:
+                details += (" | " if details else "") + "; ".join(s.errors[:2])
+            lines.append(f"| {s.stage} | {icon} | {s.duration_ms}ms | {details} |")
+
+        if result.artifacts:
+            lines.extend(["", "## Artifacts", ""])
+            for a in result.artifacts:
+                lines.append(f"- `{a}`")
+
+        args.report.parent.mkdir(parents=True, exist_ok=True)
+        args.report.write_text("\n".join(lines) + "\n")
 
     sys.exit(0 if result.overall_status == "success" else 1)
 

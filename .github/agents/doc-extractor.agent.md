@@ -2,6 +2,7 @@
 description: Extracts architecture entities from collected documents with source citations, validates with user before writing YAML. Zero hallucinations — every fact is cited and human-approved.
 argument-hint: Point to a folder with collected documents (e.g., "extract from ./context/my-system")
 tools: ['read', 'edit', 'execute', 'search']
+agents: ['doc-collector', 'architect', 'validator', 'diagram-generator', 'doc-writer']
 handoffs:
   - label: "Collect more documents"
     agent: doc-collector

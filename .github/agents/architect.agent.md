@@ -2,7 +2,7 @@
 description: Architectural modeling agent that builds a structured YAML model of software architecture through focused questions, writing well-formed YAML incrementally and generating diagrams for visual validation.
 argument-hint: The agent will prompt a user for all the questions to answer
 tools: ['agent', 'read', 'edit', 'search', 'execute', 'todo', 'vscode']
-agents: ['validator', 'diagram-generator', 'security-reviewer']
+agents: ['validator', 'diagram-generator', 'security-reviewer', 'deployer', 'doc-writer', 'doc-collector', 'pattern-manager']
 handoffs:
   - label: "Deploy to network zones"
     agent: deployer

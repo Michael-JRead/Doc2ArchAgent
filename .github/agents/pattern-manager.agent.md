@@ -2,6 +2,7 @@
 description: Pattern manager for reusable network and product templates — save, load, swap, list, browse catalog, and version patterns across the enterprise.
 argument-hint: What would you like to do? (list patterns / load a pattern / save current config as pattern / swap a pattern)
 tools: ['read', 'edit', 'search', 'execute']
+agents: ['architect', 'deployer', 'validator', 'diagram-generator', 'security-reviewer']
 handoffs:
   - label: "Back to architecture"
     agent: architect

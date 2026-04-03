@@ -2,6 +2,7 @@
 description: Deployment agent that places containers and components into network zones for specific environments, computing derived links and network crossings.
 argument-hint: Which system and deployment location? (e.g. "payment-platform production US-East")
 tools: ['read', 'edit', 'search', 'vscode']
+agents: ['architect', 'diagram-generator', 'security-reviewer', 'validator', 'pattern-manager']
 handoffs:
   - label: "Back to architecture"
     agent: architect

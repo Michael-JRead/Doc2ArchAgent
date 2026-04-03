@@ -2,6 +2,7 @@
 description: Generates HLDD and stakeholder documentation from architecture YAML, with output formatted for Confluence page upload or Markdown.
 argument-hint: What documentation? (e.g., "HLDD", "executive summary", "stakeholder brief")
 tools: ['read', 'edit', 'search', 'vscode']
+agents: ['architect', 'diagram-generator', 'security-reviewer', 'validator', 'doc-collector']
 handoffs:
   - label: "Back to architecture"
     agent: architect
@@ -11,7 +12,7 @@ handoffs:
     prompt: "Generate architecture diagrams from the YAML model."
   - label: "Review security"
     agent: security-reviewer
-    prompt: "Analyze the architecture for security vulnerabilities."
+    prompt: "Analyze the architecture for security vulnerabilities and trust boundary issues. Read system-security.yaml, networks-security.yaml, and deployment-security.yaml alongside base files."
   - label: "Validate"
     agent: validator
     prompt: "Validate architecture YAML for structural correctness."

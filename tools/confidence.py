@@ -213,6 +213,98 @@ class ConfidenceScorer:
 
         return int(_clamp(score, 0, 100))
 
+    # Field weights for aggregate entity scoring
+    FIELD_WEIGHTS = {
+        "name": 1.5,
+        "technology": 1.5,
+        "type": 1.2,
+        "description": 1.0,
+        "protocol": 1.2,
+        "port": 1.0,
+        "status": 0.8,
+    }
+
+    def score_entity(self, entity_fields: dict[str, int]) -> dict:
+        """Compute aggregate confidence for a complete entity.
+
+        Uses weighted average of field-level scores where critical fields
+        (name, technology) weigh more than descriptive fields.
+
+        Args:
+            entity_fields: Mapping of field_name -> confidence_score (0-100).
+
+        Returns:
+            Dict with aggregate_score, level, meets_threshold, and per-field breakdown.
+        """
+        if not entity_fields:
+            return {
+                "aggregate_score": 0,
+                "level": "NOT_STATED",
+                "meets_threshold": False,
+                "field_count": 0,
+            }
+
+        weighted_sum = 0.0
+        total_weight = 0.0
+        for field, score in entity_fields.items():
+            weight = self.FIELD_WEIGHTS.get(field, 1.0)
+            weighted_sum += score * weight
+            total_weight += weight
+
+        aggregate = int(round(weighted_sum / total_weight)) if total_weight > 0 else 0
+
+        return {
+            "aggregate_score": aggregate,
+            "level": self.to_category(aggregate),
+            "meets_threshold": self.meets_threshold(aggregate),
+            "field_count": len(entity_fields),
+        }
+
+    def generate_report(self, provenance: dict) -> str:
+        """Generate a markdown confidence report from enriched provenance.
+
+        Returns a markdown string with summary table by confidence tier.
+        """
+        lines = [
+            "# Confidence Report",
+            "",
+        ]
+
+        stats = provenance.get("statistics", {})
+        if stats:
+            lines.extend([
+                f"**Threshold:** {stats.get('confidence_threshold', 95)}%  ",
+                f"**Average Confidence:** {stats.get('average_confidence', 0)}%  ",
+                f"**Above Threshold:** {stats.get('fields_above_threshold', 0)}  ",
+                f"**Below Threshold:** {stats.get('fields_below_threshold', 0)}  ",
+                "",
+            ])
+
+        # Tier breakdown
+        tiers = {"HIGH": [], "MEDIUM": [], "LOW": [], "UNCERTAIN": [], "NOT_STATED": []}
+        for entity in provenance.get("entities", []):
+            entity_id = entity.get("id", "unknown")
+            for field_name, field_data in entity.get("fields", {}).items():
+                if not isinstance(field_data, dict):
+                    continue
+                score = field_data.get("confidence_score", 0)
+                cat = self.to_category(score)
+                tiers[cat].append(f"{entity_id}.{field_name} ({score})")
+
+        lines.extend([
+            "## By Confidence Tier",
+            "",
+            "| Tier | Count | Fields |",
+            "|------|-------|--------|",
+        ])
+        for tier, fields in tiers.items():
+            preview = ", ".join(fields[:5])
+            if len(fields) > 5:
+                preview += f", ... (+{len(fields) - 5} more)"
+            lines.append(f"| {tier} | {len(fields)} | {preview} |")
+
+        return "\n".join(lines) + "\n"
+
     def enrich_provenance(self, provenance: dict, threshold: int | None = None) -> dict:
         """Add numeric confidence scores to a provenance YAML dict.
 
@@ -298,6 +390,16 @@ def main():
     enrich_p.add_argument("--threshold", type=int, default=95)
     enrich_p.add_argument("--output", default=None, help="Output path (default: overwrite)")
 
+    # Subcommand: report
+    report_p = sub.add_parser("report", help="Generate markdown confidence report")
+    report_p.add_argument("provenance_file", help="Path to provenance.yaml")
+    report_p.add_argument("--threshold", type=int, default=95)
+    report_p.add_argument("--output", default=None, help="Output markdown path (default: stdout)")
+
+    # Subcommand: set-threshold
+    thresh_p = sub.add_parser("set-threshold", help="Display recommended threshold info")
+    thresh_p.add_argument("value", type=int, help="New threshold value (0-100)")
+
     args = parser.parse_args()
 
     if args.command == "score":
@@ -330,6 +432,29 @@ def main():
         with open(out_path, "w") as f:
             _yaml.dump(enriched, f, default_flow_style=False, sort_keys=False)
         print(f"Enriched {len(enriched.get('entities', []))} entities → {out_path}")
+
+    elif args.command == "report":
+        import yaml as _yaml
+        scorer = ConfidenceScorer(default_threshold=args.threshold)
+        with open(args.provenance_file) as f:
+            prov = _yaml.safe_load(f) or {}
+        # Ensure enriched
+        scorer.enrich_provenance(prov, args.threshold)
+        report = scorer.generate_report(prov)
+        if args.output:
+            with open(args.output, "w") as f:
+                f.write(report)
+            print(f"Report written to {args.output}")
+        else:
+            print(report)
+
+    elif args.command == "set-threshold":
+        value = max(0, min(100, args.value))
+        print(json.dumps({
+            "threshold": value,
+            "description": f"Entities with confidence below {value}% will require human verification.",
+            "note": "Set metadata.confidence_threshold in your YAML files to apply this threshold.",
+        }, indent=2))
 
     else:
         parser.print_help()

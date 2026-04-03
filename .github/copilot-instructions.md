@@ -14,6 +14,84 @@ Every architecture entity extracted from documents MUST have a verifiable source
 - **Validation:** Deterministic Python code (`tools/validate.py`, `tools/threat-rules.py`) — same input always produces same output
 - **Rendering:** Template-based agents (`@diagram-*`)
 
+## Build and Test Commands
+
+```bash
+# Validate architecture
+python tools/validate.py architecture/*/system.yaml --format table
+
+# Run threat rules
+python tools/threat-rules.py architecture/*/system.yaml --networks architecture/networks.yaml
+
+# Run tests
+python -m pytest tests/ -v
+
+# Sync ATT&CK data
+python tools/sync-attack-data.py
+
+# Detect available tools (cross-platform — replaces detect-tools.sh)
+python tools/detect-tools.py
+
+# Validate patterns (supports both legacy and directory formats)
+python tools/validate-patterns.py patterns/networks/
+python tools/validate-patterns.py patterns/products/
+
+# Compose deployment from manifest
+python tools/compose.py deployments/<id>/manifest.yaml --validate
+
+# Migrate legacy pattern to directory format
+python tools/migrate-pattern.py patterns/products/messaging/ibm-mq.pattern.yaml
+
+# Classify document sections by concern (network vs product)
+python tools/classify-sections.py <document> --dry-run
+python tools/classify-sections.py <document> --output-dir <pattern-dir>/contexts/sources/
+```
+
+## Agent Coordination
+
+### Agent Hierarchy
+- **@architect** — Primary entry point and orchestrator for interactive modeling
+- **@doc-collector** → **@doc-extractor** — Document ingestion pipeline
+- **@diagram-generator** — Diagram orchestration hub, dispatches to 5 renderers (@diagram-mermaid, @diagram-plantuml, @diagram-drawio, @diagram-structurizr, @diagram-d2)
+- **@validator** and **@security-reviewer** — Read-only analysis agents (report issues, never fix them)
+- **@deployer** and **@pattern-manager** — Domain-specific modeling agents
+- **@doc-writer** — Documentation generation from architecture YAML
+- **@diagram-diff** — Architecture version comparison
+
+### Handoff Protocol
+When handing off to another agent:
+1. Summarize current state (which files exist, what was just completed)
+2. Specify the exact task for the target agent
+3. List relevant file paths the target agent should read
+4. Include security overlay file paths when applicable (`system-security.yaml`, `networks-security.yaml`, `deployment-security.yaml`)
+
+### Self-Validation Rule
+After any agent writes or modifies YAML, it MUST invoke validation before handing off:
+```bash
+python tools/validate.py <file> --format table
+```
+If validation fails, fix the errors before handing off. Never pass invalid YAML downstream.
+
+## Do NOT Touch
+
+These files and directories are protected — agents must never modify them:
+- `schemas/` — Source of truth for validation (JSON Schema files)
+- `context/*.yaml` — Curated threat rules, compliance mappings, risk scoring
+- Generated files in `deployments/*/` marked with `GENERATED` header — modify the manifest or source patterns instead
+- Custom diagrams in any `diagrams/custom/` directory — hand-crafted, never overwritten
+- License files: `LICENSE`, `LICENSE-COMMERCIAL.md`, `CLA.md`, `NOTICE`
+
+## Skills
+
+The `.github/skills/` directory contains task-specific guidance loaded automatically when relevant:
+- **validate-yaml** — Deterministic validation commands and output interpretation
+- **threat-analysis** — STRIDE threat evaluation and compliance mapping
+- **confidence-scoring** — Provenance confidence assessment framework
+- **diagram-workflow** — End-to-end diagram generation process
+- **yaml-schema-guide** — Schema structure, required fields, and enum reference
+- **document-ingestion** — Document collection and extraction pipeline
+- **pattern-composition** — Deployment composition from patterns
+
 ## Shell Configuration
 
 **Before running any `execute` commands**, read `.github/shell-config.yaml` to determine the user's shell.
@@ -319,39 +397,6 @@ Run validation: `python tools/validate.py <system.yaml> [networks.yaml] [--secur
 **Network Zones:** `segmentation_type`, `egress_filtered`, `ids_ips_enabled`, `dlp_enabled`, `default_deny`, `allowed_ingress_zones`, `allowed_egress_zones`
 
 **Deployments:** `data_residency_region`, `data_residency_required`, `shared_responsibility_model`, `tenant_isolation`, `replicas`, `runtime_user`, `read_only_filesystem`, `resource_limits_set`, `network_policy_enforced`, `image_signed`, `vulnerability_scan_date`
-
-## Build and Test Commands
-
-```bash
-# Validate architecture
-python tools/validate.py architecture/*/system.yaml --format table
-
-# Run threat rules
-python tools/threat-rules.py architecture/*/system.yaml --networks architecture/networks.yaml
-
-# Run tests
-python -m pytest tests/ -v
-
-# Sync ATT&CK data
-python tools/sync-attack-data.py
-
-# Detect available tools (cross-platform — replaces detect-tools.sh)
-python tools/detect-tools.py
-
-# Validate patterns (supports both legacy and directory formats)
-python tools/validate-patterns.py patterns/networks/
-python tools/validate-patterns.py patterns/products/
-
-# Compose deployment from manifest
-python tools/compose.py deployments/<id>/manifest.yaml --validate
-
-# Migrate legacy pattern to directory format
-python tools/migrate-pattern.py patterns/products/messaging/ibm-mq.pattern.yaml
-
-# Classify document sections by concern (network vs product)
-python tools/classify-sections.py <document> --dry-run
-python tools/classify-sections.py <document> --output-dir <pattern-dir>/contexts/sources/
-```
 
 ## Security Review
 
