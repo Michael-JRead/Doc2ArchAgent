@@ -291,6 +291,9 @@ Run validation: `python tools/validate.py <system.yaml> [networks.yaml] [--secur
 ### authn_mechanism
 `none`, `api_key`, `basic`, `oauth2`, `oidc`, `saml`, `mtls`, `certificate`, `jwt`, `mfa`, `password`, `custom`
 
+### authz_model
+`none`, `rbac`, `abac`, `acl`, `pbac`, `rebac`, `custom`
+
 ### data_classification
 `public`, `internal`, `confidential`, `restricted`
 

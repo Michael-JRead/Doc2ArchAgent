@@ -244,7 +244,7 @@ For each container:
      - audit_logging — for compliance (HIPAA, PCI-DSS Req 10)
      - slsa_level, sbom_available — for supply chain assessment
 2. Define listeners on each component:
-   - protocol, port, tls_enabled, tls_version_min, authn_mechanism, authz_required
+   - protocol, port, tls_enabled, tls_version_min, authn_mechanism, authz_required, authz_model
    - **Security properties** (ask for each listener):
      - cipher_suite_policy (modern/intermediate/legacy)
      - rate_limiting_enabled, rate_limit_rps — for DoS protection
@@ -332,6 +332,7 @@ After finishing each type, ask: "Any more [type]? Or shall we move on?"
     internal: true (default for all placements)
     status: active (default for containers, systems)
     authz_required: true
+    authz_model: rbac
 - If a field is optional, say so. Never silently omit required fields.
 - status (container/system): proposed | active | deprecated | decommissioned
 - status (deployment): proposed | approved | active | deprecated

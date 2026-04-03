@@ -357,7 +357,9 @@ Include one entry per node type actually used in the diagram:
 - Green edge: "Encrypted (TLS)"
 - Red edge: "Unencrypted"
 - Grey edge: "TLS unknown"
-- Red border: "Unauthenticated listener"
+- Red border: "No Authentication"
+- Orange border: "No Authorization"
+- Blue border: "Has Authorization (RBAC/ABAC/ACL)"
 
 ### Confidence Legend (when provenance.yaml exists)
 - Blue `#1565c0`: "HIGH — Source confirmed"
@@ -418,6 +420,9 @@ The security layout plan follows the same schema as the standard layout plan wit
   - `none` → authn_mechanism is "none"
   - `weak` → authn_mechanism is "basic" or "password"
   - `strong` → everything else (oauth2, mtls, oidc, etc.)
+- `authz_model: none | rbac | abac | acl | pbac | rebac | custom` — from listener_security authz_model
+  - `none` → authz_required is false or authz_model is "none"
+  - When authz_required is true but authz_model is missing → treat as "none" and add `no_authz` warning
 - `stride_categories: [S, T, R, I, D, E]` — from stride-analysis.md if present
 - `data_stores_pii: true | false` — from component_security
 
@@ -425,11 +430,13 @@ The security layout plan follows the same schema as the standard layout plan wit
 - `tls_status: encrypted | unencrypted | unknown` — from listener_security tls_enabled
 - `tls_version: "1.2" | "1.3"` — from listener_security tls_version_min
 - `authn_mechanism: "oauth2" | "mtls" | "none"` — from listener/relationship security
-- `warnings: [zone_crossing, trust_boundary, no_tls, no_authn]` — computed:
+- `authz_model: "rbac" | "abac" | "acl" | "none"` — from listener_security authz_model
+- `warnings: [zone_crossing, trust_boundary, no_tls, no_authn, no_authz]` — computed:
   - `zone_crossing` — source and target are in different network zones
   - `trust_boundary` — edge crosses a trust boundary defined in system-security.yaml
   - `no_tls` — tls_enabled is false
   - `no_authn` — authn_mechanism is none
+  - `no_authz` — authz_required is false or authz_model is "none"
 - `data_classification: public | internal | confidential | restricted` — from data_entities
 
 **Additional boundary fields:**
@@ -494,29 +501,32 @@ diagrams:
         type: container
         label: API Tier
         technology: Kong Gateway
-        description: "OAuth2 / TLS 1.3"
+        description: "OAuth2 / RBAC / TLS 1.3"
         boundary_id: dmz-zone
         grid_col: 1
         grid_row: 0
         authn_status: strong
+        authz_model: rbac
       - id: app-core
         type: container
         label: Application Core
         technology: "Java / Spring Boot"
-        description: "mTLS / cert auth"
+        description: "mTLS / RBAC / cert auth"
         boundary_id: app-zone
         grid_col: 2
         grid_row: 0
         authn_status: strong
+        authz_model: rbac
       - id: data-tier
         type: container_db
         label: Data Tier
         technology: PostgreSQL 15
-        description: "mTLS / AES-256 at rest"
+        description: "mTLS / ACL / AES-256 at rest"
         boundary_id: app-zone
         grid_col: 3
         grid_row: 0
         authn_status: strong
+        authz_model: acl
         data_stores_pii: true
       - id: card-network
         type: system_ext
@@ -541,27 +551,30 @@ diagrams:
         source: api-tier
         target: app-core
         label: "Routes requests"
-        protocol: "HTTPS :8443 / TLS 1.3 / mTLS"
+        protocol: "HTTPS :8443 / TLS 1.3 / mTLS / RBAC"
         sync: true
         tls_status: encrypted
         authn_mechanism: mtls
+        authz_model: rbac
       - id: app-to-data
         source: app-core
         target: data-tier
         label: "Reads/writes"
-        protocol: "JDBC :5432 / TLS 1.2 / cert"
+        protocol: "JDBC :5432 / TLS 1.2 / cert / ACL"
         sync: true
         tls_status: encrypted
         authn_mechanism: certificate
+        authz_model: acl
         data_classification: restricted
       - id: app-to-cards
         source: app-core
         target: card-network
         label: "Authorizes"
-        protocol: "ISO 8583 :443 / TLS 1.2 / mTLS"
+        protocol: "ISO 8583 :443 / TLS 1.2 / mTLS / RBAC"
         sync: true
         tls_status: encrypted
         authn_mechanism: mtls
+        authz_model: rbac
         data_classification: restricted
         warnings: [zone_crossing]
     legend:

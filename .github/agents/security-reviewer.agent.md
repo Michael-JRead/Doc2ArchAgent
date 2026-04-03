@@ -169,6 +169,11 @@ Severity: HIGH.
 Find listeners where `authz_required` is `false` or missing.
 Severity: MEDIUM.
 
+### Missing Authorization Model
+Find listeners where `authz_required` is `true` but `authz_model` is missing or `"none"`.
+Without an explicit model (rbac, abac, acl, pbac, rebac, custom), enforcement is undefined.
+Severity: LOW (MEDIUM if data_classification is confidential/restricted or listener is public/partner-facing).
+
 ---
 
 ## STRIDE THREAT ANALYSIS
@@ -205,6 +210,8 @@ For each `component_relationship` with a `target_listener_ref`, evaluate all six
 **ELEVATION OF PRIVILEGE:**
 - `authz_required == false` → `⚠ [MEDIUM]` No authorization check
 - `authz_required == false` AND internet-facing → `✗ [HIGH]` Unauthz access from internet
+- `authz_required == true` AND `authz_model` missing → `⚠ [LOW]` Authz enabled without explicit model
+- `authz_model == "none"` AND `data_classification in [confidential, restricted]` → `⚠ [MEDIUM]` Sensitive data without authz model
 
 ### DFD Element Mapping
 

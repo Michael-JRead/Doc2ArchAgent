@@ -64,6 +64,7 @@ components:
     tls_version_min: '1.2'
     authn_mechanism: certificate
     authz_required: true
+    authz_model: acl
 - id: mq-mq-console
   name: MQ Console
   container_id: mq-mq-infrastructure
@@ -80,6 +81,7 @@ components:
     tls_version_min: '1.2'
     authn_mechanism: ldap
     authz_required: true
+    authz_model: rbac
 component_relationships:
 - id: mq-console-to-qm
   source_component: mq-mq-console
