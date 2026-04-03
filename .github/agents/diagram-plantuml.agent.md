@@ -82,9 +82,9 @@ Every file MUST start with `@startuml` and end with `@enduml`.
 Nothing except comments may appear between `SHOW_LEGEND()` and `@enduml`.
 
 Available legend macros:
-- `SHOW_LEGEND()` — standard legend at bottom (preferred)
-- `SHOW_FLOATING_LEGEND()` — floating legend box (alternative)
-- `LAYOUT_WITH_LEGEND()` — combined layout + legend (deprecated, use `SHOW_LEGEND()`)
+- `SHOW_LEGEND(?hideStereotype, ?details)` — standard legend at bottom-right (preferred)
+- `SHOW_FLOATING_LEGEND(?alias, ?hideStereotype, ?details)` — floating legend, positionable with `Lay_Distance()`
+- `LAYOUT_WITH_LEGEND()` — **cannot display custom tags/stereotypes** — use `SHOW_LEGEND()` instead
 - `HIDE_LEGEND()` — suppress legend entirely
 
 ### 8. Escape Creole special characters in labels
@@ -306,9 +306,9 @@ Component_Ext(alias, "Label", "Technology", "Description", $tags="external")
 ```
 
 ### Deployment macros
-**3rd positional arg is `$techn` (used for type/technology).**
+**3rd positional arg is `?type` (NOT `?techn`).**
 
-Full signature: `Deployment_Node(alias, label, ?techn, ?descr, ?sprite, ?tags, ?link, ?type)`
+Full signature: `Deployment_Node(alias, label, ?type, ?descr, ?sprite, ?tags, ?link)`
 ```
 Deployment_Node(alias, "Label", "Type", "Description", $tags="trusted")
 Node(alias, "Label", "Type", "Description", $tags="trusted")
@@ -316,6 +316,7 @@ Node(alias, "Label", "Type", "Description", $tags="trusted")
 Both `Deployment_Node` and `Node` are identical — use either. `Node_L` and `Node_R` variants exist for left/right alignment.
 
 ### Boundary macros — full signatures
+**GOTCHA:** `Boundary()` has `?type` in position 3. `System_Boundary`/`Enterprise_Boundary`/`Container_Boundary` do NOT have `?type` — they skip straight to `?tags`.
 ```
 Boundary(alias, label, ?type, ?tags, ?link, ?descr)
 Enterprise_Boundary(alias, label, ?tags, ?link, ?descr)
@@ -325,9 +326,17 @@ Container_Boundary(alias, label, ?tags, ?link, ?descr)
 
 ### Dynamic diagram macros
 For C4_Dynamic diagrams (`!include <C4/C4_Dynamic>`):
+
+**DEPRECATED:** `RelIndex()` is obsolete. Use `Rel()` with `$index` parameter instead:
 ```
-RelIndex(index, from, to, label, ?techn, ?descr, ?sprite, ?tags, ?link)
+' DEPRECATED:
+RelIndex(1, user, api, "Makes request")
+
+' CORRECT:
+Rel(user, api, "Makes request", $index=1)
 ```
+
+Index helpers: `Index()`, `SetIndex($n)`, `LastIndex()`, `increment($offset)`
 
 ### Skipping optional parameters
 Use named parameters (prefixed with `$`) to skip positional args:
@@ -414,6 +423,12 @@ Rel_R(src, tgt, "label", "protocol", $tags="async")
 ### Multiple tags
 Use `+` to combine tags: `$tags="sync+encrypted"`
 
+### Tag gotchas
+- **No space** between `$tags` and `=`: write `$tags="x"` NOT `$tags ="x"`
+- **No commas** in tag names — commas break keyword arguments
+- If 2 tags define the same skinparam, the **first** definition wins
+- `AddBoundaryTag()` uses a separate namespace — same tag name can have different styles for elements vs boundaries
+
 ---
 
 ## BOUNDARY RENDERING
@@ -449,8 +464,11 @@ Enterprise_Boundary(eb, "Enterprise") {
 
 Use as a last resort to fix positioning (max 3 per diagram):
 ```
-Lay_R(element_a, element_b)
-Lay_D(element_a, element_b)
+Lay_R(element_a, element_b)       ' or Lay_Right()
+Lay_D(element_a, element_b)       ' or Lay_Down()
+Lay_U(element_a, element_b)       ' or Lay_Up()
+Lay_L(element_a, element_b)       ' or Lay_Left()
+Lay_Distance(element_a, element_b, ?distance)  ' sets distance with down alignment
 ```
 Remove any `Lay_` that doesn't visibly improve the layout.
 
@@ -624,3 +642,9 @@ SHOW_LEGEND()
 | `$technology` param not found | Use `$techn` (abbreviated) |
 | `ComponentQueue` not found | Update PlantUML — needs v1.2021+ |
 | Server timeout on large diagrams | Keep under ~30 elements per diagram |
+| `RelIndex()` deprecated | Use `Rel(..., $index=1)` instead |
+| `LAYOUT_WITH_LEGEND()` ignores custom tags | Use `SHOW_LEGEND()` instead |
+| `$link` not clickable | Links only work in SVG output, not PNG |
+| Sequence boundary `{ }` fails | Use `Boundary_End()` for C4_Sequence diagrams |
+| Space in `$tags ="x"` | No space allowed: `$tags="x"` |
+| Comma in tag name | Don't use commas in tag names — breaks kwargs |

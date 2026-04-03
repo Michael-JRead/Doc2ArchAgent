@@ -457,7 +457,51 @@ def validate_plantuml(filepath: Path) -> dict:
                     f"Line {i}: Unbalanced parentheses in AddElementTag/AddRelTag"
                 )
 
-    # Check 12g: Lay_R/Lay_D target aliases exist
+    # Check 12g: Space between $tags and = (common LLM error)
+    for i, line in enumerate(lines, 1):
+        stripped = line.strip()
+        if stripped.startswith("'"):
+            continue
+        if re.search(r'\$tags\s+=', stripped):
+            errors.append(
+                f"Line {i}: Space between '$tags' and '=' — "
+                f"write '$tags=\"x\"' not '$tags =\"x\"'"
+            )
+
+    # Check 12h: Comma in tag name
+    for i, line in enumerate(lines, 1):
+        stripped = line.strip()
+        if stripped.startswith("'"):
+            continue
+        tag_match = re.search(r'\$tags="([^"]*)"', stripped)
+        if tag_match:
+            tag_value = tag_match.group(1)
+            if "," in tag_value:
+                errors.append(
+                    f"Line {i}: Comma in $tags value '{tag_value}' — "
+                    f"use '+' to combine tags: $tags=\"tag1+tag2\""
+                )
+
+    # Check 12i: Deprecated RelIndex usage
+    for i, line in enumerate(lines, 1):
+        stripped = line.strip()
+        if stripped.startswith("'"):
+            continue
+        if re.match(r'RelIndex\s*\(', stripped):
+            warnings.append(
+                f"Line {i}: RelIndex() is deprecated — "
+                f"use Rel(..., $index=N) instead"
+            )
+
+    # Check 12j: LAYOUT_WITH_LEGEND (cannot show custom tags)
+    for i, line in enumerate(lines, 1):
+        if "LAYOUT_WITH_LEGEND()" in line:
+            warnings.append(
+                f"Line {i}: LAYOUT_WITH_LEGEND() cannot display custom tags — "
+                f"use SHOW_LEGEND() instead"
+            )
+
+    # Check 12k: Lay_R/Lay_D target aliases exist
     lay_pattern = re.compile(r'Lay_[RLUD]\(\s*(\w+)\s*,\s*(\w+)')
     for i, line in enumerate(lines, 1):
         match = lay_pattern.search(line.strip())
