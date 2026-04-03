@@ -397,6 +397,44 @@ def validate(system_path: str, networks_path: str | None = None,
         if comp_id not in connected:
             add_warning(f"component '{comp_id}' has no relationships (orphaned)", rule_id="ARCH008")
 
+    # --- 11b. Data entity and external system referential integrity ---
+    data_entities = {d['id']: d for d in system.get('data_entities', []) if isinstance(d, dict) and 'id' in d}
+    for rel in system.get('component_relationships', []):
+        if not isinstance(rel, dict):
+            continue
+        for de_ref in rel.get('data_entities', []):
+            if isinstance(de_ref, str) and de_ref not in data_entities:
+                add_warning(
+                    f"component_relationship '{rel.get('id', '?')}': data_entity '{de_ref}' "
+                    f"not found in system.yaml data_entities (may be in security overlay)",
+                    rule_id="ARCH002",
+                )
+
+    # --- 11c. Trust boundary zone references ---
+    for tb in system.get('trust_boundaries', []):
+        if not isinstance(tb, dict):
+            continue
+        for zone_field in ('source_zone', 'target_zone'):
+            zone_ref = tb.get(zone_field, '')
+            if zone_ref and zones and zone_ref not in zones:
+                add_warning(
+                    f"trust_boundary '{tb.get('id', '?')}': {zone_field} '{zone_ref}' "
+                    f"not found in networks.yaml network_zones",
+                    rule_id="ARCH002",
+                )
+
+    # --- 11d. Context external_system_id references ---
+    for ctx in system.get('contexts', []):
+        if not isinstance(ctx, dict):
+            continue
+        ext_ref = ctx.get('external_system_id', '')
+        if ext_ref and ext_ref not in external_systems:
+            add_error(
+                f"context '{ctx.get('id', '?')}': external_system_id '{ext_ref}' "
+                f"does not exist in external_systems",
+                rule_id="ARCH002",
+            )
+
     # --- 12. Cross-entity consistency checks (hallucination detection) ---
     # A component in an external context (internal=false) is suspicious
     for comp_id, comp in components.items():

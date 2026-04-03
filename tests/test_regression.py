@@ -2256,6 +2256,106 @@ class TestSecuritySchemaSplit:
 
 
 # ============================================================================
+# L4 — FUNCTIONAL: Cross-entity referential integrity (validate.py)
+# ============================================================================
+
+class TestCrossEntityReferentialIntegrity:
+    """Tests for cross-entity referential integrity checks in validate.py."""
+
+    def _import_validate(self):
+        from importlib.util import spec_from_file_location, module_from_spec
+        spec = spec_from_file_location("validate", TOOLS_DIR / "validate.py")
+        mod = module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return mod
+
+    def test_trust_boundary_zone_ref_warning(self, tmp_path):
+        """Trust boundaries referencing nonexistent zones produce warnings."""
+        mod = self._import_validate()
+
+        system = {
+            "metadata": {"name": "Test", "description": "Test", "owner": "test", "status": "active"},
+            "contexts": [{"id": "ctx", "name": "Ctx", "description": "Test", "internal": True}],
+            "containers": [],
+            "components": [],
+            "trust_boundaries": [
+                {"id": "tb-1", "source_zone": "nonexistent-zone", "target_zone": "also-missing"}
+            ],
+        }
+        networks = {
+            "network_zones": [
+                {"id": "dmz", "name": "DMZ", "zone_type": "dmz", "internet_routable": True, "trust": "untrusted"}
+            ]
+        }
+
+        sys_path = tmp_path / "system.yaml"
+        net_path = tmp_path / "networks.yaml"
+        with open(sys_path, "w") as f:
+            yaml.dump(system, f)
+        with open(net_path, "w") as f:
+            yaml.dump(networks, f)
+
+        result = mod.validate(str(sys_path), str(net_path))
+        warning_msgs = " ".join(w["message"] for w in result["warnings"])
+        assert "nonexistent-zone" in warning_msgs
+        assert "also-missing" in warning_msgs
+
+    def test_context_external_system_ref_error(self, tmp_path):
+        """Context referencing nonexistent external_system_id produces an error."""
+        mod = self._import_validate()
+
+        system = {
+            "metadata": {"name": "Test", "description": "Test", "owner": "test", "status": "active"},
+            "contexts": [
+                {"id": "ext-ctx", "name": "External", "description": "Ext", "internal": False,
+                 "external_system_id": "nonexistent-ext"}
+            ],
+            "containers": [],
+            "components": [],
+            "external_systems": [],
+        }
+
+        sys_path = tmp_path / "system.yaml"
+        with open(sys_path, "w") as f:
+            yaml.dump(system, f)
+
+        result = mod.validate(str(sys_path))
+        assert result["valid"] is False
+        error_msgs = " ".join(e["message"] for e in result["errors"])
+        assert "nonexistent-ext" in error_msgs
+
+    def test_data_entity_ref_warning(self, tmp_path):
+        """Relationship referencing nonexistent data_entity produces a warning."""
+        mod = self._import_validate()
+
+        system = {
+            "metadata": {"name": "Test", "description": "Test", "owner": "test", "status": "active"},
+            "contexts": [{"id": "ctx", "name": "Ctx", "description": "Test", "internal": True}],
+            "containers": [{"id": "ctr", "name": "Container", "context_id": "ctx"}],
+            "components": [
+                {"id": "comp-a", "name": "A", "container_id": "ctr", "listeners": [
+                    {"id": "http", "protocol": "HTTPS", "port": 443}
+                ]},
+                {"id": "comp-b", "name": "B", "container_id": "ctr", "listeners": []},
+            ],
+            "component_relationships": [
+                {"id": "rel-1", "source_component": "comp-a", "target_component": "comp-b",
+                 "target_listener_ref": "http",
+                 "data_entities": ["missing-entity"]}
+            ],
+            "data_entities": [],
+        }
+
+        sys_path = tmp_path / "system.yaml"
+        with open(sys_path, "w") as f:
+            yaml.dump(system, f)
+
+        result = mod.validate(str(sys_path))
+        warning_msgs = " ".join(w["message"] for w in result["warnings"])
+        assert "missing-entity" in warning_msgs
+
+
+# ============================================================================
 # L4 — FUNCTIONAL: convert-docs.py
 # ============================================================================
 
