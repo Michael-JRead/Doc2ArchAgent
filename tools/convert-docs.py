@@ -26,6 +26,7 @@ import argparse
 import json
 import os
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -163,7 +164,10 @@ def convert_docx(src: Path, dst: Path) -> dict:
     if docx is None:
         # Fallback: try pandoc
         if shutil.which("pandoc"):
-            rc = os.system(f'pandoc "{src}" -t plain -o "{dst}" 2>/dev/null')
+            rc = subprocess.run(
+                ["pandoc", str(src), "-t", "plain", "-o", str(dst)],
+                capture_output=True,
+            ).returncode
             if rc == 0:
                 return {"status": "converted", "method": "pandoc", "quality": "high", "has_tables": False}
         return {"status": "skipped", "reason": "python-docx not installed and pandoc not available"}
@@ -247,7 +251,10 @@ def convert_html(src: Path, dst: Path) -> dict:
 
     # Fallback: pandoc
     if shutil.which("pandoc"):
-        rc = os.system(f'pandoc "{src}" -t plain -o "{dst}" 2>/dev/null')
+        rc = subprocess.run(
+            ["pandoc", str(src), "-t", "plain", "-o", str(dst)],
+            capture_output=True,
+        ).returncode
         if rc == 0:
             return {"status": "converted", "method": "pandoc", "quality": "high"}
 
@@ -336,7 +343,11 @@ def convert_file(src: Path, output_dir: Path) -> dict:
 
     # Determine output filename
     out_ext = ".md" if ext in (".docx", ".doc", ".html", ".htm") else ".txt"
-    dst = output_dir / (src.stem + out_ext)
+    dst = (output_dir / (src.stem + out_ext)).resolve()
+
+    # Guard against path traversal via crafted filenames
+    if not str(dst).startswith(str(output_dir.resolve())):
+        return {"source": src.name, "status": "skipped", "reason": "Path traversal detected"}
 
     try:
         result = converter(src, dst)
@@ -374,8 +385,15 @@ def main():
 
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Collect files (non-recursive, skip hidden files)
-    files = sorted(f for f in input_dir.iterdir() if f.is_file() and not f.name.startswith("."))
+    # Resolve to absolute paths to prevent traversal
+    input_dir = input_dir.resolve()
+    output_dir = output_dir.resolve()
+
+    # Collect files (non-recursive, skip hidden files and symlinks)
+    files = sorted(
+        f for f in input_dir.iterdir()
+        if f.is_file() and not f.name.startswith(".") and not f.is_symlink()
+    )
 
     if not files:
         print(f"No files found in {input_dir}", file=sys.stderr)

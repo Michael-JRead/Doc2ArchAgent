@@ -8,13 +8,13 @@ handoffs:
     prompt: "Return to the architect agent to modify the architecture model."
   - label: "Generate diagrams"
     agent: diagram-generator
-    prompt: "Generate architecture diagrams from the YAML model."
+    prompt: "Generate architecture diagrams from the YAML model. Include security overlays (system-security.yaml, networks-security.yaml, deployment-security.yaml) for trust boundary and confidence visualization."
   - label: "Review security"
     agent: security-reviewer
-    prompt: "Analyze the architecture for security vulnerabilities and trust boundary issues."
+    prompt: "Analyze the architecture for security vulnerabilities and trust boundary issues. Read system-security.yaml, networks-security.yaml, and deployment-security.yaml alongside base files."
   - label: "Validate"
     agent: validator
-    prompt: "Validate architecture YAML for structural correctness and referential integrity."
+    prompt: "Validate architecture YAML for structural correctness and referential integrity. Include security overlay files in validation scope."
   - label: "Manage patterns"
     agent: pattern-manager
     prompt: "Save, load, or swap reusable network and product patterns."

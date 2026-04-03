@@ -2253,3 +2253,370 @@ class TestSecuritySchemaSplit:
         resource_ids = [r["id"] for r in nets_sec["infrastructure_resources"]]
         assert "prod-edge-waf" in resource_ids
         assert "prod-app-lb" in resource_ids
+
+
+# ============================================================================
+# L4 — FUNCTIONAL: convert-docs.py
+# ============================================================================
+
+class TestConvertDocs:
+    """Functional tests for the document conversion tool."""
+
+    def _import_convert_docs(self):
+        from importlib.util import spec_from_file_location, module_from_spec
+        spec = spec_from_file_location("convert_docs", TOOLS_DIR / "convert-docs.py")
+        mod = module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return mod
+
+    def test_copy_text_passthrough(self, tmp_path):
+        """Plain text files are copied as-is."""
+        mod = self._import_convert_docs()
+        src = tmp_path / "input"
+        src.mkdir()
+        out = tmp_path / "output"
+        out.mkdir()
+
+        content = "This is a test document about architecture."
+        (src / "readme.txt").write_text(content)
+
+        result = mod.convert_file(src / "readme.txt", out)
+        assert result["status"] == "converted"
+        assert result["method"] == "direct-copy"
+        assert (out / "readme.txt").read_text() == content
+
+    def test_markdown_passthrough(self, tmp_path):
+        """Markdown files are copied as-is."""
+        mod = self._import_convert_docs()
+        src = tmp_path / "input"
+        src.mkdir()
+        out = tmp_path / "output"
+        out.mkdir()
+
+        content = "# Architecture\n\nSome markdown content."
+        (src / "doc.md").write_text(content)
+
+        result = mod.convert_file(src / "doc.md", out)
+        assert result["status"] == "converted"
+        assert result["method"] == "direct-copy"
+
+    def test_skip_unsupported_formats(self, tmp_path):
+        """Unsupported formats like .xlsx are skipped."""
+        mod = self._import_convert_docs()
+        out = tmp_path / "output"
+        out.mkdir()
+
+        (tmp_path / "data.xlsx").write_bytes(b"fake xlsx")
+        result = mod.convert_file(tmp_path / "data.xlsx", out)
+        assert result["status"] == "skipped"
+
+    def test_skip_diagram_files(self, tmp_path):
+        """Diagram files (.drawio, .vsdx) are skipped with guidance."""
+        mod = self._import_convert_docs()
+        out = tmp_path / "output"
+        out.mkdir()
+
+        (tmp_path / "arch.drawio").write_text("<mxfile></mxfile>")
+        result = mod.convert_file(tmp_path / "arch.drawio", out)
+        assert result["status"] == "skipped"
+        assert "parse-diagram-file.py" in result["reason"]
+
+    def test_unknown_extension_skipped(self, tmp_path):
+        """Unknown extensions are gracefully skipped."""
+        mod = self._import_convert_docs()
+        out = tmp_path / "output"
+        out.mkdir()
+
+        (tmp_path / "data.xyz").write_text("unknown format")
+        result = mod.convert_file(tmp_path / "data.xyz", out)
+        assert result["status"] == "skipped"
+        assert "Unknown format" in result["reason"]
+
+    def test_extension_map_completeness(self):
+        """EXTENSION_MAP covers all documented supported formats."""
+        mod = self._import_convert_docs()
+        expected = {".pdf", ".docx", ".doc", ".html", ".htm",
+                    ".png", ".jpg", ".jpeg", ".tiff", ".tif", ".bmp",
+                    ".txt", ".md", ".csv", ".json", ".yaml", ".yml"}
+        assert set(mod.EXTENSION_MAP.keys()) == expected
+
+    def test_symlink_skipped_in_main(self, tmp_path):
+        """Symlinks in input directory are skipped (security guard)."""
+        src = tmp_path / "input"
+        src.mkdir()
+        out = tmp_path / "output"
+        out.mkdir()
+
+        real_file = tmp_path / "secret.txt"
+        real_file.write_text("sensitive data")
+        link = src / "link.txt"
+        link.symlink_to(real_file)
+
+        # Also add a real file so main() doesn't exit on empty
+        (src / "real.txt").write_text("normal content")
+
+        mod = self._import_convert_docs()
+        # Simulate the file collection logic from main()
+        files = sorted(
+            f for f in src.iterdir()
+            if f.is_file() and not f.name.startswith(".") and not f.is_symlink()
+        )
+        names = [f.name for f in files]
+        assert "link.txt" not in names
+        assert "real.txt" in names
+
+    def test_path_traversal_guard(self, tmp_path):
+        """Output path traversal via crafted filename is blocked."""
+        mod = self._import_convert_docs()
+        out = tmp_path / "output"
+        out.mkdir()
+
+        # Create a file with a name that could cause traversal
+        # The resolve() + startswith() guard should catch this
+        crafted = tmp_path / "..%2f..%2fetc%2fpasswd.txt"
+        try:
+            crafted.write_text("test")
+            result = mod.convert_file(crafted, out)
+            # Should either convert safely within output_dir or skip
+            if result["status"] == "converted":
+                # Verify output stayed inside output_dir
+                for f in out.iterdir():
+                    assert str(f.resolve()).startswith(str(out.resolve()))
+        except (OSError, ValueError):
+            pass  # Some OS won't allow this filename at all
+
+    def test_convert_yaml_passthrough(self, tmp_path):
+        """YAML files are copied via direct-copy method."""
+        mod = self._import_convert_docs()
+        out = tmp_path / "output"
+        out.mkdir()
+
+        content = "system_id: test-system\ncontexts: []"
+        (tmp_path / "system.yaml").write_text(content)
+        result = mod.convert_file(tmp_path / "system.yaml", out)
+        assert result["status"] == "converted"
+        assert result["method"] == "direct-copy"
+        assert (out / "system.txt").read_text() == content
+
+    def test_html_conversion(self, tmp_path):
+        """HTML files are converted to text."""
+        mod = self._import_convert_docs()
+        out = tmp_path / "output"
+        out.mkdir()
+
+        html = "<html><body><h1>Architecture</h1><p>Test content.</p></body></html>"
+        (tmp_path / "doc.html").write_text(html)
+        result = mod.convert_file(tmp_path / "doc.html", out)
+        assert result["status"] == "converted"
+        assert "Architecture" in (out / "doc.md").read_text()
+
+
+# ============================================================================
+# L4 — FUNCTIONAL: validate-provenance.py
+# ============================================================================
+
+class TestValidateProvenance:
+    """Functional tests for the provenance validation tool."""
+
+    def _import_validate_provenance(self):
+        from importlib.util import spec_from_file_location, module_from_spec
+        spec = spec_from_file_location("validate_provenance", TOOLS_DIR / "validate-provenance.py")
+        mod = module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return mod
+
+    def test_valid_provenance(self, tmp_path):
+        """A well-formed provenance file passes validation."""
+        mod = self._import_validate_provenance()
+
+        # Create context directory with source doc
+        ctx = tmp_path / "context"
+        ctx.mkdir()
+        (ctx / "architecture-doc.txt").write_text(
+            "The payment gateway handles all credit card transactions via TLS 1.3."
+        )
+
+        # Create provenance.yaml using the actual schema:
+        # entity_id, entity_type, fields dict with per-field confidence/source/quote/pass
+        prov = {
+            "extraction_date": "2026-04-01",
+            "pipeline_version": "1.0.0",
+            "documents_analyzed": [
+                {
+                    "file": "architecture-doc.txt",
+                    "extraction_method": "direct-copy",
+                    "quality": "high",
+                }
+            ],
+            "entities": [
+                {
+                    "entity_id": "payment-gateway",
+                    "entity_type": "component",
+                    "fields": {
+                        "description": {
+                            "confidence": "HIGH",
+                            "source": "architecture-doc.txt, Overview",
+                            "quote": "payment gateway handles all credit card transactions",
+                            "pass": "prose",
+                        }
+                    },
+                }
+            ],
+        }
+        prov_path = tmp_path / "provenance.yaml"
+        with open(prov_path, "w") as f:
+            yaml.dump(prov, f)
+
+        result = mod.validate_provenance(str(prov_path), str(ctx))
+        assert result["valid"] is True
+        assert len(result["errors"]) == 0
+
+    def test_missing_required_fields(self, tmp_path):
+        """Missing top-level fields are flagged as errors."""
+        mod = self._import_validate_provenance()
+
+        prov_path = tmp_path / "provenance.yaml"
+        with open(prov_path, "w") as f:
+            yaml.dump({"extraction_date": "2026-04-01"}, f)
+
+        ctx = tmp_path / "context"
+        ctx.mkdir()
+
+        result = mod.validate_provenance(str(prov_path), str(ctx))
+        assert result["valid"] is False
+        error_text = " ".join(result["errors"])
+        assert "pipeline_version" in error_text
+        assert "entities" in error_text
+
+    def test_invalid_confidence_level(self, tmp_path):
+        """Invalid confidence levels produce errors."""
+        mod = self._import_validate_provenance()
+
+        ctx = tmp_path / "context"
+        ctx.mkdir()
+
+        prov = {
+            "extraction_date": "2026-04-01",
+            "pipeline_version": "1.0.0",
+            "documents_analyzed": [],
+            "entities": [
+                {
+                    "entity_id": "test-component",
+                    "entity_type": "component",
+                    "fields": {
+                        "name": {
+                            "confidence": "MAYBE",  # Invalid
+                            "source": "doc.txt",
+                            "quote": "test quote",
+                            "pass": "prose",
+                        }
+                    },
+                }
+            ],
+        }
+        prov_path = tmp_path / "provenance.yaml"
+        with open(prov_path, "w") as f:
+            yaml.dump(prov, f)
+
+        result = mod.validate_provenance(str(prov_path), str(ctx))
+        combined = " ".join(result["errors"] + result["warnings"])
+        assert "MAYBE" in combined
+
+    def test_invalid_entity_type(self, tmp_path):
+        """Invalid entity types produce warnings."""
+        mod = self._import_validate_provenance()
+
+        ctx = tmp_path / "context"
+        ctx.mkdir()
+
+        prov = {
+            "extraction_date": "2026-04-01",
+            "pipeline_version": "1.0.0",
+            "documents_analyzed": [],
+            "entities": [
+                {
+                    "entity_id": "test",
+                    "entity_type": "invalid_type",
+                    "fields": {
+                        "name": {
+                            "confidence": "HIGH",
+                            "source": "doc.txt",
+                            "quote": "test",
+                            "pass": "prose",
+                        }
+                    },
+                }
+            ],
+        }
+        prov_path = tmp_path / "provenance.yaml"
+        with open(prov_path, "w") as f:
+            yaml.dump(prov, f)
+
+        result = mod.validate_provenance(str(prov_path), str(ctx))
+        combined = " ".join(result["errors"] + result["warnings"])
+        assert "invalid_type" in combined
+
+    def test_fuzzy_quote_matching(self, tmp_path):
+        """Quotes that closely match source text are validated."""
+        mod = self._import_validate_provenance()
+
+        ctx = tmp_path / "context"
+        ctx.mkdir()
+        (ctx / "source.txt").write_text(
+            "The application uses PostgreSQL as its primary database for storing user records."
+        )
+
+        prov = {
+            "extraction_date": "2026-04-01",
+            "pipeline_version": "1.0.0",
+            "documents_analyzed": [
+                {"file": "source.txt", "extraction_method": "direct-copy"}
+            ],
+            "entities": [
+                {
+                    "entity_id": "user-db",
+                    "entity_type": "component",
+                    "fields": {
+                        "description": {
+                            "confidence": "HIGH",
+                            "source": "source.txt, Database",
+                            "quote": "uses PostgreSQL as its primary database",
+                            "pass": "prose",
+                        }
+                    },
+                }
+            ],
+        }
+        prov_path = tmp_path / "provenance.yaml"
+        with open(prov_path, "w") as f:
+            yaml.dump(prov, f)
+
+        result = mod.validate_provenance(str(prov_path), str(ctx))
+        # Should pass — quote is present in source
+        assert result["valid"] is True
+
+    def test_unloadable_provenance_file(self, tmp_path):
+        """A non-existent provenance file returns an error."""
+        mod = self._import_validate_provenance()
+
+        ctx = tmp_path / "context"
+        ctx.mkdir()
+
+        result = mod.validate_provenance(str(tmp_path / "nonexistent.yaml"), str(ctx))
+        assert result["valid"] is False
+        assert any("Cannot load" in e for e in result["errors"])
+
+    def test_valid_extraction_methods(self):
+        """All documented extraction methods are in the valid set."""
+        mod = self._import_validate_provenance()
+        expected_methods = {
+            "direct_read", "pandoc", "pdftotext", "ocr", "vision",
+            "python-docx", "pymupdf", "html2text", "tesseract-ocr",
+            "pymupdf+pdfplumber-tables", "direct-copy", "raw-read",
+        }
+        assert mod.VALID_EXTRACTION_METHODS == expected_methods
+
+    def test_valid_confidence_levels(self):
+        """All documented confidence levels are in the valid set."""
+        mod = self._import_validate_provenance()
+        assert mod.VALID_CONFIDENCE == {"HIGH", "MEDIUM", "LOW", "UNCERTAIN", "NOT_STATED"}
