@@ -1,0 +1,58 @@
+# ===========================================================================
+# EXAMPLE FILE — Included as a reference implementation for dataflow files.
+# This is NOT a real production architecture. Modify or replace for your use.
+# ===========================================================================
+#
+# Application-to-application dataflows for the standard 3-tier network.
+# These describe system-to-system traffic (no human users in the flow).
+
+dataflow_metadata:
+  pattern_ref: standard-3tier
+  audience: application
+  description: >
+    EXAMPLE — Application-to-application traffic flows through the
+    standard 3-tier network topology.
+
+dataflows:
+  - id: web-to-app
+    source_zone: dmz
+    target_zone: private-app-tier
+    source_component: waf-engine
+    target_component: lb-engine
+    target_listener_ref: lb-https-in
+    label: "EXAMPLE — Web tier to application tier traffic"
+    protocol: HTTPS
+    port: 443
+    tls_required: true
+    data_classification: confidential
+    direction: ingress
+    description: >
+      EXAMPLE — Inspected HTTPS traffic forwarded from DMZ WAF through
+      load balancer to application servers.
+
+  - id: app-to-data
+    source_zone: private-app-tier
+    target_zone: private-data-tier
+    label: "EXAMPLE — Application tier to data tier queries"
+    protocol: TCP
+    port: 5432
+    tls_required: true
+    data_classification: restricted
+    authn_mechanism: certificate
+    direction: ingress
+    description: >
+      EXAMPLE — Database queries from application servers to PostgreSQL
+      in the data tier. Uses mTLS for authentication.
+
+  - id: app-to-cache
+    source_zone: private-app-tier
+    target_zone: private-app-tier
+    label: "EXAMPLE — Application tier internal cache traffic"
+    protocol: TCP
+    port: 6379
+    tls_required: true
+    data_classification: internal
+    authn_mechanism: password
+    direction: bidirectional
+    description: >
+      EXAMPLE — Redis cache traffic within the application tier.

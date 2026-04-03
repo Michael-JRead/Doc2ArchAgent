@@ -1,0 +1,48 @@
+# ===========================================================================
+# EXAMPLE FILE — Included as a reference implementation for dataflow files.
+# This is NOT a real production architecture. Modify or replace for your use.
+# ===========================================================================
+#
+# Human/user-facing dataflows for the standard 3-tier network.
+# These describe traffic where a human user is the initiator.
+
+dataflow_metadata:
+  pattern_ref: standard-3tier
+  audience: human
+  description: >
+    EXAMPLE — Human user-facing traffic flows through the standard
+    3-tier network topology.
+
+dataflows:
+  - id: user-to-web
+    source_zone: internet
+    target_zone: dmz
+    label: "EXAMPLE — End user HTTPS access to web tier"
+    protocol: HTTPS
+    port: 443
+    tls_required: true
+    data_classification: confidential
+    authn_mechanism: oidc
+    direction: ingress
+    session_timeout_minutes: 30
+    description: >
+      EXAMPLE — End users access the application through HTTPS.
+      Authenticated via OIDC (e.g., corporate SSO). Session timeout
+      enforced at 30 minutes per security policy.
+
+  - id: admin-to-mgmt
+    source_zone: management
+    target_zone: private-app-tier
+    label: "EXAMPLE — Administrator access to management interfaces"
+    protocol: HTTPS
+    port: 8443
+    tls_required: true
+    data_classification: restricted
+    authn_mechanism: mfa
+    admin_interface: true
+    direction: ingress
+    session_timeout_minutes: 15
+    description: >
+      EXAMPLE — Administrators access management consoles via dedicated
+      management network. MFA required per PCI-DSS Req 8.3. Short
+      session timeout for privileged access.

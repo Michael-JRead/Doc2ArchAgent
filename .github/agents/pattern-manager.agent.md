@@ -34,6 +34,30 @@ There are two pattern types:
 - **Network Patterns** — reusable `networks.yaml` fragments (zones + infrastructure resources), organized by geography
 - **Product Patterns** — reusable `system.yaml` fragments (containers + components + listeners + relationships), organized by capability
 
+### Unified Patterns (Multi-File)
+
+Any pattern can optionally include BOTH `networks.yaml` AND `system.yaml`, plus dataflow files:
+- **Network patterns** may include `system.yaml` (e.g., WAF, load balancer as C4 containers) and dataflow files
+- **Product patterns** may include `networks.yaml` (e.g., product-specific isolation zones) and dataflow files
+- **Dataflow files**: `app-dataflows.yaml` (system-to-system) and `human-dataflows.yaml` (user-facing)
+- The `files` field in `pattern.meta.yaml` lists all optional files included in the pattern
+- Pop-and-swap is atomic — swapping a pattern removes/adds ALL its files as a unit
+
+### Audience / Purpose
+
+Each pattern has an `audience` field in its metadata: `application`, `human`, `hybrid`, or `infrastructure`.
+- **DO NOT assume audience.** When listing or loading patterns, always show the audience.
+- When creating or saving patterns, **ask the user** what audience the pattern serves if not specified.
+- In deployment manifests, each network entry has a `purpose` field — display this when listing.
+
+### Multi-Network Deployments
+
+Manifests can reference multiple network patterns via the `networks:` array (replaces singular `network:`).
+- Each network entry has a unique `id_prefix` and a `purpose` (application/human/hybrid/management/other)
+- When swapping network patterns, ask which network (by purpose) the user wants to replace
+- Show zones grouped by source network pattern and purpose in listings
+- Cross-network links (`cross_network_links`) connect zones across different network patterns
+
 ---
 
 ## UX CONVENTIONS

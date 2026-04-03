@@ -1,0 +1,73 @@
+# ===========================================================================
+# EXAMPLE FILE — Included as a reference implementation for unified patterns.
+# This is NOT a real production architecture. Modify or replace for your use.
+# ===========================================================================
+#
+# Network patterns can optionally include a system.yaml to describe
+# infrastructure components (WAF, load balancers, etc.) as C4 containers.
+# These are composed into the system output alongside product containers.
+
+metadata:
+  name: "Standard 3-Tier Network Infrastructure (EXAMPLE)"
+  description: >
+    EXAMPLE — Infrastructure components for the standard 3-tier network
+    topology. Represents WAF and load balancer as C4 containers so they
+    appear in architecture diagrams and threat models.
+  owner: network-infrastructure-team
+  status: active
+
+containers:
+  - id: edge-waf-container
+    name: "Edge WAF (EXAMPLE)"
+    context_id: datacenter-network
+    container_type: bastion_host
+    technology: F5 BIG-IP ASM
+    description: "EXAMPLE — Web application firewall at DMZ ingress"
+    status: active
+
+  - id: app-load-balancer
+    name: "Application Load Balancer (EXAMPLE)"
+    context_id: datacenter-network
+    container_type: load_balancer
+    technology: F5 BIG-IP LTM
+    description: "EXAMPLE — Load balancer distributing traffic to application tier"
+    status: active
+
+components:
+  - id: waf-engine
+    name: "WAF Engine (EXAMPLE)"
+    container_id: edge-waf-container
+    component_type: security_appliance
+    technology: F5 BIG-IP ASM
+    description: "EXAMPLE — WAF rule engine inspecting HTTP traffic"
+    listeners:
+      - id: waf-https-in
+        protocol: HTTPS
+        port: 443
+        tls_enabled: true
+        tls_version_min: "1.2"
+        authn_mechanism: none
+        authz_required: false
+
+  - id: lb-engine
+    name: "LB Engine (EXAMPLE)"
+    container_id: app-load-balancer
+    component_type: load_balancer
+    technology: F5 BIG-IP LTM
+    description: "EXAMPLE — Layer 7 load balancing with health checks"
+    listeners:
+      - id: lb-https-in
+        protocol: HTTPS
+        port: 443
+        tls_enabled: true
+        tls_version_min: "1.2"
+        authn_mechanism: none
+        authz_required: false
+
+component_relationships:
+  - id: waf-to-lb
+    source_component: waf-engine
+    target_component: lb-engine
+    target_listener_ref: lb-https-in
+    label: "forwards inspected traffic"
+    synchronous: true

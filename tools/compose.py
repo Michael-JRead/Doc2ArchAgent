@@ -108,9 +108,28 @@ def _load_pattern_contexts(pattern_dir: Path, prefix: str) -> tuple[list[dict], 
     return contexts, context_rels
 
 
-def compose_network(manifest: dict) -> dict:
-    """Compose the network portion from the manifest's network pattern."""
-    net_spec = manifest["network"]
+def _normalize_network_specs(manifest: dict) -> list[dict]:
+    """Normalize singular 'network' or plural 'networks' into a list.
+
+    Provides backward compatibility: old manifests with ``network:`` (object)
+    are wrapped in a single-element list.  New manifests use ``networks:``
+    (array).  Having both is an error.
+    """
+    has_singular = "network" in manifest
+    has_plural = "networks" in manifest
+    if has_singular and has_plural:
+        raise ValueError(
+            "Manifest has both 'network' and 'networks' — use one or the other"
+        )
+    if has_plural:
+        return manifest["networks"]
+    if has_singular:
+        return [manifest["network"]]
+    raise ValueError("Manifest must have either 'network' or 'networks' field")
+
+
+def _compose_single_network(net_spec: dict) -> dict:
+    """Compose one network pattern from a single network spec entry."""
     pattern_ref = net_spec["pattern_ref"]
     prefix = net_spec["id_prefix"]
     overrides = net_spec.get("overrides", {})
@@ -156,6 +175,13 @@ def compose_network(manifest: dict) -> dict:
     # Load network pattern contexts
     net_contexts, net_ctx_rels = _load_pattern_contexts(pattern_dir, prefix)
 
+    # Load optional system.yaml from network pattern (unified patterns)
+    system_path = pattern_dir / "system.yaml"
+    system_data = None
+    if system_path.exists():
+        with open(system_path) as f:
+            system_data = yaml.safe_load(f) or {}
+
     result = {
         "network_zones": zones,
         "infrastructure_resources": resources,
@@ -164,8 +190,103 @@ def compose_network(manifest: dict) -> dict:
         result["_contexts"] = net_contexts
     if net_ctx_rels:
         result["_context_relationships"] = net_ctx_rels
+    if system_data:
+        result["_system"] = system_data
 
     return result
+
+
+def _apply_cross_network_links(all_zones: list[dict],
+                                links: list[dict]) -> None:
+    """Inject cross_network_links into zone allowed_ingress/egress arrays."""
+    zone_map = {z["id"]: z for z in all_zones}
+    for link in links:
+        src_id = link["source_zone"]
+        tgt_id = link["target_zone"]
+        direction = link.get("direction", "bidirectional")
+
+        if src_id not in zone_map:
+            raise ValueError(f"cross_network_links: source_zone '{src_id}' not found")
+        if tgt_id not in zone_map:
+            raise ValueError(f"cross_network_links: target_zone '{tgt_id}' not found")
+
+        src_zone = zone_map[src_id]
+        tgt_zone = zone_map[tgt_id]
+
+        if direction in ("egress", "bidirectional"):
+            egress = src_zone.setdefault("allowed_egress_zones", [])
+            if tgt_id not in egress:
+                egress.append(tgt_id)
+        if direction in ("ingress", "bidirectional"):
+            ingress = tgt_zone.setdefault("allowed_ingress_zones", [])
+            if src_id not in ingress:
+                ingress.append(src_id)
+        if direction == "bidirectional":
+            ingress_src = src_zone.setdefault("allowed_ingress_zones", [])
+            if tgt_id not in ingress_src:
+                ingress_src.append(tgt_id)
+            egress_tgt = tgt_zone.setdefault("allowed_egress_zones", [])
+            if src_id not in egress_tgt:
+                egress_tgt.append(src_id)
+
+
+def compose_networks(manifest: dict) -> dict:
+    """Compose all network patterns from the manifest into merged zones/resources.
+
+    Supports both singular ``network:`` (backward compat) and plural
+    ``networks:`` (multi-network).  Validates globally unique zone IDs
+    after prefixing and applies cross_network_links.
+    """
+    net_specs = _normalize_network_specs(manifest)
+
+    # Check for duplicate prefixes among networks
+    prefixes = [s["id_prefix"] for s in net_specs]
+    if len(prefixes) != len(set(prefixes)):
+        dupes = [p for p in prefixes if prefixes.count(p) > 1]
+        raise ValueError(f"Duplicate network id_prefix values: {set(dupes)}")
+
+    all_zones: list[dict] = []
+    all_resources: list[dict] = []
+    all_contexts: list[dict] = []
+    all_ctx_rels: list[dict] = []
+    all_system_data: list[tuple[str, dict]] = []  # (prefix, system_data)
+
+    for net_spec in net_specs:
+        result = _compose_single_network(net_spec)
+        all_zones.extend(result["network_zones"])
+        all_resources.extend(result.get("infrastructure_resources", []))
+        if "_contexts" in result:
+            all_contexts.extend(result["_contexts"])
+        if "_context_relationships" in result:
+            all_ctx_rels.extend(result["_context_relationships"])
+        if "_system" in result:
+            all_system_data.append((net_spec["id_prefix"], result["_system"]))
+
+    # Validate globally unique zone IDs
+    zone_ids = [z["id"] for z in all_zones]
+    if len(zone_ids) != len(set(zone_ids)):
+        dupes = [z for z in zone_ids if zone_ids.count(z) > 1]
+        raise ValueError(f"Zone ID collision across network patterns: {set(dupes)}")
+
+    # Apply cross_network_links
+    _apply_cross_network_links(all_zones, manifest.get("cross_network_links", []))
+
+    composed = {
+        "network_zones": all_zones,
+        "infrastructure_resources": all_resources,
+    }
+    if all_contexts:
+        composed["_contexts"] = all_contexts
+    if all_ctx_rels:
+        composed["_context_relationships"] = all_ctx_rels
+    if all_system_data:
+        composed["_network_system_data"] = all_system_data
+
+    return composed
+
+
+# Keep backward-compat alias
+compose_network = compose_networks
 
 
 def compose_system(manifest: dict) -> dict:
@@ -187,6 +308,8 @@ def compose_system(manifest: dict) -> dict:
     all_external_systems = []
     all_data_entities = []
     all_trust_boundaries = []
+    all_product_zones = []          # zones from product patterns (unified)
+    all_product_resources = []      # infra resources from product patterns
 
     for product_spec in products:
         pattern_ref = product_spec["pattern_ref"]
@@ -277,6 +400,24 @@ def compose_system(manifest: dict) -> dict:
         containers = _apply_overrides(containers, overrides, prefix)
         components = _apply_overrides(components, overrides, prefix)
 
+        # Load optional networks.yaml from product pattern (unified patterns)
+        product_networks_path = pattern_dir / "networks.yaml"
+        if product_networks_path.exists():
+            with open(product_networks_path) as f:
+                prod_net_data = yaml.safe_load(f) or {}
+            prod_zones = _prefix_ids_in_list(
+                prod_net_data.get("network_zones", []), prefix,
+                ref_fields=["allowed_ingress_zones", "allowed_egress_zones"]
+            )
+            prod_resources = _prefix_ids_in_list(
+                prod_net_data.get("infrastructure_resources", []), prefix,
+                ref_fields=["zone_id"]
+            )
+            prod_zones = _apply_overrides(prod_zones, overrides, prefix)
+            prod_resources = _apply_overrides(prod_resources, overrides, prefix)
+            all_product_zones.extend(prod_zones)
+            all_product_resources.extend(prod_resources)
+
         all_contexts.extend(contexts)
         all_context_relationships.extend(ctx_rels_from_dir)
         all_containers.extend(containers)
@@ -319,6 +460,12 @@ def compose_system(manifest: dict) -> dict:
         composed["data_entities"] = all_data_entities
     if all_trust_boundaries:
         composed["trust_boundaries"] = all_trust_boundaries
+
+    # Stash product-contributed zones/resources for merging into networks
+    if all_product_zones:
+        composed["_product_zones"] = all_product_zones
+    if all_product_resources:
+        composed["_product_resources"] = all_product_resources
 
     return composed
 
@@ -384,10 +531,16 @@ def _build_system_security_stub(manifest: dict, system: dict) -> dict:
 
 def _build_networks_security_stub(manifest: dict, networks: dict) -> dict:
     """Build networks-security.yaml stub from composed data."""
-    net_ref = manifest.get("network", {}).get("pattern_ref", "")
+    # Build composite networks_ref from all network pattern refs
+    try:
+        net_specs = _normalize_network_specs(manifest)
+        net_refs = [f"{s['id_prefix']}:{s['pattern_ref']}" for s in net_specs]
+        networks_ref = ", ".join(net_refs) if len(net_refs) > 1 else net_refs[0]
+    except (ValueError, IndexError):
+        networks_ref = ""
     stub: dict = {
         "network_security_metadata": {
-            "networks_ref": net_ref,
+            "networks_ref": networks_ref,
         },
         "zone_security": [],
     }
@@ -456,11 +609,13 @@ def _detect_circular_refs(manifest: dict) -> list[str]:
     """
     errors: list[str] = []
 
-    # Check for duplicate id_prefix values (already checked in compose_system
-    # but we also guard here for the full pipeline)
+    # Check for duplicate id_prefix values across ALL patterns (network + product)
     prefixes = [p["id_prefix"] for p in manifest.get("products", [])]
-    if manifest.get("network", {}).get("id_prefix"):
-        prefixes.append(manifest["network"]["id_prefix"])
+    try:
+        net_specs = _normalize_network_specs(manifest)
+        prefixes.extend(s["id_prefix"] for s in net_specs)
+    except ValueError:
+        pass  # Will be caught later by compose_networks
     seen = set()
     for p in prefixes:
         if p in seen:
@@ -478,6 +633,31 @@ def _detect_circular_refs(manifest: dict) -> list[str]:
             )
 
     return errors
+
+
+def _load_pattern_dataflows(pattern_dir: Path, prefix: str) -> list[dict]:
+    """Load app-dataflows.yaml and human-dataflows.yaml from a pattern, prefix IDs."""
+    all_flows = []
+    for fname in ("app-dataflows.yaml", "human-dataflows.yaml"):
+        fpath = pattern_dir / fname
+        if not fpath.exists():
+            continue
+        with open(fpath) as f:
+            data = yaml.safe_load(f) or {}
+        flows = data.get("dataflows", [])
+        prefixed = _prefix_ids_in_list(
+            flows, prefix,
+            ref_fields=["source_zone", "target_zone",
+                         "source_component", "target_component",
+                         "target_listener_ref"]
+        )
+        # Tag each flow with its audience source
+        audience = data.get("dataflow_metadata", {}).get("audience", "")
+        for flow in prefixed:
+            flow.setdefault("_audience", audience)
+            flow.setdefault("_source_pattern", prefix)
+        all_flows.extend(prefixed)
+    return all_flows
 
 
 def compose(manifest_path: Path, dry_run: bool = False,
@@ -499,7 +679,7 @@ def compose(manifest_path: Path, dry_run: bool = False,
         )
 
     # Compose
-    networks = compose_network(manifest)
+    networks = compose_networks(manifest)
     system = compose_system(manifest)
     deployment = compose_deployment(manifest)
 
@@ -511,6 +691,54 @@ def compose(manifest_path: Path, dry_run: bool = False,
     if net_ctx_rels:
         existing_ctx_rels = system.get("context_relationships", [])
         system["context_relationships"] = net_ctx_rels + existing_ctx_rels
+
+    # Inject network pattern system data (containers/components from network patterns)
+    net_system_data = networks.pop("_network_system_data", [])
+    for net_prefix, sys_data in net_system_data:
+        net_containers = _prefix_ids_in_list(
+            sys_data.get("containers", []), net_prefix,
+            ref_fields=["context_id"]
+        )
+        system["containers"] = system.get("containers", []) + net_containers
+        # Components from network pattern system.yaml
+        for comp in sys_data.get("components", []):
+            c = copy.deepcopy(comp)
+            c["id"] = _prefix_id(c["id"], net_prefix)
+            if "container_id" in c:
+                c["container_id"] = _prefix_id(c["container_id"], net_prefix)
+            for listener in c.get("listeners", []):
+                listener["id"] = _prefix_id(listener["id"], net_prefix)
+            system.setdefault("components", []).append(c)
+        # Relationships from network pattern system.yaml
+        net_rels = _prefix_ids_in_list(
+            sys_data.get("component_relationships", []), net_prefix,
+            ref_fields=["source_component", "target_component", "target_listener_ref"]
+        )
+        system["component_relationships"] = system.get("component_relationships", []) + net_rels
+
+    # Merge product-contributed zones into networks (unified patterns)
+    product_zones = system.pop("_product_zones", [])
+    product_resources = system.pop("_product_resources", [])
+    if product_zones:
+        networks["network_zones"] = networks.get("network_zones", []) + product_zones
+    if product_resources:
+        networks.setdefault("infrastructure_resources", [])
+        networks["infrastructure_resources"].extend(product_resources)
+
+    # Load and merge dataflows from all patterns
+    all_dataflows = []
+    try:
+        net_specs = _normalize_network_specs(manifest)
+    except ValueError:
+        net_specs = []
+    for net_spec in net_specs:
+        pattern_dir = _find_pattern_dir(net_spec["pattern_ref"], "network")
+        if pattern_dir:
+            all_dataflows.extend(_load_pattern_dataflows(pattern_dir, net_spec["id_prefix"]))
+    for prod_spec in manifest.get("products", []):
+        pattern_dir = _find_pattern_dir(prod_spec["pattern_ref"], "product")
+        if pattern_dir:
+            all_dataflows.extend(_load_pattern_dataflows(pattern_dir, prod_spec["id_prefix"]))
 
     # Build security overlay stubs from composed data
     system_security = _build_system_security_stub(manifest, system)
@@ -534,14 +762,11 @@ def compose(manifest_path: Path, dry_run: bool = False,
         "networks": networks,
         "system": system,
         "deployment": deployment,
+        "dataflows": all_dataflows,
         "output_dir": str(output_dir),
         "errors": [],
         "warnings": [],
     }
-
-    # Add context_relationships to composed output if present
-    if system.get("context_relationships"):
-        pass  # already set above
 
     if dry_run:
         print(json.dumps({
@@ -558,9 +783,44 @@ def compose(manifest_path: Path, dry_run: bool = False,
             "security_trust_boundaries_count": len(system_security.get("trust_boundaries", [])),
             "security_container_security_count": len(deployment_security.get("container_security", [])),
             "security_has_deployment_posture": "deployment_posture" in deployment_security,
+            "dataflows_count": len(all_dataflows),
             "output_dir": str(output_dir),
         }, indent=2))
         return result
+
+    # Write dataflows if any were loaded
+    files_written = []
+    if all_dataflows:
+        # Split by audience for separate output files
+        app_flows = [f for f in all_dataflows if f.get("_audience") == "application"]
+        human_flows = [f for f in all_dataflows if f.get("_audience") == "human"]
+        hybrid_flows = [f for f in all_dataflows if f.get("_audience") not in ("application", "human")]
+        # Strip internal tags before writing
+        for flows in (app_flows, human_flows, hybrid_flows):
+            for f in flows:
+                f.pop("_audience", None)
+                f.pop("_source_pattern", None)
+        if app_flows:
+            df_out = {"dataflow_metadata": {"audience": "application"}, "dataflows": app_flows}
+            out_path = output_dir / "app-dataflows.yaml"
+            with open(out_path, "w") as fh:
+                fh.write(header)
+                yaml.dump(df_out, fh, default_flow_style=False, sort_keys=False, allow_unicode=True)
+            files_written.append(str(out_path))
+        if human_flows:
+            df_out = {"dataflow_metadata": {"audience": "human"}, "dataflows": human_flows}
+            out_path = output_dir / "human-dataflows.yaml"
+            with open(out_path, "w") as fh:
+                fh.write(header)
+                yaml.dump(df_out, fh, default_flow_style=False, sort_keys=False, allow_unicode=True)
+            files_written.append(str(out_path))
+        if hybrid_flows:
+            df_out = {"dataflow_metadata": {"audience": "hybrid"}, "dataflows": hybrid_flows}
+            out_path = output_dir / "hybrid-dataflows.yaml"
+            with open(out_path, "w") as fh:
+                fh.write(header)
+                yaml.dump(df_out, fh, default_flow_style=False, sort_keys=False, allow_unicode=True)
+            files_written.append(str(out_path))
 
     # Write output files (base + security overlays)
     for fname, data in [("networks.yaml", networks),
@@ -623,7 +883,7 @@ def compose(manifest_path: Path, dry_run: bool = False,
             str(output_dir / "networks-security.yaml"),
             str(output_dir / "deployment-security.yaml"),
             str(output_dir / "diagrams" / "_index.yaml"),
-        ],
+        ] + files_written,
     }, indent=2))
 
     return result

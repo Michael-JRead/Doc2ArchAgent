@@ -30,6 +30,12 @@ pattern:
       bind_to: mq-infrastructure
       description: "Web-based administration console"
 
+  audience: application
+  files:
+    - networks.yaml
+    - app-dataflows.yaml
+    - human-dataflows.yaml
+
   has_contexts: true
 
   version_tracking_enabled: true

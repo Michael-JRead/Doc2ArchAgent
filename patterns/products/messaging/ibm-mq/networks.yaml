@@ -1,0 +1,22 @@
+# ===========================================================================
+# EXAMPLE FILE — Included as a reference implementation for unified patterns.
+# This is NOT a real production architecture. Modify or replace for your use.
+# ===========================================================================
+#
+# Product patterns can optionally include a networks.yaml to describe
+# product-specific network zones. These zones are merged into the
+# composed network output alongside zones from network patterns.
+
+network_zones:
+  - id: mq-isolation
+    name: "MQ Message Bus Zone (EXAMPLE)"
+    zone_type: private
+    internet_routable: false
+    trust: trusted
+    description: >
+      EXAMPLE — Isolated zone for MQ queue managers and channel
+      infrastructure. No direct internet access. Only application-tier
+      components with valid certificates can reach this zone.
+    allowed_ingress_zones:
+      - private-app-tier
+    allowed_egress_zones: []

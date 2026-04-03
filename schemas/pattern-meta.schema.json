@@ -99,6 +99,16 @@
             "additionalProperties": true
           }
         },
+        "audience": {
+          "type": "string",
+          "enum": ["application", "human", "hybrid", "infrastructure"],
+          "description": "Who this pattern serves. application=system-to-system traffic, human=user-facing, hybrid=both, infrastructure=foundational. Agents should ask user to clarify if omitted."
+        },
+        "files": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "List of files included in this pattern beyond the core YAML (e.g., ['app-dataflows.yaml', 'human-dataflows.yaml', 'security-controls.yaml'])."
+        },
         "has_contexts": {
           "type": "boolean",
           "default": true,

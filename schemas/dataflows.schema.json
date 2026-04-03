@@ -1,0 +1,125 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Michael-JRead/Doc2ArchAgent/schemas/dataflows.schema.json",
+  "title": "Doc2ArchAgent Dataflows Schema",
+  "description": "Schema for app-dataflows.yaml and human-dataflows.yaml — traffic flow definitions within patterns. Network-level flows use source_zone/target_zone. Component-level flows use source_component/target_component. Both can coexist.",
+  "type": "object",
+  "properties": {
+    "dataflow_metadata": {
+      "type": "object",
+      "description": "Metadata describing the audience and purpose of these dataflows.",
+      "properties": {
+        "pattern_ref": {
+          "type": "string",
+          "description": "Pattern ID this dataflow file belongs to."
+        },
+        "audience": {
+          "type": "string",
+          "enum": ["application", "human", "hybrid"],
+          "description": "Who these flows serve. application=system-to-system, human=user-facing, hybrid=both."
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable summary of these dataflows."
+        }
+      },
+      "required": ["audience"],
+      "additionalProperties": true
+    },
+    "dataflows": {
+      "type": "array",
+      "description": "Individual traffic flow definitions.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+            "description": "Unique dataflow identifier in kebab-case."
+          },
+          "source_zone": {
+            "type": "string",
+            "description": "Source zone ID (for network-level flows). References a zone in networks.yaml."
+          },
+          "target_zone": {
+            "type": "string",
+            "description": "Target zone ID (for network-level flows). References a zone in networks.yaml."
+          },
+          "source_component": {
+            "type": "string",
+            "description": "Source component ID (for component-level flows). References a component in system.yaml."
+          },
+          "target_component": {
+            "type": "string",
+            "description": "Target component ID (for component-level flows). References a component in system.yaml."
+          },
+          "target_listener_ref": {
+            "type": "string",
+            "description": "Listener ID on target component. Enables STRIDE-per-element analysis."
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Human-readable flow description."
+          },
+          "protocol": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Communication protocol (HTTPS, TCP, MQ, SSH, gRPC, etc.)."
+          },
+          "port": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65535,
+            "description": "Target port number."
+          },
+          "tls_required": {
+            "type": "boolean",
+            "description": "Whether TLS encryption is required for this flow."
+          },
+          "data_classification": {
+            "type": "string",
+            "enum": ["public", "internal", "confidential", "restricted"],
+            "description": "Highest data classification carried by this flow."
+          },
+          "authn_mechanism": {
+            "type": "string",
+            "enum": [
+              "none", "api_key", "basic", "oauth2", "oidc", "saml",
+              "mtls", "certificate", "jwt", "mfa", "password", "custom"
+            ],
+            "description": "Authentication mechanism for this flow."
+          },
+          "direction": {
+            "type": "string",
+            "enum": ["ingress", "egress", "bidirectional"],
+            "description": "Traffic direction relative to the target."
+          },
+          "admin_interface": {
+            "type": "boolean",
+            "default": false,
+            "description": "Whether this is an administrative/management flow. Requires stronger auth (MFA per PCI-DSS Req 8.3)."
+          },
+          "session_timeout_minutes": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Session/token timeout in minutes. Relevant for human-facing flows."
+          },
+          "data_entities": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Data entity IDs carried by this flow."
+          },
+          "description": {
+            "type": "string",
+            "description": "Detailed description of this dataflow."
+          }
+        },
+        "required": ["id", "label", "protocol"],
+        "additionalProperties": true
+      }
+    }
+  },
+  "required": ["dataflow_metadata", "dataflows"],
+  "additionalProperties": true
+}

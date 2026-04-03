@@ -1076,9 +1076,12 @@ class TestComposeTool:
         assert result.returncode == 0, f"compose.py --dry-run failed: {result.stderr}"
         data = json.loads(result.stdout)
         assert data["dry_run"] is True
-        assert data["networks_zones_count"] == 3
-        assert data["system_containers_count"] == 1
-        assert data["system_components_count"] == 2
+        # 3 from network pattern + 1 from product pattern (unified patterns)
+        assert data["networks_zones_count"] == 4
+        # 1 product container + 2 network containers (unified patterns)
+        assert data["system_containers_count"] == 3
+        # 2 product components + 2 network components (unified patterns)
+        assert data["system_components_count"] == 4
 
     def test_compose_writes_files(self):
         result = subprocess.run(

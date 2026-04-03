@@ -1,0 +1,31 @@
+# ===========================================================================
+# EXAMPLE FILE — Included as a reference implementation for dataflow files.
+# This is NOT a real production architecture. Modify or replace for your use.
+# ===========================================================================
+#
+# Human/user-facing dataflows for the IBM MQ product pattern.
+# Describes administrator access to the MQ web console.
+
+dataflow_metadata:
+  pattern_ref: ibm-mq
+  audience: human
+  description: >
+    EXAMPLE — Human user-facing traffic flows for IBM MQ administration.
+
+dataflows:
+  - id: admin-to-console
+    target_component: mq-console
+    target_listener_ref: mq-console-https
+    label: "EXAMPLE — Administrator access to MQ web console"
+    protocol: HTTPS
+    port: 9443
+    tls_required: true
+    data_classification: restricted
+    authn_mechanism: mfa
+    admin_interface: true
+    direction: ingress
+    session_timeout_minutes: 15
+    description: >
+      EXAMPLE — MQ administrators access the web console for queue
+      management. MFA required for administrative access. Short session
+      timeout per security policy.

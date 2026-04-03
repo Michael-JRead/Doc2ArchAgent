@@ -35,6 +35,12 @@ pattern:
       type: infrastructure_resource
       description: "Load balancer distributing traffic to application tier"
 
+  audience: hybrid
+  files:
+    - system.yaml
+    - app-dataflows.yaml
+    - human-dataflows.yaml
+
   has_contexts: true
 
   version_tracking_enabled: true

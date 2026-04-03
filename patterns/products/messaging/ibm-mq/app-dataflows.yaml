@@ -1,0 +1,44 @@
+# ===========================================================================
+# EXAMPLE FILE — Included as a reference implementation for dataflow files.
+# This is NOT a real production architecture. Modify or replace for your use.
+# ===========================================================================
+#
+# Application-to-application dataflows for the IBM MQ product pattern.
+# Describes message producer and consumer traffic to the queue manager.
+
+dataflow_metadata:
+  pattern_ref: ibm-mq
+  audience: application
+  description: >
+    EXAMPLE — Application-to-application message flows through IBM MQ
+    queue manager infrastructure.
+
+dataflows:
+  - id: producer-to-qm
+    source_component: app-producer
+    target_component: queue-manager
+    target_listener_ref: mq-listener
+    label: "EXAMPLE — Message producer to queue manager"
+    protocol: MQ
+    port: 1414
+    tls_required: true
+    data_classification: confidential
+    authn_mechanism: certificate
+    direction: ingress
+    description: >
+      EXAMPLE — Application producers send messages to the queue manager
+      over MQ protocol with mTLS authentication.
+
+  - id: qm-to-consumer
+    source_component: queue-manager
+    target_component: app-consumer
+    label: "EXAMPLE — Queue manager to message consumer"
+    protocol: MQ
+    port: 1414
+    tls_required: true
+    data_classification: confidential
+    authn_mechanism: certificate
+    direction: egress
+    description: >
+      EXAMPLE — Queue manager delivers messages to consuming applications
+      via MQ channels with certificate-based authentication.
