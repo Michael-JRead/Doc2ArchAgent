@@ -60,7 +60,7 @@ jobs:
           if results:
               print(f'::warning::Bandit found {len(results)} issue(s):')
               for r in results:
-                  print(f\"  {r['severity']}: {r['issue_text']} ({r['filename']}:{r['line_number']})\")
+                  print(f\"  {r['issue_severity']}: {r['issue_text']} ({r['filename']}:{r['line_number']})\")
           else:
               print('Bandit: No issues found')
           "

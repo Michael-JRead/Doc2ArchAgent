@@ -671,7 +671,8 @@ def format_sarif(result: dict) -> str:
 
         level = "error" if item in result["errors"] else "warning"
         fingerprint = hashlib.md5(
-            f"{item['rule_id']}:{item['message']}:{file_uri}".encode()
+            f"{item['rule_id']}:{item['message']}:{file_uri}".encode(),
+            usedforsecurity=False,
         ).hexdigest()
 
         sarif_results.append({

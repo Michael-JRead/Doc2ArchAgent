@@ -1008,7 +1008,8 @@ def format_sarif(findings: list[Finding], file_path: str = "") -> str:
             rules[f.rule_id] = rule_def
 
         fingerprint = hashlib.md5(
-            f"{f.rule_id}:{f.entity_type}:{f.entity_id}".encode()
+            f"{f.rule_id}:{f.entity_type}:{f.entity_id}".encode(),
+            usedforsecurity=False,
         ).hexdigest()
 
         result_props = {
