@@ -112,8 +112,16 @@ Use separator lines between major sections:
 ```
 Always include a blank line between entities.
 
+### Validation Gate — MANDATORY
+Before offering any handoff options, run validation on all generated YAML files:
+```bash
+python tools/validate.py <deployment-dir>/system.yaml --format table
+python tools/validate.py <deployment-dir>/deployment.yaml --format table
+```
+Fix ALL errors (exit code 1) before completing. Do NOT offer handoff options until validation passes.
+
 ### Handoff Guidance
-- After deployment is complete, offer: "Deployment complete. You can now:" followed by handoff options as numbered list
+- After deployment is complete and validation passes, offer: "Deployment complete. You can now:" followed by handoff options as numbered list
 - When handing off, provide a context summary:
   ```
   ✓ Handing off to @security-reviewer

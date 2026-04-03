@@ -88,6 +88,21 @@ jobs:
             python tools/validate-patterns.py patterns/ --format table 2>/dev/null || true
           fi
 
+          # Validate diagram syntax (Mermaid, PlantUML, Draw.io)
+          if [ -d "architecture" ]; then
+            for diagrams_dir in $(find architecture -type d -name diagrams 2>/dev/null); do
+              echo "Validating diagrams: $diagrams_dir"
+              python tools/validate-diagram.py all "$diagrams_dir" 2>/dev/null || EXIT_CODE=1
+            done
+          fi
+
+          # Validate provenance citations against source documents
+          for prov in $(find architecture -name "provenance.yaml" 2>/dev/null); do
+            context_dir=$(dirname "$prov")/context
+            echo "Validating provenance: $prov"
+            python tools/validate-provenance.py "$prov" "$context_dir" 2>/dev/null || true
+          done
+
           # Merge SARIF files into one (or create empty)
           python3 -c "
           import json, sys, glob
