@@ -3622,3 +3622,127 @@ class TestDockerfile:
         assert "FROM python:" in content
         assert "requirements.txt" in content
         assert "INSTALL_ML" in content
+
+
+# ==========================================================================
+# L8 — Security Overlay Diagram Validation
+# ==========================================================================
+
+
+class TestSecurityOverlayDiagramValidation:
+    """Tests for PlantUML security overlay diagram validation."""
+
+    def _validate(self, puml_text: str) -> dict:
+        """Helper to validate a PUML string via temp file."""
+        import tempfile
+        sys.path.insert(0, str(TOOLS_DIR))
+        mod = importlib.import_module("validate-diagram")
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".puml", delete=False) as f:
+            f.write(puml_text)
+            f.flush()
+            result = mod.validate_plantuml(Path(f.name))
+        Path(f.name).unlink(missing_ok=True)
+        return result
+
+    def test_named_color_detected_as_error(self):
+        """Named colors in AddElementTag/AddRelTag must be caught."""
+        puml = """@startuml
+!include <C4/C4_Deployment>
+LAYOUT_LANDSCAPE()
+AddElementTag("trusted", $bgColor="green", $fontColor="white")
+AddRelTag("encrypted", $lineColor="green")
+Node(n1, "Test", "type", "desc", $tags="trusted")
+SHOW_LEGEND()
+@enduml"""
+        result = self._validate(puml)
+        color_errors = [e for e in result["errors"] if "Named color" in e]
+        assert len(color_errors) >= 2, f"Expected named color errors, got: {result['errors']}"
+
+    def test_hex_colors_pass_validation(self):
+        """Hex colors in tags should not trigger errors."""
+        puml = """@startuml
+!include <C4/C4_Deployment>
+LAYOUT_LANDSCAPE()
+AddElementTag("trusted", $bgColor="#2e7d32", $fontColor="#ffffff", $borderColor="#1b5e20")
+AddRelTag("encrypted", $textColor="#2e7d32", $lineColor="#2e7d32")
+Node(n1, "Test", "type", "desc", $tags="trusted")
+SHOW_LEGEND()
+@enduml"""
+        result = self._validate(puml)
+        color_errors = [e for e in result["errors"] if "color" in e.lower()]
+        assert len(color_errors) == 0, f"Unexpected color errors: {color_errors}"
+
+    def test_linestyle_string_detected_as_error(self):
+        """$lineStyle='dashed' (string) must be caught — use DashedLine() macro."""
+        puml = """@startuml
+!include <C4/C4_Deployment>
+LAYOUT_LANDSCAPE()
+AddRelTag("tls_unknown", $lineColor="#9e9e9e", $lineStyle="dashed")
+Node(n1, "A", "t", "d")
+Node(n2, "B", "t", "d")
+Rel(n1, n2, "test", $tags="tls_unknown")
+SHOW_LEGEND()
+@enduml"""
+        result = self._validate(puml)
+        style_errors = [e for e in result["errors"] if "lineStyle" in e]
+        assert len(style_errors) >= 1, f"Expected lineStyle error, got: {result['errors']}"
+
+    def test_security_overlay_complete_example_passes(self):
+        """The complete security overlay example from the agent doc should pass validation."""
+        puml = """@startuml
+' Payment Platform — Security Overlay (Deployment View)
+' Generated: 2026-03-31T12:00:00Z
+
+!include <C4/C4_Deployment>
+
+skinparam wrapWidth 250
+skinparam linetype polyline
+
+LAYOUT_LANDSCAPE()
+HIDE_STEREOTYPE()
+
+AddElementTag("container", $bgColor="#438DD5", $fontColor="#ffffff", $borderColor="#2E6295")
+AddElementTag("external", $bgColor="#999999", $fontColor="#ffffff", $borderColor="#666666")
+AddElementTag("trusted", $bgColor="#2e7d32", $fontColor="#ffffff", $borderColor="#1b5e20")
+AddElementTag("semi_trusted", $bgColor="#f9a825", $fontColor="#000000", $borderColor="#f57f17")
+
+AddRelTag("encrypted", $textColor="#2e7d32", $lineColor="#2e7d32")
+AddRelTag("unencrypted", $textColor="#c62828", $lineColor="#c62828", $lineStyle=BoldLine())
+AddRelTag("tls_unknown", $textColor="#9e9e9e", $lineColor="#9e9e9e", $lineStyle=DashedLine())
+
+Deployment_Node(dmz_zone, "DMZ", "network zone", "Internet-facing", $tags="semi_trusted") {
+    Container(api_tier, "API Tier", "Kong Gateway", "OAuth2 ~/~/ TLS 1.3", $tags="container")
+}
+
+Deployment_Node(app_zone, "Application Tier", "network zone", "Internal only", $tags="trusted") {
+    Container(app_core, "Application Core", "Java ~/~/ Spring Boot", "mTLS ~/~/ cert auth", $tags="container")
+    ContainerDb(data_tier, "Data Tier", "PostgreSQL 15", "mTLS ~/~/ AES-256 at rest", $tags="container")
+}
+
+System_Ext(card_network, "Visa ~/~/ Mastercard", "External card network", $tags="external")
+
+Rel_R(api_tier, app_core, "Routes requests", "HTTPS :8443 ~/~/ TLS 1.3 ~/~/ mTLS", $tags="encrypted")
+Rel_R(app_core, data_tier, "Reads~/~/writes", "JDBC :5432 ~/~/ TLS 1.2 ~/~/ cert [RESTRICTED]", $tags="encrypted")
+Rel_R(app_core, card_network, "Authorizes", "ISO 8583 :443 ~/~/ TLS 1.2 ~/~/ mTLS [RESTRICTED]", $tags="encrypted")
+
+SHOW_LEGEND()
+@enduml"""
+        result = self._validate(puml)
+        assert result["valid"], f"Security overlay example should pass, errors: {result['errors']}"
+
+    def test_plantuml_agent_has_security_color_rules(self):
+        """The PlantUML agent doc must include hex color guidance for security overlays."""
+        content = (PROJECT_ROOT / ".github" / "agents" / "diagram-plantuml.agent.md").read_text()
+        assert "No such color" in content
+        assert "#2e7d32" in content
+        assert "#c62828" in content
+        assert "~/~/" in content
+        assert "BoldLine()" in content
+
+    def test_diagram_generator_has_security_layout_plan_example(self):
+        """The diagram-generator agent must include a security layout plan example."""
+        content = (PROJECT_ROOT / ".github" / "agents" / "diagram-generator.agent.md").read_text()
+        assert "layout-plan-security.yaml" in content
+        assert "tls_status" in content
+        assert "authn_status" in content
+        assert "semi_trusted" in content

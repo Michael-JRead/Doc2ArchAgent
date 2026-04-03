@@ -516,6 +516,51 @@ def validate_plantuml(filepath: Path) -> dict:
                     f"Line {i}: Lay_ target '{tgt}' not found as defined element"
                 )
 
+    # Check 12l: Named colors in AddElementTag/AddRelTag (must be hex)
+    named_colors = {
+        "red", "green", "blue", "yellow", "orange", "purple", "grey", "gray",
+        "black", "white", "pink", "brown", "cyan", "magenta", "lime", "teal",
+        "navy", "maroon", "olive", "aqua", "silver", "gold", "coral",
+    }
+    color_param_pattern = re.compile(
+        r'\$(bgColor|fontColor|borderColor|lineColor|textColor)\s*=\s*"?([^",\)]+)"?'
+    )
+    for i, line in enumerate(lines, 1):
+        stripped = line.strip()
+        if stripped.startswith("'"):
+            continue
+        if "AddElementTag(" in stripped or "AddRelTag(" in stripped:
+            for match in color_param_pattern.finditer(stripped):
+                param_name = match.group(1)
+                color_val = match.group(2).strip().strip('"')
+                if color_val.lower() in named_colors:
+                    errors.append(
+                        f"Line {i}: Named color '{color_val}' in ${param_name} — "
+                        f"PlantUML C4 tags require hex codes (e.g., '#c62828'), "
+                        f"not color names"
+                    )
+                elif color_val and not color_val.startswith("#") and color_val not in (
+                    "DashedLine()", "BoldLine()", "DottedLine()",
+                ):
+                    warnings.append(
+                        f"Line {i}: ${param_name} value '{color_val}' may not be a valid "
+                        f"hex color — use '#rrggbb' format"
+                    )
+
+    # Check 12m: $lineStyle as string instead of macro
+    for i, line in enumerate(lines, 1):
+        stripped = line.strip()
+        if stripped.startswith("'"):
+            continue
+        style_match = re.search(r'\$lineStyle\s*=\s*"([^"]*)"', stripped)
+        if style_match:
+            style_val = style_match.group(1)
+            if style_val.lower() in ("dashed", "bold", "dotted"):
+                errors.append(
+                    f"Line {i}: $lineStyle=\"{style_val}\" is invalid — "
+                    f"use macro form: $lineStyle=DashedLine() or $lineStyle=BoldLine()"
+                )
+
     # Check 13: Include level matches macros used
     has_component_macro = any(
         re.search(r'\bComponent(Db|Queue|_Ext|Db_Ext|Queue_Ext)?\s*\(', l)

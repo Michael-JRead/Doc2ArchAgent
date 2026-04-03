@@ -146,10 +146,22 @@ diagrams:
 
 When security overlays are present, diagrams should include:
 
-- **Trust boundaries** — Visual borders around zones with trust levels
-- **Encrypted connections** — Lock icons or TLS labels on edges
-- **Confidence indicators** — Color-coding by confidence level (green=HIGH, yellow=MEDIUM, red=LOW)
-- **Authentication markers** — Auth method labels on listener nodes
+- **Trust boundaries** — Visual borders around zones with trust levels (trusted/semi_trusted/untrusted)
+- **Encrypted connections** — TLS labels on edges, color-coded green (#2e7d32) for encrypted, red (#c62828) for unencrypted
+- **Confidence indicators** — Color-coding by confidence level (blue=HIGH, amber=MEDIUM, red=LOW)
+- **Authentication markers** — Auth method labels in node descriptions (not labels)
+- **Data classification** — Classification level appended to edge labels (e.g., `[RESTRICTED]`)
+
+### PlantUML Security Overlay Rules
+
+**CRITICAL:** PlantUML C4 `AddElementTag`/`AddRelTag` require hex color codes (`#2e7d32`), NOT color names (`green`). Using named colors causes `No such color` errors.
+
+**CRITICAL:** All `/` characters in edge protocol strings must be escaped as `~/~/` to prevent PlantUML Creole italic formatting. Example: `"HTTPS :443 ~/~/ TLS 1.3 ~/~/ OAuth2"`
+
+Security overlays are generated as deployment-level diagrams using `layout-plan-security.yaml` with:
+- `Deployment_Node` for trust zone boundaries with `$tags="trusted"` / `$tags="semi_trusted"` / `$tags="untrusted"`
+- `AddRelTag("encrypted", ...)` / `AddRelTag("unencrypted", ...)` for TLS status edge coloring
+- `$lineStyle=DashedLine()` (macro form, NOT string `"dashed"`) for unknown TLS status edges
 
 ## Deterministic Syntax Validation
 
