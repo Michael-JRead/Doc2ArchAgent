@@ -369,6 +369,29 @@ Position the text cell at the midpoint of the edge path.
 3. Check: shapes rendered correctly, edge connections preserved, text labels visible
 4. Manual fix: re-add any edge labels that were dropped
 
+### Lucidchart Standard Import API (alternative path)
+
+Lucidchart offers a programmatic **Standard Import API** using a JSON-based `.lucid` format (ZIP file containing `document.json` + optional images/data). This bypasses Draw.io XML limitations entirely.
+
+**API endpoint:** `POST https://api.lucid.co/v1/documents`
+- Content type: `x-application/vnd.lucid.standardImport`
+- Creates new documents (cannot edit existing)
+
+**Key format differences from Draw.io XML:**
+- Shapes use JSON with `id`, `type`, `boundingBox` (x, y, w, h), `style`, `text`
+- Lines use `lineType` (straight/elbow/curved), `endpoint1`/`endpoint2` with 24 arrow styles
+- Line text is positioned with `position` (0.0-1.0) — **labels are preserved**
+- Containers use `magnetize` property for child movement
+- Shape libraries: standard, flowchart, container, BPMN 2.0, table
+
+**C4 element mapping to Lucid Standard Import:**
+- Person/System/Container/Component → `rectangle` with rounded style + C4 colors
+- Database → `database` from flowchart library
+- Boundary → `rectangleContainer` from container library
+- Edges → `elbow` line type with `arrow` endpoint style
+
+This is a future enhancement opportunity: generate `.lucid` JSON directly instead of Draw.io XML for guaranteed Lucidchart fidelity.
+
 ---
 
 ## SELF-VALIDATION
