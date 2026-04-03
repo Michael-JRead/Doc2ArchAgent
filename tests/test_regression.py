@@ -2253,3 +2253,732 @@ class TestSecuritySchemaSplit:
         resource_ids = [r["id"] for r in nets_sec["infrastructure_resources"]]
         assert "prod-edge-waf" in resource_ids
         assert "prod-app-lb" in resource_ids
+
+
+# ============================================================================
+# L4 — FUNCTIONAL: Cross-entity referential integrity (validate.py)
+# ============================================================================
+
+class TestCrossEntityReferentialIntegrity:
+    """Tests for cross-entity referential integrity checks in validate.py."""
+
+    def _import_validate(self):
+        from importlib.util import spec_from_file_location, module_from_spec
+        spec = spec_from_file_location("validate", TOOLS_DIR / "validate.py")
+        mod = module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return mod
+
+    def test_trust_boundary_zone_ref_warning(self, tmp_path):
+        """Trust boundaries referencing nonexistent zones produce warnings."""
+        mod = self._import_validate()
+
+        system = {
+            "metadata": {"name": "Test", "description": "Test", "owner": "test", "status": "active"},
+            "contexts": [{"id": "ctx", "name": "Ctx", "description": "Test", "internal": True}],
+            "containers": [],
+            "components": [],
+            "trust_boundaries": [
+                {"id": "tb-1", "source_zone": "nonexistent-zone", "target_zone": "also-missing"}
+            ],
+        }
+        networks = {
+            "network_zones": [
+                {"id": "dmz", "name": "DMZ", "zone_type": "dmz", "internet_routable": True, "trust": "untrusted"}
+            ]
+        }
+
+        sys_path = tmp_path / "system.yaml"
+        net_path = tmp_path / "networks.yaml"
+        with open(sys_path, "w") as f:
+            yaml.dump(system, f)
+        with open(net_path, "w") as f:
+            yaml.dump(networks, f)
+
+        result = mod.validate(str(sys_path), str(net_path))
+        warning_msgs = " ".join(w["message"] for w in result["warnings"])
+        assert "nonexistent-zone" in warning_msgs
+        assert "also-missing" in warning_msgs
+
+    def test_context_external_system_ref_error(self, tmp_path):
+        """Context referencing nonexistent external_system_id produces an error."""
+        mod = self._import_validate()
+
+        system = {
+            "metadata": {"name": "Test", "description": "Test", "owner": "test", "status": "active"},
+            "contexts": [
+                {"id": "ext-ctx", "name": "External", "description": "Ext", "internal": False,
+                 "external_system_id": "nonexistent-ext"}
+            ],
+            "containers": [],
+            "components": [],
+            "external_systems": [],
+        }
+
+        sys_path = tmp_path / "system.yaml"
+        with open(sys_path, "w") as f:
+            yaml.dump(system, f)
+
+        result = mod.validate(str(sys_path))
+        assert result["valid"] is False
+        error_msgs = " ".join(e["message"] for e in result["errors"])
+        assert "nonexistent-ext" in error_msgs
+
+    def test_data_entity_ref_warning(self, tmp_path):
+        """Relationship referencing nonexistent data_entity produces a warning."""
+        mod = self._import_validate()
+
+        system = {
+            "metadata": {"name": "Test", "description": "Test", "owner": "test", "status": "active"},
+            "contexts": [{"id": "ctx", "name": "Ctx", "description": "Test", "internal": True}],
+            "containers": [{"id": "ctr", "name": "Container", "context_id": "ctx"}],
+            "components": [
+                {"id": "comp-a", "name": "A", "container_id": "ctr", "listeners": [
+                    {"id": "http", "protocol": "HTTPS", "port": 443}
+                ]},
+                {"id": "comp-b", "name": "B", "container_id": "ctr", "listeners": []},
+            ],
+            "component_relationships": [
+                {"id": "rel-1", "source_component": "comp-a", "target_component": "comp-b",
+                 "target_listener_ref": "http",
+                 "data_entities": ["missing-entity"]}
+            ],
+            "data_entities": [],
+        }
+
+        sys_path = tmp_path / "system.yaml"
+        with open(sys_path, "w") as f:
+            yaml.dump(system, f)
+
+        result = mod.validate(str(sys_path))
+        warning_msgs = " ".join(w["message"] for w in result["warnings"])
+        assert "missing-entity" in warning_msgs
+
+
+# ============================================================================
+# L4 — FUNCTIONAL: convert-docs.py
+# ============================================================================
+
+class TestConvertDocs:
+    """Functional tests for the document conversion tool."""
+
+    def _import_convert_docs(self):
+        from importlib.util import spec_from_file_location, module_from_spec
+        spec = spec_from_file_location("convert_docs", TOOLS_DIR / "convert-docs.py")
+        mod = module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return mod
+
+    def test_copy_text_passthrough(self, tmp_path):
+        """Plain text files are copied as-is."""
+        mod = self._import_convert_docs()
+        src = tmp_path / "input"
+        src.mkdir()
+        out = tmp_path / "output"
+        out.mkdir()
+
+        content = "This is a test document about architecture."
+        (src / "readme.txt").write_text(content)
+
+        result = mod.convert_file(src / "readme.txt", out)
+        assert result["status"] == "converted"
+        assert result["method"] == "direct-copy"
+        assert (out / "readme.txt").read_text() == content
+
+    def test_markdown_passthrough(self, tmp_path):
+        """Markdown files are copied as-is."""
+        mod = self._import_convert_docs()
+        src = tmp_path / "input"
+        src.mkdir()
+        out = tmp_path / "output"
+        out.mkdir()
+
+        content = "# Architecture\n\nSome markdown content."
+        (src / "doc.md").write_text(content)
+
+        result = mod.convert_file(src / "doc.md", out)
+        assert result["status"] == "converted"
+        assert result["method"] == "direct-copy"
+
+    def test_skip_unsupported_formats(self, tmp_path):
+        """Unsupported formats like .xlsx are skipped."""
+        mod = self._import_convert_docs()
+        out = tmp_path / "output"
+        out.mkdir()
+
+        (tmp_path / "data.xlsx").write_bytes(b"fake xlsx")
+        result = mod.convert_file(tmp_path / "data.xlsx", out)
+        assert result["status"] == "skipped"
+
+    def test_skip_diagram_files(self, tmp_path):
+        """Diagram files (.drawio, .vsdx) are skipped with guidance."""
+        mod = self._import_convert_docs()
+        out = tmp_path / "output"
+        out.mkdir()
+
+        (tmp_path / "arch.drawio").write_text("<mxfile></mxfile>")
+        result = mod.convert_file(tmp_path / "arch.drawio", out)
+        assert result["status"] == "skipped"
+        assert "parse-diagram-file.py" in result["reason"]
+
+    def test_unknown_extension_skipped(self, tmp_path):
+        """Unknown extensions are gracefully skipped."""
+        mod = self._import_convert_docs()
+        out = tmp_path / "output"
+        out.mkdir()
+
+        (tmp_path / "data.xyz").write_text("unknown format")
+        result = mod.convert_file(tmp_path / "data.xyz", out)
+        assert result["status"] == "skipped"
+        assert "Unknown format" in result["reason"]
+
+    def test_extension_map_completeness(self):
+        """EXTENSION_MAP covers all documented supported formats."""
+        mod = self._import_convert_docs()
+        expected = {".pdf", ".docx", ".doc", ".html", ".htm",
+                    ".png", ".jpg", ".jpeg", ".tiff", ".tif", ".bmp",
+                    ".txt", ".md", ".csv", ".json", ".yaml", ".yml"}
+        assert set(mod.EXTENSION_MAP.keys()) == expected
+
+    def test_symlink_skipped_in_main(self, tmp_path):
+        """Symlinks in input directory are skipped (security guard)."""
+        src = tmp_path / "input"
+        src.mkdir()
+        out = tmp_path / "output"
+        out.mkdir()
+
+        real_file = tmp_path / "secret.txt"
+        real_file.write_text("sensitive data")
+        link = src / "link.txt"
+        link.symlink_to(real_file)
+
+        # Also add a real file so main() doesn't exit on empty
+        (src / "real.txt").write_text("normal content")
+
+        mod = self._import_convert_docs()
+        # Simulate the file collection logic from main()
+        files = sorted(
+            f for f in src.iterdir()
+            if f.is_file() and not f.name.startswith(".") and not f.is_symlink()
+        )
+        names = [f.name for f in files]
+        assert "link.txt" not in names
+        assert "real.txt" in names
+
+    def test_path_traversal_guard(self, tmp_path):
+        """Output path traversal via crafted filename is blocked."""
+        mod = self._import_convert_docs()
+        out = tmp_path / "output"
+        out.mkdir()
+
+        # Create a file with a name that could cause traversal
+        # The resolve() + startswith() guard should catch this
+        crafted = tmp_path / "..%2f..%2fetc%2fpasswd.txt"
+        try:
+            crafted.write_text("test")
+            result = mod.convert_file(crafted, out)
+            # Should either convert safely within output_dir or skip
+            if result["status"] == "converted":
+                # Verify output stayed inside output_dir
+                for f in out.iterdir():
+                    assert str(f.resolve()).startswith(str(out.resolve()))
+        except (OSError, ValueError):
+            pass  # Some OS won't allow this filename at all
+
+    def test_convert_yaml_passthrough(self, tmp_path):
+        """YAML files are copied via direct-copy method."""
+        mod = self._import_convert_docs()
+        out = tmp_path / "output"
+        out.mkdir()
+
+        content = "system_id: test-system\ncontexts: []"
+        (tmp_path / "system.yaml").write_text(content)
+        result = mod.convert_file(tmp_path / "system.yaml", out)
+        assert result["status"] == "converted"
+        assert result["method"] == "direct-copy"
+        assert (out / "system.txt").read_text() == content
+
+    def test_html_conversion(self, tmp_path):
+        """HTML files are converted to text."""
+        mod = self._import_convert_docs()
+        out = tmp_path / "output"
+        out.mkdir()
+
+        html = "<html><body><h1>Architecture</h1><p>Test content.</p></body></html>"
+        (tmp_path / "doc.html").write_text(html)
+        result = mod.convert_file(tmp_path / "doc.html", out)
+        assert result["status"] == "converted"
+        assert "Architecture" in (out / "doc.md").read_text()
+
+
+# ============================================================================
+# L4 — FUNCTIONAL: validate-provenance.py
+# ============================================================================
+
+class TestValidateProvenance:
+    """Functional tests for the provenance validation tool."""
+
+    def _import_validate_provenance(self):
+        from importlib.util import spec_from_file_location, module_from_spec
+        spec = spec_from_file_location("validate_provenance", TOOLS_DIR / "validate-provenance.py")
+        mod = module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return mod
+
+    def test_valid_provenance(self, tmp_path):
+        """A well-formed provenance file passes validation."""
+        mod = self._import_validate_provenance()
+
+        # Create context directory with source doc
+        ctx = tmp_path / "context"
+        ctx.mkdir()
+        (ctx / "architecture-doc.txt").write_text(
+            "The payment gateway handles all credit card transactions via TLS 1.3."
+        )
+
+        # Create provenance.yaml using the actual schema:
+        # entity_id, entity_type, fields dict with per-field confidence/source/quote/pass
+        prov = {
+            "extraction_date": "2026-04-01",
+            "pipeline_version": "1.0.0",
+            "documents_analyzed": [
+                {
+                    "file": "architecture-doc.txt",
+                    "extraction_method": "direct-copy",
+                    "quality": "high",
+                }
+            ],
+            "entities": [
+                {
+                    "entity_id": "payment-gateway",
+                    "entity_type": "component",
+                    "fields": {
+                        "description": {
+                            "confidence": "HIGH",
+                            "source": "architecture-doc.txt, Overview",
+                            "quote": "payment gateway handles all credit card transactions",
+                            "pass": "prose",
+                        }
+                    },
+                }
+            ],
+        }
+        prov_path = tmp_path / "provenance.yaml"
+        with open(prov_path, "w") as f:
+            yaml.dump(prov, f)
+
+        result = mod.validate_provenance(str(prov_path), str(ctx))
+        assert result["valid"] is True
+        assert len(result["errors"]) == 0
+
+    def test_missing_required_fields(self, tmp_path):
+        """Missing top-level fields are flagged as errors."""
+        mod = self._import_validate_provenance()
+
+        prov_path = tmp_path / "provenance.yaml"
+        with open(prov_path, "w") as f:
+            yaml.dump({"extraction_date": "2026-04-01"}, f)
+
+        ctx = tmp_path / "context"
+        ctx.mkdir()
+
+        result = mod.validate_provenance(str(prov_path), str(ctx))
+        assert result["valid"] is False
+        error_text = " ".join(result["errors"])
+        assert "pipeline_version" in error_text
+        assert "entities" in error_text
+
+    def test_invalid_confidence_level(self, tmp_path):
+        """Invalid confidence levels produce errors."""
+        mod = self._import_validate_provenance()
+
+        ctx = tmp_path / "context"
+        ctx.mkdir()
+
+        prov = {
+            "extraction_date": "2026-04-01",
+            "pipeline_version": "1.0.0",
+            "documents_analyzed": [],
+            "entities": [
+                {
+                    "entity_id": "test-component",
+                    "entity_type": "component",
+                    "fields": {
+                        "name": {
+                            "confidence": "MAYBE",  # Invalid
+                            "source": "doc.txt",
+                            "quote": "test quote",
+                            "pass": "prose",
+                        }
+                    },
+                }
+            ],
+        }
+        prov_path = tmp_path / "provenance.yaml"
+        with open(prov_path, "w") as f:
+            yaml.dump(prov, f)
+
+        result = mod.validate_provenance(str(prov_path), str(ctx))
+        combined = " ".join(result["errors"] + result["warnings"])
+        assert "MAYBE" in combined
+
+    def test_invalid_entity_type(self, tmp_path):
+        """Invalid entity types produce warnings."""
+        mod = self._import_validate_provenance()
+
+        ctx = tmp_path / "context"
+        ctx.mkdir()
+
+        prov = {
+            "extraction_date": "2026-04-01",
+            "pipeline_version": "1.0.0",
+            "documents_analyzed": [],
+            "entities": [
+                {
+                    "entity_id": "test",
+                    "entity_type": "invalid_type",
+                    "fields": {
+                        "name": {
+                            "confidence": "HIGH",
+                            "source": "doc.txt",
+                            "quote": "test",
+                            "pass": "prose",
+                        }
+                    },
+                }
+            ],
+        }
+        prov_path = tmp_path / "provenance.yaml"
+        with open(prov_path, "w") as f:
+            yaml.dump(prov, f)
+
+        result = mod.validate_provenance(str(prov_path), str(ctx))
+        combined = " ".join(result["errors"] + result["warnings"])
+        assert "invalid_type" in combined
+
+    def test_fuzzy_quote_matching(self, tmp_path):
+        """Quotes that closely match source text are validated."""
+        mod = self._import_validate_provenance()
+
+        ctx = tmp_path / "context"
+        ctx.mkdir()
+        (ctx / "source.txt").write_text(
+            "The application uses PostgreSQL as its primary database for storing user records."
+        )
+
+        prov = {
+            "extraction_date": "2026-04-01",
+            "pipeline_version": "1.0.0",
+            "documents_analyzed": [
+                {"file": "source.txt", "extraction_method": "direct-copy"}
+            ],
+            "entities": [
+                {
+                    "entity_id": "user-db",
+                    "entity_type": "component",
+                    "fields": {
+                        "description": {
+                            "confidence": "HIGH",
+                            "source": "source.txt, Database",
+                            "quote": "uses PostgreSQL as its primary database",
+                            "pass": "prose",
+                        }
+                    },
+                }
+            ],
+        }
+        prov_path = tmp_path / "provenance.yaml"
+        with open(prov_path, "w") as f:
+            yaml.dump(prov, f)
+
+        result = mod.validate_provenance(str(prov_path), str(ctx))
+        # Should pass — quote is present in source
+        assert result["valid"] is True
+
+    def test_unloadable_provenance_file(self, tmp_path):
+        """A non-existent provenance file returns an error."""
+        mod = self._import_validate_provenance()
+
+        ctx = tmp_path / "context"
+        ctx.mkdir()
+
+        result = mod.validate_provenance(str(tmp_path / "nonexistent.yaml"), str(ctx))
+        assert result["valid"] is False
+        assert any("Cannot load" in e for e in result["errors"])
+
+    def test_valid_extraction_methods(self):
+        """All documented extraction methods are in the valid set."""
+        mod = self._import_validate_provenance()
+        expected_methods = {
+            "direct_read", "pandoc", "pdftotext", "ocr", "vision",
+            "python-docx", "pymupdf", "html2text", "tesseract-ocr",
+            "pymupdf+pdfplumber-tables", "direct-copy", "raw-read",
+        }
+        assert mod.VALID_EXTRACTION_METHODS == expected_methods
+
+    def test_valid_confidence_levels(self):
+        """All documented confidence levels are in the valid set."""
+        mod = self._import_validate_provenance()
+        assert mod.VALID_CONFIDENCE == {"HIGH", "MEDIUM", "LOW", "UNCERTAIN", "NOT_STATED"}
+
+
+# ============================================================================
+# L4 — FUNCTIONAL: Orphan entity detection (validate.py)
+# ============================================================================
+
+class TestOrphanEntityDetection:
+    """Tests for expanded orphan detection in validate.py."""
+
+    def _import_validate(self):
+        from importlib.util import spec_from_file_location, module_from_spec
+        spec = spec_from_file_location("validate", TOOLS_DIR / "validate.py")
+        mod = module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return mod
+
+    def test_orphaned_container_detected(self, tmp_path):
+        """Containers with no components assigned are flagged as orphaned."""
+        mod = self._import_validate()
+        system = {
+            "metadata": {"name": "Test", "description": "Test", "owner": "test", "status": "active"},
+            "contexts": [{"id": "ctx", "name": "Ctx", "description": "Test", "internal": True}],
+            "containers": [
+                {"id": "active-container", "name": "Active", "context_id": "ctx"},
+                {"id": "empty-container", "name": "Empty", "context_id": "ctx"},
+            ],
+            "components": [
+                {"id": "comp-a", "name": "A", "container_id": "active-container", "listeners": []},
+            ],
+        }
+        sys_path = tmp_path / "system.yaml"
+        with open(sys_path, "w") as f:
+            yaml.dump(system, f)
+        result = mod.validate(str(sys_path))
+        warning_msgs = " ".join(w["message"] for w in result["warnings"])
+        assert "empty-container" in warning_msgs
+        assert "orphaned" in warning_msgs
+
+    def test_orphaned_zone_detected(self, tmp_path):
+        """Zones with no infrastructure resources or trust boundaries are flagged."""
+        mod = self._import_validate()
+        system = {
+            "metadata": {"name": "Test", "description": "Test", "owner": "test", "status": "active"},
+            "contexts": [{"id": "ctx", "name": "Ctx", "description": "Test", "internal": True}],
+            "containers": [],
+            "components": [],
+        }
+        networks = {
+            "network_zones": [
+                {"id": "used-zone", "name": "Used", "zone_type": "dmz", "internet_routable": True, "trust": "untrusted"},
+                {"id": "unused-zone", "name": "Unused", "zone_type": "private", "internet_routable": False, "trust": "trusted"},
+            ],
+            "infrastructure_resources": [
+                {"id": "waf", "name": "WAF", "resource_type": "waf", "technology": "cloudflare", "zone_id": "used-zone"}
+            ],
+        }
+        sys_path = tmp_path / "system.yaml"
+        net_path = tmp_path / "networks.yaml"
+        with open(sys_path, "w") as f:
+            yaml.dump(system, f)
+        with open(net_path, "w") as f:
+            yaml.dump(networks, f)
+        result = mod.validate(str(sys_path), str(net_path))
+        warning_msgs = " ".join(w["message"] for w in result["warnings"])
+        assert "unused-zone" in warning_msgs
+        assert "orphaned" in warning_msgs
+
+
+# ============================================================================
+# L4 — FUNCTIONAL: K8s securityContext extraction
+# ============================================================================
+
+class TestK8sSecurityContextExtraction:
+    """Tests for K8s securityContext extraction in ingest-kubernetes.py."""
+
+    def _import_ingest_k8s(self):
+        from importlib.util import spec_from_file_location, module_from_spec
+        spec = spec_from_file_location("ingest_kubernetes", TOOLS_DIR / "ingest-kubernetes.py")
+        mod = module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return mod
+
+    def test_security_context_extracted(self):
+        """Pod and container securityContext fields are extracted."""
+        mod = self._import_ingest_k8s()
+        entities = {"components": [], "listeners": [], "network_zones": [], "network_policies": []}
+        metadata = {"name": "secure-app", "namespace": "production", "labels": {}}
+        spec = {
+            "replicas": 1,
+            "template": {
+                "spec": {
+                    "securityContext": {"runAsNonRoot": True, "runAsUser": 1000},
+                    "containers": [{
+                        "name": "app",
+                        "image": "myapp:v1.2.3",
+                        "securityContext": {
+                            "readOnlyRootFilesystem": True,
+                            "allowPrivilegeEscalation": False,
+                            "capabilities": {"drop": ["ALL"]},
+                        },
+                        "resources": {"limits": {"cpu": "500m", "memory": "256Mi"}},
+                    }],
+                }
+            },
+        }
+        mod._process_workload("Deployment", metadata, spec, {}, entities)
+        comp = entities["components"][0]
+        assert "security_context" in comp
+        sc = comp["security_context"]
+        assert sc["run_as_non_root"] is True
+        assert sc["read_only_root_filesystem"] is True
+        assert sc["allow_privilege_escalation"] is False
+        assert sc["capabilities_drop"] == ["ALL"]
+        assert comp["read_only_filesystem"] is True
+        assert comp["resource_limits_set"] is True
+
+    def test_host_namespace_extracted(self):
+        """Host network/PID/IPC sharing is detected."""
+        mod = self._import_ingest_k8s()
+        entities = {"components": [], "listeners": [], "network_zones": [], "network_policies": []}
+        metadata = {"name": "host-app", "namespace": "default", "labels": {}}
+        spec = {
+            "replicas": 1,
+            "template": {
+                "spec": {
+                    "hostNetwork": True,
+                    "hostPID": True,
+                    "containers": [{"name": "app", "image": "app:latest"}],
+                }
+            },
+        }
+        mod._process_workload("Deployment", metadata, spec, {}, entities)
+        comp = entities["components"][0]
+        assert comp.get("host_network") is True
+        assert comp.get("host_pid") is True
+
+    def test_no_security_context_graceful(self):
+        """Workloads without securityContext are handled gracefully."""
+        mod = self._import_ingest_k8s()
+        entities = {"components": [], "listeners": [], "network_zones": [], "network_policies": []}
+        metadata = {"name": "basic-app", "namespace": "default", "labels": {}}
+        spec = {
+            "replicas": 1,
+            "template": {
+                "spec": {
+                    "containers": [{"name": "app", "image": "app:v1"}],
+                }
+            },
+        }
+        mod._process_workload("Deployment", metadata, spec, {}, entities)
+        comp = entities["components"][0]
+        # Should not have security_context if none was specified
+        assert "security_context" not in comp
+
+
+# ============================================================================
+# L4 — FUNCTIONAL: Compliance mapping and threat enrichment
+# ============================================================================
+
+class TestThreatEnrichment:
+    """Tests for compliance mapping, confidence, and convergence scoring."""
+
+    def _import_threat_rules(self):
+        from importlib.util import spec_from_file_location, module_from_spec
+        spec = spec_from_file_location("threat_rules", TOOLS_DIR / "threat-rules.py")
+        mod = module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return mod
+
+    def test_compliance_mapping_loads(self):
+        """Compliance mapping file loads and contains expected rules."""
+        mod = self._import_threat_rules()
+        mapping = mod.load_compliance_mapping()
+        assert "unauthenticated-listener" in mapping
+        assert "pci_dss" in mapping["unauthenticated-listener"]
+        assert "nist_800_53" in mapping["unauthenticated-listener"]
+
+    def test_finding_has_confidence_and_risk_score(self):
+        """Finding objects include confidence and risk_score fields."""
+        mod = self._import_threat_rules()
+        f = mod.Finding(
+            rule_id="test-rule", title="Test", severity="high",
+            stride="spoofing", cwe=306, cwe_name="Missing Auth",
+            description="Test finding", entity_type="listener",
+            entity_id="comp.listener", remediation="Fix it",
+        )
+        assert f.confidence == "high"
+        assert f.risk_score == 7.0
+        d = f.to_dict()
+        assert "confidence" in d
+        assert "risk_score" in d
+
+    def test_enrich_adds_compliance(self):
+        """enrich_findings attaches compliance framework references."""
+        mod = self._import_threat_rules()
+        f = mod.Finding(
+            rule_id="unauthenticated-listener", title="Unauth",
+            severity="high", stride="spoofing", cwe=306,
+            cwe_name="Missing Auth", description="No auth",
+            entity_type="listener", entity_id="api.http",
+            remediation="Add auth",
+        )
+        mapping = mod.load_compliance_mapping()
+        enriched = mod.enrich_findings([f], mapping)
+        assert len(enriched[0].compliance) > 0
+        frameworks = {c["framework"] for c in enriched[0].compliance}
+        assert "pci_dss" in frameworks
+        assert "nist_800_53" in frameworks
+
+    def test_convergence_scoring_boosts_risk(self):
+        """Entities with 3+ findings get boosted risk scores."""
+        mod = self._import_threat_rules()
+        findings = []
+        for i in range(4):
+            findings.append(mod.Finding(
+                rule_id=f"rule-{i}", title=f"Rule {i}", severity="medium",
+                stride="spoofing", cwe=306, cwe_name="Test",
+                description="Test", entity_type="listener",
+                entity_id="same-entity.listener",  # Same entity
+                remediation="Fix",
+            ))
+        original_score = findings[0].risk_score
+        mod.enrich_findings(findings, {})
+        # All findings on same entity should have boosted risk
+        for f in findings:
+            assert f.risk_score > original_score
+
+    def test_convergence_no_boost_for_few_findings(self):
+        """Entities with <3 findings don't get boosted."""
+        mod = self._import_threat_rules()
+        findings = [
+            mod.Finding(
+                rule_id="rule-1", title="Rule 1", severity="medium",
+                stride="spoofing", cwe=306, cwe_name="Test",
+                description="Test", entity_type="listener",
+                entity_id="entity-a.listener", remediation="Fix",
+            ),
+            mod.Finding(
+                rule_id="rule-2", title="Rule 2", severity="medium",
+                stride="spoofing", cwe=306, cwe_name="Test",
+                description="Test", entity_type="listener",
+                entity_id="entity-b.listener", remediation="Fix",
+            ),
+        ]
+        original_scores = [f.risk_score for f in findings]
+        mod.enrich_findings(findings, {})
+        for f, orig in zip(findings, original_scores):
+            assert f.risk_score == orig
+
+    def test_finding_to_dict_includes_compliance(self):
+        """to_dict() includes compliance when present."""
+        mod = self._import_threat_rules()
+        f = mod.Finding(
+            rule_id="test", title="Test", severity="high",
+            stride=None, cwe=None, cwe_name=None,
+            description="Test", entity_type="component",
+            entity_id="comp", remediation="Fix",
+        )
+        f.compliance = [{"framework": "pci_dss", "control": "pci-4.1"}]
+        d = f.to_dict()
+        assert "compliance" in d
+        assert d["compliance"][0]["framework"] == "pci_dss"

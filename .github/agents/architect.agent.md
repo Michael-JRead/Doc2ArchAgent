@@ -9,10 +9,10 @@ handoffs:
     prompt: "Place containers and components into network zones for a deployment environment."
   - label: "Review security posture"
     agent: security-reviewer
-    prompt: "Analyze the architecture for security vulnerabilities and trust boundary issues."
+    prompt: "Analyze the architecture for security vulnerabilities and trust boundary issues. Read system-security.yaml, networks-security.yaml, and deployment-security.yaml alongside base files."
   - label: "Generate diagrams"
     agent: diagram-generator
-    prompt: "Generate architecture diagrams from the YAML model."
+    prompt: "Generate architecture diagrams from the YAML model. Include security overlays (system-security.yaml, networks-security.yaml, deployment-security.yaml) for trust boundary and confidence visualization."
   - label: "Generate documentation"
     agent: doc-writer
     prompt: "Generate HLDD and stakeholder documentation from the architecture."

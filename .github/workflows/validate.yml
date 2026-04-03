@@ -5,17 +5,21 @@ on:
     branches: [main]
     paths:
       - 'architecture/**'
-      - 'tools/validate.py'
-      - 'tools/validate-patterns.py'
+      - 'tools/**'
       - 'schemas/**'
       - 'patterns/**'
+      - 'tests/**'
+      - 'context/**'
+      - 'deployments/**'
   pull_request:
     paths:
       - 'architecture/**'
-      - 'tools/validate.py'
-      - 'tools/validate-patterns.py'
+      - 'tools/**'
       - 'schemas/**'
       - 'patterns/**'
+      - 'tests/**'
+      - 'context/**'
+      - 'deployments/**'
 
 jobs:
   validate:
@@ -36,10 +40,34 @@ jobs:
           python-version: '3.12'
 
       - name: Install dependencies
-        run: pip install pyyaml jsonschema pytest
+        run: pip install pyyaml jsonschema pytest bandit pip-audit rapidfuzz beautifulsoup4 html2text python-docx
 
       - name: Run regression tests
         run: pytest tests/ -v --tb=short
+
+      - name: SAST — Bandit security scan
+        run: bandit -r tools/ -f json -o bandit-results.json --severity-level medium || true
+
+      - name: Bandit summary
+        if: always()
+        run: |
+          if [ -f bandit-results.json ]; then
+            python3 -c "
+          import json
+          with open('bandit-results.json') as f:
+              data = json.load(f)
+          results = data.get('results', [])
+          if results:
+              print(f'::warning::Bandit found {len(results)} issue(s):')
+              for r in results:
+                  print(f\"  {r['issue_severity']}: {r['issue_text']} ({r['filename']}:{r['line_number']})\")
+          else:
+              print('Bandit: No issues found')
+          "
+          fi
+
+      - name: Dependency audit — pip-audit
+        run: pip-audit --requirement tools/requirements.txt --output json --desc 2>/dev/null || true
 
       - name: Validate architecture files
         id: validate

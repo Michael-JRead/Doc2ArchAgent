@@ -30,10 +30,10 @@ handoffs:
     prompt: "Return to the architect agent for architecture changes."
   - label: "Review security"
     agent: security-reviewer
-    prompt: "Review security aspects of the architecture."
+    prompt: "Review security aspects of the architecture. Read system-security.yaml, networks-security.yaml, and deployment-security.yaml alongside base files for complete threat analysis."
   - label: "Validate"
     agent: validator
-    prompt: "Validate the generated diagrams and architecture artifacts."
+    prompt: "Validate the generated diagrams and architecture artifacts. Include security overlay files (system-security.yaml, networks-security.yaml, deployment-security.yaml) in validation scope."
 ---
 
 <!-- Copyright (c) 2026 Michael J. Read. All rights reserved. -->

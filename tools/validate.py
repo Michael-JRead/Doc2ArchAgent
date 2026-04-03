@@ -90,9 +90,9 @@ SARIF_RULES = {
     },
     "ARCH008": {
         "id": "ARCH008",
-        "shortDescription": {"text": "Orphaned component"},
-        "fullDescription": {"text": "A component has no relationships connecting it to other components."},
-        "help": {"text": "Add at least one component_relationship involving this component."},
+        "shortDescription": {"text": "Orphaned entity"},
+        "fullDescription": {"text": "An entity (component, container, or zone) has no references connecting it to the architecture model."},
+        "help": {"text": "Add relationships, placements, or infrastructure resources referencing this entity."},
         "defaultConfiguration": {"level": "warning"},
     },
     "ARCH009": {
@@ -385,7 +385,8 @@ def validate(system_path: str, networks_path: str | None = None,
                     rule_id="ARCH007",
                 )
 
-    # --- 11. Orphaned components ---
+    # --- 11. Orphaned entity detection (components, containers, zones) ---
+    # 11a. Orphaned components — no relationships referencing them
     connected = set()
     for rel in system.get('component_relationships', []):
         if isinstance(rel, dict):
@@ -396,6 +397,74 @@ def validate(system_path: str, networks_path: str | None = None,
     for comp_id in components:
         if comp_id not in connected:
             add_warning(f"component '{comp_id}' has no relationships (orphaned)", rule_id="ARCH008")
+
+    # 11a-ii. Orphaned containers — no components reference them
+    referenced_containers = {comp.get('container_id') for comp in components.values() if comp.get('container_id')}
+    for cont_id in containers:
+        if cont_id not in referenced_containers:
+            add_warning(
+                f"container '{cont_id}' has no components assigned to it (orphaned)",
+                rule_id="ARCH008",
+            )
+
+    # 11a-iii. Orphaned zones — no deployment placements or infra resources reference them
+    if networks and zones:
+        referenced_zones = set()
+        # From infrastructure_resources
+        for res in networks.get('infrastructure_resources', []):
+            if isinstance(res, dict) and res.get('zone_id'):
+                referenced_zones.add(res['zone_id'])
+        # From trust_boundaries
+        for tb in system.get('trust_boundaries', []):
+            if isinstance(tb, dict):
+                for field in ('source_zone', 'target_zone'):
+                    if tb.get(field):
+                        referenced_zones.add(tb[field])
+        for zone_id in zones:
+            if zone_id not in referenced_zones:
+                add_warning(
+                    f"network_zone '{zone_id}' has no infrastructure resources or trust boundary references (orphaned)",
+                    rule_id="ARCH008",
+                    file=nw_file,
+                )
+
+    # --- 11b. Data entity and external system referential integrity ---
+    data_entities = {d['id']: d for d in system.get('data_entities', []) if isinstance(d, dict) and 'id' in d}
+    for rel in system.get('component_relationships', []):
+        if not isinstance(rel, dict):
+            continue
+        for de_ref in rel.get('data_entities', []):
+            if isinstance(de_ref, str) and de_ref not in data_entities:
+                add_warning(
+                    f"component_relationship '{rel.get('id', '?')}': data_entity '{de_ref}' "
+                    f"not found in system.yaml data_entities (may be in security overlay)",
+                    rule_id="ARCH002",
+                )
+
+    # --- 11c. Trust boundary zone references ---
+    for tb in system.get('trust_boundaries', []):
+        if not isinstance(tb, dict):
+            continue
+        for zone_field in ('source_zone', 'target_zone'):
+            zone_ref = tb.get(zone_field, '')
+            if zone_ref and zones and zone_ref not in zones:
+                add_warning(
+                    f"trust_boundary '{tb.get('id', '?')}': {zone_field} '{zone_ref}' "
+                    f"not found in networks.yaml network_zones",
+                    rule_id="ARCH002",
+                )
+
+    # --- 11d. Context external_system_id references ---
+    for ctx in system.get('contexts', []):
+        if not isinstance(ctx, dict):
+            continue
+        ext_ref = ctx.get('external_system_id', '')
+        if ext_ref and ext_ref not in external_systems:
+            add_error(
+                f"context '{ctx.get('id', '?')}': external_system_id '{ext_ref}' "
+                f"does not exist in external_systems",
+                rule_id="ARCH002",
+            )
 
     # --- 12. Cross-entity consistency checks (hallucination detection) ---
     # A component in an external context (internal=false) is suspicious
@@ -602,7 +671,8 @@ def format_sarif(result: dict) -> str:
 
         level = "error" if item in result["errors"] else "warning"
         fingerprint = hashlib.md5(
-            f"{item['rule_id']}:{item['message']}:{file_uri}".encode()
+            f"{item['rule_id']}:{item['message']}:{file_uri}".encode(),
+            usedforsecurity=False,
         ).hexdigest()
 
         sarif_results.append({

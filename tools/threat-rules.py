@@ -37,6 +37,8 @@ RULES_FILE = PROJECT_ROOT / "context" / "threat-rules.yaml"
 APPLICABILITY_FILE = PROJECT_ROOT / "context" / "threat-applicability.yaml"
 
 SEVERITY_ORDER = {"critical": 4, "high": 3, "medium": 2, "low": 1, "info": 0}
+SEVERITY_RISK_SCORE = {"critical": 9.0, "high": 7.0, "medium": 5.0, "low": 3.0, "info": 1.0}
+COMPLIANCE_MAPPING_FILE = PROJECT_ROOT / "context" / "compliance-rule-mapping.yaml"
 
 
 # =============================================================================
@@ -350,7 +352,8 @@ class Finding:
     def __init__(self, rule_id: str, title: str, severity: str, stride: str | None,
                  cwe: int | None, cwe_name: str | None, description: str,
                  entity_type: str, entity_id: str, remediation: str,
-                 severity_reason: str = "", file_path: str = ""):
+                 severity_reason: str = "", file_path: str = "",
+                 confidence: str = "high"):
         self.rule_id = rule_id
         self.title = title
         self.severity = severity
@@ -363,12 +366,17 @@ class Finding:
         self.remediation = remediation
         self.severity_reason = severity_reason
         self.file_path = file_path
+        self.confidence = confidence  # high, medium, low
+        self.risk_score = SEVERITY_RISK_SCORE.get(severity, 1.0)
+        self.compliance = []  # populated post-evaluation
 
     def to_dict(self) -> dict:
-        return {
+        d = {
             "rule_id": self.rule_id,
             "title": self.title,
             "severity": self.severity,
+            "confidence": self.confidence,
+            "risk_score": self.risk_score,
             "stride": self.stride,
             "cwe": self.cwe,
             "cwe_name": self.cwe_name,
@@ -378,6 +386,9 @@ class Finding:
             "remediation": self.remediation,
             "severity_reason": self.severity_reason,
         }
+        if self.compliance:
+            d["compliance"] = self.compliance
+        return d
 
 
 def load_rules() -> list[dict]:
@@ -387,6 +398,15 @@ def load_rules() -> list[dict]:
     with open(RULES_FILE) as f:
         data = yaml.safe_load(f)
     return data.get("rules", [])
+
+
+def load_compliance_mapping() -> dict:
+    """Load decoupled compliance rule mappings."""
+    if not COMPLIANCE_MAPPING_FILE.exists():
+        return {}
+    with open(COMPLIANCE_MAPPING_FILE) as f:
+        data = yaml.safe_load(f) or {}
+    return data.get("rule_mappings", {})
 
 
 def load_applicability() -> dict:
@@ -826,6 +846,85 @@ def _filter_accepted_risks(findings: list[Finding], accepted_risks: list[dict]) 
 
 
 # =============================================================================
+# Post-Evaluation Enrichment
+# =============================================================================
+
+
+def _infer_confidence(finding: Finding, model: ArchModel) -> str:
+    """Infer confidence based on whether the triggering entity has explicit data.
+
+    Returns 'high' if the entity has explicit security-relevant fields,
+    'medium' if fields are absent (finding triggered on defaults/missing data),
+    'low' for entities with minimal data.
+    """
+    entity_id = finding.entity_id
+    # For listener findings (entity_id = "comp_id.listener_id")
+    if finding.entity_type == "listener" and "." in entity_id:
+        comp_id = entity_id.rsplit(".", 1)[0]
+        comp = model.components.get(comp_id, {})
+        listeners = comp.get("listeners", [])
+        lid = entity_id.rsplit(".", 1)[1]
+        listener = next((l for l in listeners if l.get("id") == lid), {})
+        # If key security fields are explicitly set, high confidence
+        explicit_fields = sum(1 for k in ("authn_mechanism", "tls_enabled", "authz_required")
+                              if k in listener)
+        if explicit_fields >= 2:
+            return "high"
+        elif explicit_fields >= 1:
+            return "medium"
+        return "low"
+    elif finding.entity_type == "component":
+        comp = model.components.get(entity_id, {})
+        if comp.get("listeners") or comp.get("security_context"):
+            return "high"
+        return "medium"
+    elif finding.entity_type == "zone":
+        zone = model.zones.get(entity_id, {})
+        if zone.get("trust") and zone.get("internet_routable") is not None:
+            return "high"
+        return "medium"
+    return "high"
+
+
+def enrich_findings(findings: list[Finding], compliance_map: dict,
+                    model: ArchModel | None = None) -> list[Finding]:
+    """Enrich findings with compliance mappings, confidence, and convergence scoring."""
+    # 0. Infer confidence from entity data completeness
+    if model:
+        for finding in findings:
+            finding.confidence = _infer_confidence(finding, model)
+
+    # 1. Attach compliance framework references
+    for finding in findings:
+        mapping = compliance_map.get(finding.rule_id, {})
+        if mapping:
+            frameworks = []
+            for framework, controls in mapping.items():
+                if framework == "cwe":
+                    continue  # Already in finding.cwe
+                for ctrl in controls:
+                    frameworks.append({"framework": framework, "control": ctrl})
+            finding.compliance = frameworks
+
+    # 2. Convergence scoring — boost risk for entities with multiple findings
+    entity_findings: dict[str, list[Finding]] = {}
+    for finding in findings:
+        entity_findings.setdefault(finding.entity_id, []).append(finding)
+
+    for entity_id, entity_group in entity_findings.items():
+        count = len(entity_group)
+        if count >= 3:
+            # Convergence multiplier: 3+ distinct rules on same entity = high-confidence attack surface
+            multiplier = min(1.5, 1.0 + (count - 2) * 0.1)
+            for f in entity_group:
+                f.risk_score = round(min(10.0, f.risk_score * multiplier), 1)
+                if count >= 5:
+                    f.confidence = "high"  # Multiple vectors confirm the issue
+
+    return findings
+
+
+# =============================================================================
 # Output Formatters
 # =============================================================================
 
@@ -867,7 +966,10 @@ def format_table(findings: list[Finding]) -> str:
             stride_str = f.stride.upper() if f.stride else "N/A"
             lines.append(f"  {i}. [{f.rule_id}] {f.title}")
             lines.append(f"     Entity: {f.entity_type}:{f.entity_id}")
-            lines.append(f"     STRIDE: {stride_str}  |  CWE: {cwe_str}")
+            lines.append(f"     STRIDE: {stride_str}  |  CWE: {cwe_str}  |  Confidence: {f.confidence}  |  Risk: {f.risk_score}")
+            if f.compliance:
+                frameworks = set(c["framework"] for c in f.compliance)
+                lines.append(f"     Compliance: {', '.join(sorted(frameworks))}")
             if f.severity_reason:
                 lines.append(f"     Reason: {f.severity_reason}")
             lines.append(f"     Fix: {f.remediation}")
@@ -894,15 +996,31 @@ def format_sarif(findings: list[Finding], file_path: str = "") -> str:
                 },
                 "properties": {},
             }
+            tags = []
             if f.cwe:
-                rule_def["properties"]["tags"] = [f"CWE-{f.cwe}"]
+                tags.append(f"CWE-{f.cwe}")
             if f.stride:
+                tags.append(f"STRIDE:{f.stride}")
                 rule_def["properties"]["stride"] = f.stride
+            if tags:
+                rule_def["properties"]["tags"] = tags
+            rule_def["properties"]["precision"] = "high"
             rules[f.rule_id] = rule_def
 
         fingerprint = hashlib.md5(
-            f"{f.rule_id}:{f.entity_id}".encode()
+            f"{f.rule_id}:{f.entity_type}:{f.entity_id}".encode(),
+            usedforsecurity=False,
         ).hexdigest()
+
+        result_props = {
+            "severity": f.severity,
+            "confidence": f.confidence,
+            "risk_score": f.risk_score,
+        }
+        if f.compliance:
+            result_props["compliance"] = [
+                f"{c['framework']}:{c['control']}" for c in f.compliance
+            ]
 
         results.append({
             "ruleId": f.rule_id,
@@ -916,7 +1034,7 @@ def format_sarif(findings: list[Finding], file_path: str = "") -> str:
                 }
             }],
             "fingerprints": {"primaryLocationLineHash": fingerprint},
-            "properties": {"severity": f.severity},
+            "properties": result_props,
         })
 
     sarif = {
@@ -1015,8 +1133,12 @@ def main():
     findings = evaluate_rules(model, rules, applicability,
                               environment=args.environment, file_path=args.system_yaml)
 
-    # Sort by severity (critical first)
-    findings.sort(key=lambda f: SEVERITY_ORDER.get(f.severity, 0), reverse=True)
+    # Post-evaluation enrichment: compliance mappings, confidence, convergence scoring
+    compliance_map = load_compliance_mapping()
+    findings = enrich_findings(findings, compliance_map, model)
+
+    # Sort by risk score (highest first), then severity
+    findings.sort(key=lambda f: (SEVERITY_ORDER.get(f.severity, 0), f.risk_score), reverse=True)
 
     # Output
     if args.format == "json":
