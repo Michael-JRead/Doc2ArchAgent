@@ -153,6 +153,53 @@ def _process_workload(kind: str, metadata: dict, spec: dict, services: dict, ent
             component["resources"] = resources
             break  # Use first container's resources
 
+    # Extract security context (pod-level + first container-level)
+    pod_security_ctx = pod_spec.get("securityContext", {})
+    container_security_ctx = containers[0].get("securityContext", {}) if containers else {}
+    capabilities = container_security_ctx.get("capabilities", {})
+
+    security_context = {}
+    # Pod-level fields
+    if "runAsNonRoot" in pod_security_ctx:
+        security_context["run_as_non_root"] = pod_security_ctx["runAsNonRoot"]
+    if "runAsUser" in pod_security_ctx:
+        security_context["run_as_user"] = pod_security_ctx["runAsUser"]
+    # Container-level fields (override pod-level)
+    if "runAsNonRoot" in container_security_ctx:
+        security_context["run_as_non_root"] = container_security_ctx["runAsNonRoot"]
+    if "privileged" in container_security_ctx:
+        security_context["privileged"] = container_security_ctx["privileged"]
+    if "readOnlyRootFilesystem" in container_security_ctx:
+        security_context["read_only_root_filesystem"] = container_security_ctx["readOnlyRootFilesystem"]
+    if "allowPrivilegeEscalation" in container_security_ctx:
+        security_context["allow_privilege_escalation"] = container_security_ctx["allowPrivilegeEscalation"]
+    if capabilities.get("drop"):
+        security_context["capabilities_drop"] = capabilities["drop"]
+    if capabilities.get("add"):
+        security_context["capabilities_add"] = capabilities["add"]
+
+    # Map to deployment-security schema fields
+    if security_context:
+        component["security_context"] = security_context
+        # Map to our standard fields for downstream threat rules
+        component["runtime_user"] = (
+            str(pod_security_ctx.get("runAsUser", "")) if pod_security_ctx.get("runAsUser") else ""
+        )
+        component["read_only_filesystem"] = security_context.get("read_only_root_filesystem", False)
+        component["resource_limits_set"] = bool(component.get("resources", {}).get("limits"))
+
+    # Extract host namespace sharing (security-relevant)
+    if pod_spec.get("hostNetwork"):
+        component["host_network"] = True
+    if pod_spec.get("hostPID"):
+        component["host_pid"] = True
+    if pod_spec.get("hostIPC"):
+        component["host_ipc"] = True
+
+    # Check automountServiceAccountToken
+    if pod_spec.get("automountServiceAccountToken") is False:
+        component["automount_service_account_token"] = False
+
     entities["components"].append(component)
 
 

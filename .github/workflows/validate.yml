@@ -40,7 +40,7 @@ jobs:
           python-version: '3.12'
 
       - name: Install dependencies
-        run: pip install pyyaml jsonschema pytest bandit pip-audit
+        run: pip install pyyaml jsonschema pytest bandit pip-audit rapidfuzz beautifulsoup4 html2text python-docx
 
       - name: Run regression tests
         run: pytest tests/ -v --tb=short

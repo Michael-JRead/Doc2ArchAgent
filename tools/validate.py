@@ -90,9 +90,9 @@ SARIF_RULES = {
     },
     "ARCH008": {
         "id": "ARCH008",
-        "shortDescription": {"text": "Orphaned component"},
-        "fullDescription": {"text": "A component has no relationships connecting it to other components."},
-        "help": {"text": "Add at least one component_relationship involving this component."},
+        "shortDescription": {"text": "Orphaned entity"},
+        "fullDescription": {"text": "An entity (component, container, or zone) has no references connecting it to the architecture model."},
+        "help": {"text": "Add relationships, placements, or infrastructure resources referencing this entity."},
         "defaultConfiguration": {"level": "warning"},
     },
     "ARCH009": {
@@ -385,7 +385,8 @@ def validate(system_path: str, networks_path: str | None = None,
                     rule_id="ARCH007",
                 )
 
-    # --- 11. Orphaned components ---
+    # --- 11. Orphaned entity detection (components, containers, zones) ---
+    # 11a. Orphaned components — no relationships referencing them
     connected = set()
     for rel in system.get('component_relationships', []):
         if isinstance(rel, dict):
@@ -396,6 +397,36 @@ def validate(system_path: str, networks_path: str | None = None,
     for comp_id in components:
         if comp_id not in connected:
             add_warning(f"component '{comp_id}' has no relationships (orphaned)", rule_id="ARCH008")
+
+    # 11a-ii. Orphaned containers — no components reference them
+    referenced_containers = {comp.get('container_id') for comp in components.values() if comp.get('container_id')}
+    for cont_id in containers:
+        if cont_id not in referenced_containers:
+            add_warning(
+                f"container '{cont_id}' has no components assigned to it (orphaned)",
+                rule_id="ARCH008",
+            )
+
+    # 11a-iii. Orphaned zones — no deployment placements or infra resources reference them
+    if networks and zones:
+        referenced_zones = set()
+        # From infrastructure_resources
+        for res in networks.get('infrastructure_resources', []):
+            if isinstance(res, dict) and res.get('zone_id'):
+                referenced_zones.add(res['zone_id'])
+        # From trust_boundaries
+        for tb in system.get('trust_boundaries', []):
+            if isinstance(tb, dict):
+                for field in ('source_zone', 'target_zone'):
+                    if tb.get(field):
+                        referenced_zones.add(tb[field])
+        for zone_id in zones:
+            if zone_id not in referenced_zones:
+                add_warning(
+                    f"network_zone '{zone_id}' has no infrastructure resources or trust boundary references (orphaned)",
+                    rule_id="ARCH008",
+                    file=nw_file,
+                )
 
     # --- 11b. Data entity and external system referential integrity ---
     data_entities = {d['id']: d for d in system.get('data_entities', []) if isinstance(d, dict) and 'id' in d}

@@ -2720,3 +2720,265 @@ class TestValidateProvenance:
         """All documented confidence levels are in the valid set."""
         mod = self._import_validate_provenance()
         assert mod.VALID_CONFIDENCE == {"HIGH", "MEDIUM", "LOW", "UNCERTAIN", "NOT_STATED"}
+
+
+# ============================================================================
+# L4 — FUNCTIONAL: Orphan entity detection (validate.py)
+# ============================================================================
+
+class TestOrphanEntityDetection:
+    """Tests for expanded orphan detection in validate.py."""
+
+    def _import_validate(self):
+        from importlib.util import spec_from_file_location, module_from_spec
+        spec = spec_from_file_location("validate", TOOLS_DIR / "validate.py")
+        mod = module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return mod
+
+    def test_orphaned_container_detected(self, tmp_path):
+        """Containers with no components assigned are flagged as orphaned."""
+        mod = self._import_validate()
+        system = {
+            "metadata": {"name": "Test", "description": "Test", "owner": "test", "status": "active"},
+            "contexts": [{"id": "ctx", "name": "Ctx", "description": "Test", "internal": True}],
+            "containers": [
+                {"id": "active-container", "name": "Active", "context_id": "ctx"},
+                {"id": "empty-container", "name": "Empty", "context_id": "ctx"},
+            ],
+            "components": [
+                {"id": "comp-a", "name": "A", "container_id": "active-container", "listeners": []},
+            ],
+        }
+        sys_path = tmp_path / "system.yaml"
+        with open(sys_path, "w") as f:
+            yaml.dump(system, f)
+        result = mod.validate(str(sys_path))
+        warning_msgs = " ".join(w["message"] for w in result["warnings"])
+        assert "empty-container" in warning_msgs
+        assert "orphaned" in warning_msgs
+
+    def test_orphaned_zone_detected(self, tmp_path):
+        """Zones with no infrastructure resources or trust boundaries are flagged."""
+        mod = self._import_validate()
+        system = {
+            "metadata": {"name": "Test", "description": "Test", "owner": "test", "status": "active"},
+            "contexts": [{"id": "ctx", "name": "Ctx", "description": "Test", "internal": True}],
+            "containers": [],
+            "components": [],
+        }
+        networks = {
+            "network_zones": [
+                {"id": "used-zone", "name": "Used", "zone_type": "dmz", "internet_routable": True, "trust": "untrusted"},
+                {"id": "unused-zone", "name": "Unused", "zone_type": "private", "internet_routable": False, "trust": "trusted"},
+            ],
+            "infrastructure_resources": [
+                {"id": "waf", "name": "WAF", "resource_type": "waf", "technology": "cloudflare", "zone_id": "used-zone"}
+            ],
+        }
+        sys_path = tmp_path / "system.yaml"
+        net_path = tmp_path / "networks.yaml"
+        with open(sys_path, "w") as f:
+            yaml.dump(system, f)
+        with open(net_path, "w") as f:
+            yaml.dump(networks, f)
+        result = mod.validate(str(sys_path), str(net_path))
+        warning_msgs = " ".join(w["message"] for w in result["warnings"])
+        assert "unused-zone" in warning_msgs
+        assert "orphaned" in warning_msgs
+
+
+# ============================================================================
+# L4 — FUNCTIONAL: K8s securityContext extraction
+# ============================================================================
+
+class TestK8sSecurityContextExtraction:
+    """Tests for K8s securityContext extraction in ingest-kubernetes.py."""
+
+    def _import_ingest_k8s(self):
+        from importlib.util import spec_from_file_location, module_from_spec
+        spec = spec_from_file_location("ingest_kubernetes", TOOLS_DIR / "ingest-kubernetes.py")
+        mod = module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return mod
+
+    def test_security_context_extracted(self):
+        """Pod and container securityContext fields are extracted."""
+        mod = self._import_ingest_k8s()
+        entities = {"components": [], "listeners": [], "network_zones": [], "network_policies": []}
+        metadata = {"name": "secure-app", "namespace": "production", "labels": {}}
+        spec = {
+            "replicas": 1,
+            "template": {
+                "spec": {
+                    "securityContext": {"runAsNonRoot": True, "runAsUser": 1000},
+                    "containers": [{
+                        "name": "app",
+                        "image": "myapp:v1.2.3",
+                        "securityContext": {
+                            "readOnlyRootFilesystem": True,
+                            "allowPrivilegeEscalation": False,
+                            "capabilities": {"drop": ["ALL"]},
+                        },
+                        "resources": {"limits": {"cpu": "500m", "memory": "256Mi"}},
+                    }],
+                }
+            },
+        }
+        mod._process_workload("Deployment", metadata, spec, {}, entities)
+        comp = entities["components"][0]
+        assert "security_context" in comp
+        sc = comp["security_context"]
+        assert sc["run_as_non_root"] is True
+        assert sc["read_only_root_filesystem"] is True
+        assert sc["allow_privilege_escalation"] is False
+        assert sc["capabilities_drop"] == ["ALL"]
+        assert comp["read_only_filesystem"] is True
+        assert comp["resource_limits_set"] is True
+
+    def test_host_namespace_extracted(self):
+        """Host network/PID/IPC sharing is detected."""
+        mod = self._import_ingest_k8s()
+        entities = {"components": [], "listeners": [], "network_zones": [], "network_policies": []}
+        metadata = {"name": "host-app", "namespace": "default", "labels": {}}
+        spec = {
+            "replicas": 1,
+            "template": {
+                "spec": {
+                    "hostNetwork": True,
+                    "hostPID": True,
+                    "containers": [{"name": "app", "image": "app:latest"}],
+                }
+            },
+        }
+        mod._process_workload("Deployment", metadata, spec, {}, entities)
+        comp = entities["components"][0]
+        assert comp.get("host_network") is True
+        assert comp.get("host_pid") is True
+
+    def test_no_security_context_graceful(self):
+        """Workloads without securityContext are handled gracefully."""
+        mod = self._import_ingest_k8s()
+        entities = {"components": [], "listeners": [], "network_zones": [], "network_policies": []}
+        metadata = {"name": "basic-app", "namespace": "default", "labels": {}}
+        spec = {
+            "replicas": 1,
+            "template": {
+                "spec": {
+                    "containers": [{"name": "app", "image": "app:v1"}],
+                }
+            },
+        }
+        mod._process_workload("Deployment", metadata, spec, {}, entities)
+        comp = entities["components"][0]
+        # Should not have security_context if none was specified
+        assert "security_context" not in comp
+
+
+# ============================================================================
+# L4 — FUNCTIONAL: Compliance mapping and threat enrichment
+# ============================================================================
+
+class TestThreatEnrichment:
+    """Tests for compliance mapping, confidence, and convergence scoring."""
+
+    def _import_threat_rules(self):
+        from importlib.util import spec_from_file_location, module_from_spec
+        spec = spec_from_file_location("threat_rules", TOOLS_DIR / "threat-rules.py")
+        mod = module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return mod
+
+    def test_compliance_mapping_loads(self):
+        """Compliance mapping file loads and contains expected rules."""
+        mod = self._import_threat_rules()
+        mapping = mod.load_compliance_mapping()
+        assert "unauthenticated-listener" in mapping
+        assert "pci_dss" in mapping["unauthenticated-listener"]
+        assert "nist_800_53" in mapping["unauthenticated-listener"]
+
+    def test_finding_has_confidence_and_risk_score(self):
+        """Finding objects include confidence and risk_score fields."""
+        mod = self._import_threat_rules()
+        f = mod.Finding(
+            rule_id="test-rule", title="Test", severity="high",
+            stride="spoofing", cwe=306, cwe_name="Missing Auth",
+            description="Test finding", entity_type="listener",
+            entity_id="comp.listener", remediation="Fix it",
+        )
+        assert f.confidence == "high"
+        assert f.risk_score == 7.0
+        d = f.to_dict()
+        assert "confidence" in d
+        assert "risk_score" in d
+
+    def test_enrich_adds_compliance(self):
+        """enrich_findings attaches compliance framework references."""
+        mod = self._import_threat_rules()
+        f = mod.Finding(
+            rule_id="unauthenticated-listener", title="Unauth",
+            severity="high", stride="spoofing", cwe=306,
+            cwe_name="Missing Auth", description="No auth",
+            entity_type="listener", entity_id="api.http",
+            remediation="Add auth",
+        )
+        mapping = mod.load_compliance_mapping()
+        enriched = mod.enrich_findings([f], mapping)
+        assert len(enriched[0].compliance) > 0
+        frameworks = {c["framework"] for c in enriched[0].compliance}
+        assert "pci_dss" in frameworks
+        assert "nist_800_53" in frameworks
+
+    def test_convergence_scoring_boosts_risk(self):
+        """Entities with 3+ findings get boosted risk scores."""
+        mod = self._import_threat_rules()
+        findings = []
+        for i in range(4):
+            findings.append(mod.Finding(
+                rule_id=f"rule-{i}", title=f"Rule {i}", severity="medium",
+                stride="spoofing", cwe=306, cwe_name="Test",
+                description="Test", entity_type="listener",
+                entity_id="same-entity.listener",  # Same entity
+                remediation="Fix",
+            ))
+        original_score = findings[0].risk_score
+        mod.enrich_findings(findings, {})
+        # All findings on same entity should have boosted risk
+        for f in findings:
+            assert f.risk_score > original_score
+
+    def test_convergence_no_boost_for_few_findings(self):
+        """Entities with <3 findings don't get boosted."""
+        mod = self._import_threat_rules()
+        findings = [
+            mod.Finding(
+                rule_id="rule-1", title="Rule 1", severity="medium",
+                stride="spoofing", cwe=306, cwe_name="Test",
+                description="Test", entity_type="listener",
+                entity_id="entity-a.listener", remediation="Fix",
+            ),
+            mod.Finding(
+                rule_id="rule-2", title="Rule 2", severity="medium",
+                stride="spoofing", cwe=306, cwe_name="Test",
+                description="Test", entity_type="listener",
+                entity_id="entity-b.listener", remediation="Fix",
+            ),
+        ]
+        original_scores = [f.risk_score for f in findings]
+        mod.enrich_findings(findings, {})
+        for f, orig in zip(findings, original_scores):
+            assert f.risk_score == orig
+
+    def test_finding_to_dict_includes_compliance(self):
+        """to_dict() includes compliance when present."""
+        mod = self._import_threat_rules()
+        f = mod.Finding(
+            rule_id="test", title="Test", severity="high",
+            stride=None, cwe=None, cwe_name=None,
+            description="Test", entity_type="component",
+            entity_id="comp", remediation="Fix",
+        )
+        f.compliance = [{"framework": "pci_dss", "control": "pci-4.1"}]
+        d = f.to_dict()
+        assert "compliance" in d
+        assert d["compliance"][0]["framework"] == "pci_dss"
