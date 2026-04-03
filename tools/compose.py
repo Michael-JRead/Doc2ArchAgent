@@ -204,6 +204,12 @@ def _apply_cross_network_links(all_zones: list[dict],
         src_id = link["source_zone"]
         tgt_id = link["target_zone"]
         direction = link.get("direction", "bidirectional")
+        valid_directions = ("egress", "ingress", "bidirectional")
+        if direction not in valid_directions:
+            raise ValueError(
+                f"cross_network_links: invalid direction '{direction}', "
+                f"must be one of {valid_directions}"
+            )
 
         if src_id not in zone_map:
             raise ValueError(f"cross_network_links: source_zone '{src_id}' not found")
@@ -428,8 +434,16 @@ def compose_system(manifest: dict) -> dict:
         all_data_entities.extend(data_ents)
         all_trust_boundaries.extend(trust_bounds)
 
-    # Add cross-product relationships from manifest
+    # Add cross-product relationships from manifest (with referential integrity check)
+    all_comp_ids = {c["id"] for c in all_components}
     for rel in manifest.get("cross_product_relationships", []):
+        for field in ("source_component", "target_component"):
+            ref = rel.get(field)
+            if ref and ref not in all_comp_ids:
+                raise ValueError(
+                    f"cross_product_relationships: {field} '{ref}' not found "
+                    f"in composed components"
+                )
         all_relationships.append(copy.deepcopy(rel))
 
     # Merge network pattern contexts into the system (if any)
@@ -720,6 +734,13 @@ def compose(manifest_path: Path, dry_run: bool = False,
     product_zones = system.pop("_product_zones", [])
     product_resources = system.pop("_product_resources", [])
     if product_zones:
+        existing_zone_ids = {z["id"] for z in networks.get("network_zones", [])}
+        product_zone_ids = {z["id"] for z in product_zones}
+        collisions = existing_zone_ids & product_zone_ids
+        if collisions:
+            raise ValueError(
+                f"Zone ID collision between product and network patterns: {collisions}"
+            )
         networks["network_zones"] = networks.get("network_zones", []) + product_zones
     if product_resources:
         networks.setdefault("infrastructure_resources", [])
@@ -739,6 +760,23 @@ def compose(manifest_path: Path, dry_run: bool = False,
         pattern_dir = _find_pattern_dir(prod_spec["pattern_ref"], "product")
         if pattern_dir:
             all_dataflows.extend(_load_pattern_dataflows(pattern_dir, prod_spec["id_prefix"]))
+
+    # Validate dataflow references (warnings, not errors — flows may reference externals)
+    dataflow_warnings = []
+    if all_dataflows:
+        zone_ids = {z["id"] for z in networks.get("network_zones", [])}
+        comp_ids = {c["id"] for c in system.get("components", [])}
+        for flow in all_dataflows:
+            flow_id = flow.get("id", "<unknown>")
+            for field, valid_set in [("source_zone", zone_ids),
+                                      ("target_zone", zone_ids),
+                                      ("source_component", comp_ids),
+                                      ("target_component", comp_ids)]:
+                if field in flow and flow[field] not in valid_set:
+                    dataflow_warnings.append(
+                        f"Dataflow '{flow_id}': {field} '{flow[field]}' "
+                        f"not found in composed output"
+                    )
 
     # Build security overlay stubs from composed data
     system_security = _build_system_security_stub(manifest, system)
@@ -765,7 +803,7 @@ def compose(manifest_path: Path, dry_run: bool = False,
         "dataflows": all_dataflows,
         "output_dir": str(output_dir),
         "errors": [],
-        "warnings": [],
+        "warnings": dataflow_warnings,
     }
 
     if dry_run:

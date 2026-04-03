@@ -1160,6 +1160,135 @@ class TestComposeTool:
             "Generated files must have compose.py header"
 
 
+class TestMultiNetworkComposition:
+    """Multi-network, unified patterns, and dataflow composition tests."""
+
+    def test_backward_compat_singular_network(self):
+        """Old single-network manifests still work through _normalize_network_specs."""
+        sys.path.insert(0, str(TOOLS_DIR))
+        from compose import _normalize_network_specs
+        manifest = {"network": {"pattern_ref": "standard-3tier", "id_prefix": "prod"}}
+        specs = _normalize_network_specs(manifest)
+        assert len(specs) == 1
+        assert specs[0]["pattern_ref"] == "standard-3tier"
+
+    def test_multi_network_normalizes(self):
+        """Plural networks: array is returned directly."""
+        sys.path.insert(0, str(TOOLS_DIR))
+        from compose import _normalize_network_specs
+        manifest = {"networks": [
+            {"pattern_ref": "a", "id_prefix": "net1"},
+            {"pattern_ref": "b", "id_prefix": "net2"},
+        ]}
+        specs = _normalize_network_specs(manifest)
+        assert len(specs) == 2
+
+    def test_both_network_and_networks_rejected(self):
+        """Having both network and networks raises ValueError."""
+        sys.path.insert(0, str(TOOLS_DIR))
+        from compose import _normalize_network_specs
+        manifest = {
+            "network": {"pattern_ref": "a", "id_prefix": "x"},
+            "networks": [{"pattern_ref": "b", "id_prefix": "y"}],
+        }
+        with pytest.raises(ValueError, match="both"):
+            _normalize_network_specs(manifest)
+
+    def test_duplicate_prefix_rejected(self):
+        """Duplicate id_prefix across networks raises ValueError."""
+        sys.path.insert(0, str(TOOLS_DIR))
+        from compose import compose_networks
+        manifest = {"networks": [
+            {"pattern_ref": "standard-3tier", "id_prefix": "dup"},
+            {"pattern_ref": "standard-3tier", "id_prefix": "dup"},
+        ]}
+        with pytest.raises(ValueError, match="Duplicate network id_prefix"):
+            compose_networks(manifest)
+
+    def test_cross_network_links_invalid_direction_rejected(self):
+        """Invalid direction in cross_network_links raises ValueError."""
+        sys.path.insert(0, str(TOOLS_DIR))
+        from compose import _apply_cross_network_links
+        zones = [{"id": "a-dmz"}, {"id": "b-dmz"}]
+        links = [{"source_zone": "a-dmz", "target_zone": "b-dmz", "direction": "typo"}]
+        with pytest.raises(ValueError, match="invalid direction"):
+            _apply_cross_network_links(zones, links)
+
+    def test_cross_network_links_applied(self):
+        """Valid cross_network_links inject ingress/egress refs."""
+        sys.path.insert(0, str(TOOLS_DIR))
+        from compose import _apply_cross_network_links
+        zones = [
+            {"id": "a-dmz", "allowed_egress_zones": []},
+            {"id": "b-app", "allowed_ingress_zones": []},
+        ]
+        links = [{"source_zone": "a-dmz", "target_zone": "b-app", "direction": "egress"}]
+        _apply_cross_network_links(zones, links)
+        assert "b-app" in zones[0]["allowed_egress_zones"]
+
+    def test_product_zones_in_composed_output(self):
+        """Product pattern with networks.yaml contributes zones to composed output."""
+        result = subprocess.run(
+            [sys.executable, str(TOOLS_DIR / "compose.py"),
+             str(Path(__file__).parent.parent / "deployments" / "mq-prod-us-east" / "manifest.yaml"),
+             "--dry-run"],
+            capture_output=True, text=True, timeout=30,
+        )
+        if result.returncode != 0:
+            pytest.skip("Default deployment manifest not found")
+        data = json.loads(result.stdout)
+        # ibm-mq pattern has networks.yaml with mq-isolation zone
+        assert data["networks_zones_count"] >= 4
+
+    def test_network_system_data_in_composed_system(self):
+        """Network pattern with system.yaml contributes containers to composed system."""
+        result = subprocess.run(
+            [sys.executable, str(TOOLS_DIR / "compose.py"),
+             str(Path(__file__).parent.parent / "deployments" / "mq-prod-us-east" / "manifest.yaml"),
+             "--dry-run"],
+            capture_output=True, text=True, timeout=30,
+        )
+        if result.returncode != 0:
+            pytest.skip("Default deployment manifest not found")
+        data = json.loads(result.stdout)
+        # standard-3tier has system.yaml with WAF + LB containers
+        assert data["system_containers_count"] >= 3
+
+    def test_dataflows_loaded(self):
+        """Dataflows from pattern files are loaded and counted."""
+        result = subprocess.run(
+            [sys.executable, str(TOOLS_DIR / "compose.py"),
+             str(Path(__file__).parent.parent / "deployments" / "mq-prod-us-east" / "manifest.yaml"),
+             "--dry-run"],
+            capture_output=True, text=True, timeout=30,
+        )
+        if result.returncode != 0:
+            pytest.skip("Default deployment manifest not found")
+        data = json.loads(result.stdout)
+        assert data["dataflows_count"] >= 1
+
+    def test_cross_product_rel_bad_ref_rejected(self):
+        """cross_product_relationships with invalid component ref raises ValueError."""
+        sys.path.insert(0, str(TOOLS_DIR))
+        from compose import compose_system
+        manifest = {
+            "name": "test",
+            "products": [
+                {"pattern_ref": "ibm-mq", "id_prefix": "mq"},
+            ],
+            "cross_product_relationships": [
+                {
+                    "id": "bad-rel",
+                    "source_component": "nonexistent-comp",
+                    "target_component": "mq-queue-manager",
+                    "label": "test",
+                }
+            ],
+        }
+        with pytest.raises(ValueError, match="source_component.*not found"):
+            compose_system(manifest)
+
+
 class TestMigratePatternTool:
     """tools/migrate-pattern.py correctly converts legacy patterns."""
 

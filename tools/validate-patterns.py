@@ -42,6 +42,10 @@ REQUIRED_LISTENER_FIELDS = ('id', 'protocol', 'port', 'tls_enabled', 'authn_mech
 REQUIRED_META_FIELDS = ('id', 'type', 'name', 'version', 'description')
 VALID_PATTERN_TYPES = {'product', 'network'}
 VALID_BINDING_TYPES = {'container', 'component', 'zone', 'infrastructure_resource'}
+VALID_AUDIENCES = {'application', 'human', 'hybrid', 'infrastructure'}
+REQUIRED_DATAFLOW_FIELDS = ('id', 'label', 'protocol')
+VALID_DATAFLOW_DIRECTIONS = {'ingress', 'egress', 'bidirectional'}
+VALID_DATA_CLASSIFICATIONS = {'public', 'internal', 'confidential', 'restricted'}
 
 
 # ============================================================================
@@ -181,6 +185,93 @@ def _validate_context_hierarchy(pattern_dir: Path, ptype: str,
             errors.append(f"{dirname}/contexts/provenance.yaml: cannot load: {e}")
 
 
+def _validate_dataflows(df_path: Path, fname: str, zone_ids: set, comp_ids: set,
+                        errors: list, warnings: list):
+    """Validate a dataflow file (app-dataflows.yaml or human-dataflows.yaml)."""
+    try:
+        with open(df_path) as f:
+            data = yaml.safe_load(f) or {}
+    except Exception as e:
+        errors.append(f"{fname}: cannot load: {e}")
+        return
+
+    # Validate metadata
+    meta = data.get("dataflow_metadata")
+    if not meta or not isinstance(meta, dict):
+        errors.append(f"{fname}: missing dataflow_metadata")
+    else:
+        audience = meta.get("audience")
+        if not audience:
+            errors.append(f"{fname}: dataflow_metadata.audience is required")
+        elif audience not in VALID_AUDIENCES:
+            errors.append(f"{fname}: dataflow_metadata.audience '{audience}' not valid")
+
+    # Validate flows
+    flows = data.get("dataflows", [])
+    if not flows:
+        warnings.append(f"{fname}: dataflows array is empty")
+        return
+
+    flow_ids: set[str] = set()
+    for flow in flows:
+        if not isinstance(flow, dict):
+            continue
+        fid = flow.get("id", "?")
+        for field in REQUIRED_DATAFLOW_FIELDS:
+            if not flow.get(field):
+                errors.append(f"{fname}: dataflow '{fid}': required field '{field}' is missing")
+        if fid != "?" and not KEBAB_CASE_RE.match(fid):
+            warnings.append(f"{fname}: dataflow id '{fid}' is not kebab-case")
+        if fid in flow_ids:
+            errors.append(f"{fname}: duplicate dataflow id '{fid}'")
+        flow_ids.add(fid)
+
+        # Direction enum
+        direction = flow.get("direction")
+        if direction and direction not in VALID_DATAFLOW_DIRECTIONS:
+            errors.append(f"{fname}: dataflow '{fid}': direction '{direction}' is not valid")
+
+        # Data classification enum
+        dc = flow.get("data_classification")
+        if dc and dc not in VALID_DATA_CLASSIFICATIONS:
+            errors.append(f"{fname}: dataflow '{fid}': data_classification '{dc}' is not valid")
+
+        # Zone pair completeness
+        has_src_zone = "source_zone" in flow
+        has_tgt_zone = "target_zone" in flow
+        if has_src_zone != has_tgt_zone:
+            errors.append(f"{fname}: dataflow '{fid}': source_zone and target_zone must both be present or both absent")
+
+        # Referential integrity (warnings only — may reference external entities)
+        if has_src_zone and zone_ids and flow["source_zone"] not in zone_ids:
+            warnings.append(f"{fname}: dataflow '{fid}': source_zone '{flow['source_zone']}' not in pattern zones")
+        if has_tgt_zone and zone_ids and flow["target_zone"] not in zone_ids:
+            warnings.append(f"{fname}: dataflow '{fid}': target_zone '{flow['target_zone']}' not in pattern zones")
+        src_comp = flow.get("source_component")
+        if src_comp and comp_ids and src_comp not in comp_ids:
+            warnings.append(f"{fname}: dataflow '{fid}': source_component '{src_comp}' not in pattern components")
+        tgt_comp = flow.get("target_component")
+        if tgt_comp and comp_ids and tgt_comp not in comp_ids:
+            warnings.append(f"{fname}: dataflow '{fid}': target_component '{tgt_comp}' not in pattern components")
+
+
+def _validate_files_array(pattern_dir: Path, meta_path: Path,
+                          errors: list, warnings: list):
+    """Validate the 'files' array in pattern.meta.yaml lists real files."""
+    try:
+        with open(meta_path) as f:
+            meta = yaml.safe_load(f) or {}
+    except Exception:
+        return
+    files = meta.get("pattern", {}).get("files", [])
+    if not files:
+        return
+    dirname = pattern_dir.name
+    for fname in files:
+        if not (pattern_dir / fname).exists():
+            errors.append(f"{dirname}/pattern.meta.yaml: files entry '{fname}' does not exist on disk")
+
+
 def validate_new_format_dir(pattern_dir: Path) -> dict:
     """Validate a new-format pattern directory."""
     errors: list[str] = []
@@ -224,6 +315,54 @@ def validate_new_format_dir(pattern_dir: Path) -> dict:
                 _validate_product_system(sys_data, f"{dirname}/system.yaml", errors, warnings)
             except Exception as e:
                 errors.append(f"{dirname}/system.yaml: cannot load: {e}")
+
+    # Unified patterns: validate optional cross-files
+    if ptype == 'network':
+        opt_system = pattern_dir / "system.yaml"
+        if opt_system.exists():
+            try:
+                with open(opt_system) as f:
+                    opt_sys_data = yaml.safe_load(f) or {}
+                _validate_product_system(opt_sys_data, f"{dirname}/system.yaml (unified)", errors, warnings)
+            except Exception as e:
+                errors.append(f"{dirname}/system.yaml: cannot load: {e}")
+    elif ptype == 'product':
+        opt_networks = pattern_dir / "networks.yaml"
+        if opt_networks.exists():
+            try:
+                with open(opt_networks) as f:
+                    opt_net_data = yaml.safe_load(f) or {}
+                _validate_network_content(opt_net_data, f"{dirname}/networks.yaml (unified)", errors, warnings)
+            except Exception as e:
+                errors.append(f"{dirname}/networks.yaml: cannot load: {e}")
+
+    # Validate dataflow files
+    zone_ids = set()
+    comp_ids = set()
+    # Collect zone/component IDs for referential integrity
+    net_path = pattern_dir / "networks.yaml"
+    if net_path.exists():
+        try:
+            with open(net_path) as f:
+                nd = yaml.safe_load(f) or {}
+            zone_ids = {z.get("id") for z in nd.get("network_zones", []) if isinstance(z, dict)}
+        except Exception:
+            pass
+    sys_path = pattern_dir / "system.yaml"
+    if sys_path.exists():
+        try:
+            with open(sys_path) as f:
+                sd = yaml.safe_load(f) or {}
+            comp_ids = {c.get("id") for c in sd.get("components", []) if isinstance(c, dict)}
+        except Exception:
+            pass
+    for df_name in ("app-dataflows.yaml", "human-dataflows.yaml"):
+        df_path = pattern_dir / df_name
+        if df_path.exists():
+            _validate_dataflows(df_path, f"{dirname}/{df_name}", zone_ids, comp_ids, errors, warnings)
+
+    # Validate files array in pattern.meta.yaml
+    _validate_files_array(pattern_dir, meta_path, errors, warnings)
 
     # Validate context hierarchy
     _validate_context_hierarchy(pattern_dir, ptype, errors, warnings)

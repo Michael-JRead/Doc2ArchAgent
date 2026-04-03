@@ -1,8 +1,12 @@
+# ===========================================================================
+# EXAMPLE FILE — Included as a reference implementation for product patterns.
+# This is NOT a real production architecture. Modify or replace for your use.
+# ===========================================================================
 metadata:
-  name: IBM MQ Messaging
+  name: "IBM MQ Messaging (EXAMPLE)"
   description: >
-    IBM MQ messaging infrastructure with queue manager, channels, and
-    web console. Provides enterprise-grade asynchronous messaging with
+    EXAMPLE — IBM MQ messaging infrastructure with queue manager, channels,
+    and web console. Provides enterprise-grade asynchronous messaging with
     TLS encryption and certificate-based authentication.
   owner: platform-messaging-team
   status: active

@@ -183,14 +183,38 @@ Patterns are reusable architecture templates organized in two hierarchies:
 - **Network patterns** contain a standalone `networks.yaml` defining zones and infrastructure resources
 - **Product patterns** contain a standalone `system.yaml` defining contexts, containers, components, and relationships
 
+### Unified Patterns (Multi-File)
+
+Any pattern can optionally include BOTH `networks.yaml` AND `system.yaml`, plus dataflow files:
+- **Network patterns** may include `system.yaml` (e.g., WAF, load balancer as C4 containers) and dataflow files
+- **Product patterns** may include `networks.yaml` (e.g., product-specific isolation zones) and dataflow files
+- Pop-and-swap is atomic — swapping a pattern removes/adds ALL its files as a unit
+
 Each pattern directory has:
-- `pattern.meta.yaml` — metadata, version, composition contract (`provides`/`requires`), binding points
-- `networks.yaml` (network) or `system.yaml` (product) — the pattern's architecture content
+- `pattern.meta.yaml` — metadata, version, audience, files list, composition contract
+- `networks.yaml` — zone definitions (required for network patterns, optional for product patterns)
+- `system.yaml` — containers/components (required for product patterns, optional for network patterns)
+- `app-dataflows.yaml` — **optional** application-to-application traffic flows
+- `human-dataflows.yaml` — **optional** human user-facing traffic flows
 - `contexts/` — per-pattern context hierarchy:
   - `_context.yaml` — C4 Level 1 context definitions for this pattern
   - `sources/` — source documents used to build this pattern
   - `sources/doc-inventory.yaml` — inventory of collected documents
   - `provenance.yaml` — entity-to-source evidence mapping
+
+### Audience and Purpose
+
+- **`audience`** (in `pattern.meta.yaml`): `application`, `human`, `hybrid`, or `infrastructure` — describes who the pattern serves
+- **`purpose`** (in manifest `networks[]` entries): `application`, `human`, `hybrid`, `management`, or `other` — deployment-specific labeling
+- **DO NOT assume audience.** Always validate with the user what audience a pattern serves.
+
+### Dataflow Files
+
+Both `app-dataflows.yaml` and `human-dataflows.yaml` follow `schemas/dataflows.schema.json`:
+- **Zone-level flows:** `source_zone` / `target_zone` (references zones in `networks.yaml`)
+- **Component-level flows:** `source_component` / `target_component` (references components in `system.yaml`)
+- Both can coexist in the same file
+- Each file declares `audience: application|human|hybrid|infrastructure` in `dataflow_metadata`
 
 ### Context Separation Rule
 
@@ -210,18 +234,29 @@ The `@doc-collector` agent prompts users to select pattern type and auto-routes 
 
 ### Composition via Deployment Manifests
 
-Users compose deployments by selecting 1 network + N products in a `manifest.yaml`:
+Users compose deployments by selecting one or more networks + N products in a `manifest.yaml`:
 
 ```bash
 python tools/compose.py deployments/<id>/manifest.yaml --validate
 ```
 
+#### Multi-Network Manifests
+
+Manifests support both singular (`network:`) and plural (`networks:`) syntax:
+- `network:` — single network pattern (backward compatible)
+- `networks:` — array of network patterns, each with `id_prefix`, `purpose`, and `pattern_ref`
+- Use one or the other, never both
+- Each `id_prefix` must be globally unique across ALL patterns (network + product)
+- `cross_network_links` explicitly connect zones from different network patterns
+
 The compose tool:
 1. Resolves pattern references and verifies pinned versions
 2. Applies unique `id_prefix` per pattern to prevent ID conflicts
-3. Merges `_context.yaml` files from all patterns into the composed system
-4. Merges into composed `system.yaml` + `networks.yaml` + `deployment.yaml`
-5. Validates the composed output
+3. Merges all network zones (from network patterns + product patterns) with collision detection
+4. Merges `_context.yaml` files from all patterns into the composed system
+5. Merges into composed `system.yaml` + `networks.yaml` + `deployment.yaml` + dataflow files
+6. Applies cross-network links between zones from different patterns
+7. Validates the composed output
 
 **Do not hand-edit generated files.** Modify the manifest or source patterns instead.
 
@@ -270,7 +305,8 @@ All YAML files are validated against JSON Schemas in `schemas/`:
 - `deployment-security.schema.json` — deployment-security.yaml (security overlay: runtime hardening)
 - `provenance.schema.json` — provenance.yaml
 - `pattern-meta.schema.json` — pattern.meta.yaml
-- `manifest.schema.json` — deployment manifest
+- `manifest.schema.json` — deployment manifest (supports both singular `network:` and plural `networks:`)
+- `dataflows.schema.json` — app-dataflows.yaml / human-dataflows.yaml
 - `context.schema.json` — pattern _context.yaml
 - `doc-inventory.schema.json` — pattern doc-inventory.yaml
 - `diagram-index.schema.json` — diagram _index.yaml catalog

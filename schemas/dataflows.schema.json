@@ -15,8 +15,8 @@
         },
         "audience": {
           "type": "string",
-          "enum": ["application", "human", "hybrid"],
-          "description": "Who these flows serve. application=system-to-system, human=user-facing, hybrid=both."
+          "enum": ["application", "human", "hybrid", "infrastructure"],
+          "description": "Who these flows serve. application=system-to-system, human=user-facing, hybrid=both, infrastructure=infra management."
         },
         "description": {
           "type": "string",
@@ -116,6 +116,10 @@
           }
         },
         "required": ["id", "label", "protocol"],
+        "dependencies": {
+          "source_zone": ["target_zone"],
+          "target_zone": ["source_zone"]
+        },
         "additionalProperties": true
       }
     }
