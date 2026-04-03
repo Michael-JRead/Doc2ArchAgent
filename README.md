@@ -35,6 +35,13 @@ A multi-agent architecture modeling system for VS Code, powered by GitHub Copilo
 - [STRIDE Threat Analysis](#stride-threat-analysis)
 - [Persona-Specific Diagram Views](#persona-specific-diagram-views)
 - [How This Compares](#how-this-compares)
+- [Skills System](#skills-system)
+- [Agent Handoff Graph](#agent-handoff-graph)
+- [Diagram Syntax Validation Pipeline](#diagram-syntax-validation-pipeline)
+- [Ingest Tools (Reverse Engineering Existing Infrastructure)](#ingest-tools-reverse-engineering-existing-infrastructure)
+- [Complete CLI Tools Reference](#complete-cli-tools-reference)
+- [Context Files (Threat Intelligence Data)](#context-files-threat-intelligence-data)
+- [Test Suite](#test-suite)
 - [Known Limitations](#known-limitations)
 - [Troubleshooting](#troubleshooting)
 - [Templates](#templates)
@@ -52,7 +59,7 @@ Doc2ArchAgent turns your architecture knowledge into a structured, validated C4 
 - A `networks.yaml` defining your network zones and infrastructure resources
 - Deployment YAML files mapping containers/components to specific network zones per environment
 - A `provenance.yaml` tracing every extracted field back to its source document, section, and quote
-- C4 diagrams at every level (Context, Container, Component, Deployment) in **3 formats**: Mermaid, PlantUML, and Draw.io/Lucidchart
+- C4 diagrams at every level (Context, Container, Component, Deployment) in **5 formats**: Mermaid, PlantUML, Draw.io/Lucidchart, Structurizr DSL, and D2
 - Confidence-colored diagrams showing which elements are well-supported vs. need verification
 - Persona-specific diagram views (Executive, Architect, Security, Network, Compliance)
 - **HLDD (High-Level Design Document)** formatted for Confluence page upload or Markdown
@@ -77,7 +84,7 @@ Doc2ArchAgent turns your architecture knowledge into a structured, validated C4 
 
 > **Note:** Custom agents (`.agent.md`) require GitHub Copilot Chat. The agents use built-in tools (`read`, `edit`, `search`, `execute`) — no MCP servers or external dependencies needed.
 
-| **Python 3** *(optional)* | 3.8+ | `python --version` |
+| **Python 3** *(optional)* | 3.10+ | `python --version` |
 | **PyYAML** *(optional)* | 6.0+ | `pip install pyyaml` |
 
 > **Optional:** Python + PyYAML enables deterministic validation via `tools/validate.py`. Without it, the `@validator` agent uses LLM-only validation.
@@ -129,7 +136,7 @@ Select `@architect` from the dropdown and type your system description. That's i
 
 ## How It Works — The Agent System
 
-The system is composed of **10 specialized agents**, each owning a specific concern. They communicate through **handoffs** — when one agent finishes its work, it offers to hand off to the next logical agent. Each handoff includes a descriptive prompt visible in the Copilot UI.
+The system is composed of **15 specialized agents**, each owning a specific concern. They communicate through **handoffs** — when one agent finishes its work, it offers to hand off to the next logical agent. Each handoff includes a descriptive prompt visible in the Copilot UI.
 
 ### Agent Overview
 
@@ -155,6 +162,14 @@ The diagram system uses a **phased pipeline**: the orchestrator analyzes your ar
 | **@diagram-mermaid** | Renderer: reads `layout-plan.yaml` and generates Mermaid `flowchart LR` diagrams with subgraph boundaries and C4 styling. | Called by `@diagram-generator`, or directly if you want Mermaid-only output. |
 | **@diagram-plantuml** | Renderer: reads `layout-plan.yaml` and generates PlantUML C4 diagrams using the C4-PlantUML stdlib. Verified syntax for plantuml.com and VS Code extension. | Called by `@diagram-generator`, or directly for PlantUML-only output. |
 | **@diagram-drawio** | Renderer: reads `layout-plan.yaml` and generates `.drawio` XML files with explicit x,y coordinates. Import into Lucidchart via File > Import > Draw.io. | Called by `@diagram-generator`, or directly for Lucidchart export. |
+| **@diagram-structurizr** | Renderer: reads `layout-plan.yaml` and generates Structurizr DSL (`.dsl`) files compatible with Structurizr Lite, Cloud, and CLI. Single file covers all C4 levels. | Called by `@diagram-generator`, or directly for Structurizr ecosystem interop. |
+| **@diagram-d2** | Renderer: reads `layout-plan.yaml` and generates D2 language (`.d2`) files. D2 is a modern, open-source diagram scripting language with automatic layout. | Called by `@diagram-generator`, or directly for D2 output. |
+
+#### Comparison & Diff Agent
+
+| Agent | What It Does | When to Use It |
+|-------|-------------|----------------|
+| **@diagram-diff** | Compares two versions of architecture YAML and generates visual diff diagrams showing added, removed, and modified elements with color-coded annotations. | After making architecture changes. Use to review what changed between versions. |
 
 #### Documentation Agent
 
@@ -181,8 +196,9 @@ Click a button or type the agent name directly (e.g., `@deployer place my contai
 
 **Diagram pipeline handoffs:** The `@diagram-generator` orchestrator hands off to renderers one at a time. Each renderer offers to hand off to the next renderer or back to the orchestrator:
 ```
-@diagram-generator → builds layout-plan.yaml → @diagram-mermaid → @diagram-plantuml → @diagram-drawio
+@diagram-generator → builds layout-plan.yaml → @diagram-mermaid → @diagram-plantuml → @diagram-drawio → @diagram-structurizr → @diagram-d2
 ```
+After all renderers complete, the orchestrator runs deterministic syntax validation (`tools/validate-diagram.py`) as a final gate.
 
 ---
 
@@ -868,9 +884,13 @@ The diagram system uses a **phased pipeline** — the orchestrator analyzes your
     ↓ assesses complexity (simple/medium/complex)
     ↓ writes layout-plan.yaml (grid positions, nodes, edges, legend)
     ↓
-    ├── @diagram-mermaid    → generates .md files (Mermaid flowchart LR)
-    ├── @diagram-plantuml   → generates .puml files (PlantUML C4)
-    └── @diagram-drawio     → generates .drawio files (import into Lucidchart)
+    ├── @diagram-mermaid      → generates .md files (Mermaid flowchart LR)
+    ├── @diagram-plantuml     → generates .puml files (PlantUML C4)
+    ├── @diagram-drawio       → generates .drawio files (import into Lucidchart)
+    ├── @diagram-structurizr  → generates .dsl files (Structurizr DSL)
+    ├── @diagram-d2           → generates .d2 files (D2 language)
+    ↓
+    ↓ Phase 5: validate-diagram.py runs on all outputs (syntax gate)
 ```
 
 The `layout-plan.yaml` is the intermediate artifact — it decouples analysis from rendering. All three renderers read the same plan, ensuring **consistent diagrams** across formats.
@@ -912,15 +932,17 @@ The `layout-plan.yaml` is the intermediate artifact — it decouples analysis fr
 | **C4 Component (Level 3)** | Individual components within container boundaries. Shows listeners, protocols, data flows. | Developers, security engineers |
 | **C4 Deployment (Level 4)** | Network zones with containers/components placed inside. Color-coded by trust level. Shows derived network links with warnings. | Network engineers, security, operations |
 
-#### Three Output Formats Per Diagram
+#### Five Output Formats Per Diagram
 
 | Format | File Extension | Use Case | Renderer Agent |
 |--------|---------------|----------|----------------|
 | **Mermaid** | `.md` | Preview in VS Code Markdown preview, GitHub rendering, Obsidian | `@diagram-mermaid` |
 | **PlantUML C4** | `.puml` | VS Code PlantUML extension preview, plantuml.com, Confluence | `@diagram-plantuml` |
 | **Draw.io / Lucidchart** | `.drawio` | Import into Lucidchart (File > Import > Draw.io), draw.io desktop app, Confluence draw.io plugin | `@diagram-drawio` |
+| **Structurizr DSL** | `.dsl` | Structurizr Lite (Docker), Structurizr Cloud, Structurizr CLI export | `@diagram-structurizr` |
+| **D2** | `.d2` | D2 CLI rendering, d2 playground, automatic layout with ELK/dagre | `@diagram-d2` |
 
-All three formats use the **same C4 color scheme** and produce **visually consistent** diagrams — when viewed side by side, they look nearly identical but rendered in different tools.
+All five formats use the **same C4 color scheme** and produce **visually consistent** diagrams — when viewed side by side, they look nearly identical but rendered in different tools.
 
 #### Color Scheme
 
@@ -1307,41 +1329,122 @@ deployments/                                             ← Manifest-based depl
         ├── <deployment-id>.dsl                      ← Structurizr DSL (all levels)
         └── custom/                                  ← Hand-crafted diagrams (never overwritten)
 
-tools/
-├── validate.py                                      ← Deterministic validation script
+tools/                                                   ← 26 Python tools + 1 shell script (12,231 LOC)
+├── validate.py                                      ← Main YAML validator (17 SARIF rules, ARCH001-ARCH017)
+├── validate-diagram.py                              ← Diagram syntax validator (Mermaid, PlantUML, Draw.io)
 ├── validate-patterns.py                             ← Pattern validation (legacy + directory format)
+├── validate-provenance.py                           ← Provenance citation validator (fuzzy quote matching)
+├── threat-rules.py                                  ← STRIDE threat rule engine (YAML-based rules → findings)
+├── confidence.py                                    ← Confidence scoring framework (0-100 numeric scores)
 ├── compose.py                                       ← Compose deployment from manifest + patterns
-├── migrate-pattern.py                               ← Migrate legacy .pattern.yaml to directory format
+├── agent-bridge.py                                  ← Unified CLI bridge for Copilot agents
+├── agent_supervisor.py                              ← Multi-stage pipeline orchestrator for CI/CD
+├── entity_resolver.py                               ← Cross-document entity deduplication (fuzzy matching)
+├── convert-docs.py                                  ← Document converter (PDF, DOCX, HTML, images → text)
 ├── classify-sections.py                             ← Classify document sections (network vs product)
-├── detect-tools.py                                  ← Cross-platform tool detection
+├── section_classifier.py                            ← Enhanced ML-powered section classifier
+├── detect-tools.py / detect-tools.sh                ← Cross-platform tool detection
+├── ingest-kubernetes.py                             ← Kubernetes YAML → system.yaml converter
+├── ingest-openapi.py                                ← OpenAPI spec → system.yaml converter
+├── ingest-terraform.py                              ← Terraform HCL → system.yaml converter
+├── ingest-structurizr.py                            ← Structurizr DSL → system.yaml converter
+├── layout_analyzer.py                               ← ML-powered document layout detection (YOLO)
+├── migrate-pattern.py                               ← Migrate legacy .pattern.yaml to directory format
+├── ocr_backends.py                                  ← Pluggable OCR (Tesseract, OpenDoc, PaddleOCR)
+├── parse-diagram-file.py                            ← Draw.io/Visio → structured data parser
+├── sync-attack-data.py                              ← Sync STRIDE/CWE/CAPEC data from external sources
+├── verify-claims.py                                 ← NLI-based claim verification against source docs
+├── vlm_providers.py                                 ← Vision LLM providers (OpenAI, Anthropic, Ollama)
 └── requirements.txt                                 ← Python dependencies (pyyaml)
 
-schemas/
-├── system.schema.json                               ← system.yaml validation (architecture core)
-├── system-security.schema.json                      ← system-security.yaml validation (security overlay)
-├── networks.schema.json                             ← networks.yaml validation (zone topology)
-├── networks-security.schema.json                    ← networks-security.yaml validation (security overlay)
-├── deployment.schema.json                           ← deployment YAML validation (zone placements)
-├── deployment-security.schema.json                  ← deployment-security.yaml validation (security overlay)
-├── provenance.schema.json                           ← provenance.yaml validation
-├── pattern-meta.schema.json                         ← pattern.meta.yaml validation
-├── manifest.schema.json                             ← manifest.yaml validation
-├── context.schema.json                              ← pattern _context.yaml validation
-└── doc-inventory.schema.json                        ← pattern doc-inventory.yaml validation
+schemas/                                                 ← 12 JSON Schema (Draft 2020-12) definitions
+├── system.schema.json                               ← Core C4 architecture model (contexts, containers, components)
+├── system-security.schema.json                      ← Security overlay: CIA triad, TLS, auth, compliance per entity
+├── networks.schema.json                             ← Network topology: zones, trust levels, infrastructure
+├── networks-security.schema.json                    ← Security overlay: zone posture, segmentation, IDS/IPS, DLP
+├── deployment.schema.json                           ← Zone placements: containers → network zones per environment
+├── deployment-security.schema.json                  ← Security overlay: runtime hardening, image signing, policies
+├── provenance.schema.json                           ← Per-field source citations, confidence scores, extraction stats
+├── pattern-meta.schema.json                         ← Pattern composition contract: provides, requires, binding_points
+├── manifest.schema.json                             ← Deployment manifest: 1 network + N products + placements
+├── context.schema.json                              ← Pattern _context.yaml: C4 Level 1 context definitions
+├── doc-inventory.schema.json                        ← Pattern doc-inventory.yaml: collected document registry
+└── diagram-index.schema.json                        ← Diagram _index.yaml: diagram catalog per scope
 
-schemas/
-├── system.schema.json                               ← System YAML schema (architecture core)
-├── system-security.schema.json                      ← System security overlay schema (CIA, TLS, auth, compliance)
-├── networks.schema.json                             ← Networks YAML schema (zone topology)
-├── networks-security.schema.json                    ← Networks security overlay schema (zone posture, infra resources)
-├── deployment.schema.json                           ← Deployment YAML schema (zone placements)
-├── deployment-security.schema.json                  ← Deployment security overlay schema (runtime hardening)
-├── provenance.schema.json                           ← Provenance YAML schema
-├── pattern-meta.schema.json                         ← Pattern metadata schema
-├── manifest.schema.json                             ← Deployment manifest schema
-├── context.schema.json                              ← Pattern _context.yaml schema
-├── doc-inventory.schema.json                        ← Pattern doc-inventory.yaml schema
-└── diagram-index.schema.json                        ← Diagram _index.yaml catalog schema
+.github/                                                 ← Copilot agents, skills, workflows, prompts
+├── agents/                                          ← 15 custom Copilot agents
+│   ├── architect.agent.md                           ← Primary orchestrator (6-layer modeling)
+│   ├── doc-collector.agent.md                       ← Document collection & conversion
+│   ├── doc-extractor.agent.md                       ← Entity extraction with provenance
+│   ├── deployer.agent.md                            ← Deployment zone placement
+│   ├── security-reviewer.agent.md                   ← STRIDE analysis & security review
+│   ├── validator.agent.md                           ← Dual-pass validation
+│   ├── pattern-manager.agent.md                     ← Pattern library management
+│   ├── diagram-generator.agent.md                   ← Diagram orchestrator (layout plan)
+│   ├── diagram-mermaid.agent.md                     ← Mermaid flowchart LR renderer
+│   ├── diagram-plantuml.agent.md                    ← PlantUML C4 renderer
+│   ├── diagram-drawio.agent.md                      ← Draw.io XML renderer
+│   ├── diagram-structurizr.agent.md                 ← Structurizr DSL renderer
+│   ├── diagram-d2.agent.md                          ← D2 language renderer
+│   ├── diagram-diff.agent.md                        ← Architecture version comparison
+│   └── doc-writer.agent.md                          ← HLDD/doc generation
+├── skills/                                          ← 7 reusable workflow skills
+│   ├── diagram-workflow/SKILL.md                    ← End-to-end diagram generation
+│   ├── extract-architecture/SKILL.md                ← Document-to-YAML pipeline
+│   ├── security-review/SKILL.md                     ← Comprehensive security analysis
+│   ├── validate-architecture/SKILL.md               ← Dual-pass validation
+│   ├── deploy-system/SKILL.md                       ← Guided deployment workflow
+│   ├── compose-deployment/SKILL.md                  ← Pattern-based composition
+│   └── generate-docs/SKILL.md                       ← Documentation generation
+├── prompts/                                         ← 4 reusable prompt templates
+│   ├── extract-entities.prompt.md                   ← Entity extraction prompt
+│   ├── review-security.prompt.md                    ← Security review prompt
+│   ├── generate-diagram.prompt.md                   ← Diagram generation prompt
+│   └── validate-yaml.prompt.md                      ← YAML validation prompt
+├── workflows/                                       ← 4 GitHub Actions CI/CD workflows
+│   ├── validate.yml                                 ← YAML validation on push/PR
+│   ├── test.yml                                     ← Pytest suite on push/PR
+│   ├── pattern-validate.yml                         ← Pattern validation
+│   └── diagram-validate.yml                         ← Diagram syntax validation
+├── copilot-instructions.md                          ← Global Copilot behavior instructions
+└── shell-config.yaml                                ← Shell/terminal agent configuration
+
+context/                                                 ← Curated threat intelligence data (7 YAML files)
+├── threat-rules.yaml                                ← STRIDE threat detection rules
+├── threat-applicability.yaml                        ← Rule-to-architecture pattern mapping
+├── stride-to-attack.yaml                            ← STRIDE → CAPEC attack patterns
+├── cwe-mappings.yaml                                ← CWE weakness details
+├── compliance-mappings.yaml                         ← CWE → compliance control mappings
+├── compliance-rule-mapping.yaml                     ← Rule → compliance control mappings
+└── risk-scoring.yaml                                ← Risk score calculation parameters
+
+tests/                                                   ← 457 tests across 67 test classes
+├── conftest.py                                      ← Shared fixtures (valid_dir, invalid_dir, regression_dir)
+├── test_validate.py                                 ← 25 tests: validation rules, output formats, security overlays
+├── test_regression.py                               ← 275+ tests: L1-L9 layers + Phase A-C enhancements
+└── fixtures/                                        ← Test data
+    ├── valid/                                       ← Valid YAML for positive tests
+    ├── invalid/                                     ← Invalid YAML for negative tests
+    └── regression/                                  ← Edge case and regression fixtures
+
+templates/                                               ← Annotated example files for reference
+├── system.yaml.example                              ← Complete system model example
+└── networks.yaml.example                            ← Network topology example
+
+examples/                                                ← Working example: Payment Processing Platform
+└── payment-platform/
+    ├── system.yaml                                  ← Full C4 architecture model
+    ├── system-security.yaml                         ← Security overlay
+    ├── networks.yaml                                ← Network zones (not in schema directory)
+    ├── networks-security.yaml                       ← Network security overlay
+    ├── provenance.yaml                              ← Extraction provenance & confidence
+    ├── deployment/                                  ← Deployment configuration
+    │   ├── prod-us-east.yaml                        ← Zone placements
+    │   └── deployment-security.yaml                 ← Runtime security overlay
+    └── diagrams/                                    ← Generated diagrams
+        ├── layout-plan.yaml                         ← Orchestrator layout plan
+        ├── payment-platform-context.md              ← Mermaid context diagram
+        └── payment-platform-containers.md           ← Mermaid container diagram
 ```
 
 ---
@@ -1546,6 +1649,63 @@ manifest:
       target_listener_ref: string (optional)
       label: string (optional)
       synchronous: boolean (optional)
+```
+
+### Security Overlay Files
+
+Security properties are separated from core architecture into **overlay files** that augment base YAML by entity ID reference. This separation keeps the core model clean and allows security teams to work independently.
+
+| Overlay File | Augments | Key Fields |
+|-------------|----------|------------|
+| `system-security.yaml` | `system.yaml` | Per-component: CIA triad, DFD element type, encryption, SLSA/SBOM, RTO/RPO. Per-listener: TLS config, authn/authz, rate limiting, CORS, exposure level. Per-relationship: interaction type, mutual auth, input validation, replay protection. |
+| `networks-security.yaml` | `networks.yaml` | Per-zone: segmentation type, egress filtering, IDS/IPS, DLP, default deny policy, allowed ingress/egress zones. |
+| `deployment-security.yaml` | `deployment.yaml` | Per-container: runtime user (root/non_root), read-only filesystem, resource limits, network policy, image registry/tag/digest/signing, vulnerability scan date. Deployment posture: shared responsibility model, tenant isolation. |
+
+```yaml
+# Example: system-security.yaml
+security_metadata:
+  system_ref: "Payment Processing Platform"  # Links to system.yaml metadata.name
+
+component_security:
+  - component_id: payment-api                # References system.yaml component ID
+    confidentiality: high
+    integrity: high
+    availability: high
+    dfd_element_type: process
+    listener_security:
+      - listener_id: payment-api-https       # References component listener ID
+        tls_version_min: "1.3"
+        authn_mechanism: oauth2
+        rate_limit_rps: 1000
+        exposure: internal
+```
+
+### provenance.yaml — Extraction Traceability
+
+```yaml
+extraction_metadata:
+  system_ref: string (required)              # Links to system.yaml metadata.name
+  extraction_date: date (required)
+  confidence_threshold: float (required)     # 0.0-1.0, default 0.95
+  documents_analyzed: integer (required)
+
+entities:
+  - entity_id: string (required)             # References system.yaml entity ID
+    entity_type: context | container | component | listener | relationship | ... (required)
+    confidence: high | medium | low | uncertain | user_provided (required)
+    source_document: string (required)        # Filename of source document
+    source_section: string (optional)         # Section within document
+    extraction_pass: prose | table | diagram | cross_reference (required)
+    supporting_quote: string (optional)       # Direct quote from source
+
+statistics:
+  total_entities: integer
+  confidence_breakdown:
+    high: integer
+    medium: integer
+    low: integer
+    uncertain: integer
+    user_provided: integer
 ```
 
 ---
@@ -2162,6 +2322,356 @@ Doc2ArchAgent's key differentiator is the **zero-hallucination pipeline**: every
 
 ---
 
+## Skills System
+
+Doc2ArchAgent includes **7 skills** — reusable, parameterized workflows that orchestrate multi-agent sequences through a single command. Skills are defined in `.github/skills/*/SKILL.md` and are invoked by Copilot agents during complex operations.
+
+| Skill | Purpose | Agents Involved |
+|-------|---------|----------------|
+| **diagram-workflow** | End-to-end diagram generation: reads YAML, builds layout plan, dispatches to all 5 renderers, validates syntax | `@diagram-generator` → all renderer agents → `@validator` |
+| **extract-architecture** | Full document-to-YAML pipeline: collect docs, extract entities, resolve conflicts, write YAML, validate | `@doc-collector` → `@doc-extractor` → `@validator` |
+| **security-review** | Comprehensive security analysis: STRIDE per relationship, blast radius, firewall ACLs, compliance mapping | `@security-reviewer` → `@validator` |
+| **validate-architecture** | Dual-pass validation: deterministic Python script (Pass 1) + semantic LLM review (Pass 2) | `@validator` |
+| **deploy-system** | Guided deployment: place containers in zones, compute derived links, flag crossings | `@deployer` → `@validator` → `@security-reviewer` |
+| **compose-deployment** | Pattern-based deployment: select patterns, compose manifest, generate combined output | `@pattern-manager` → `@validator` |
+| **generate-docs** | Documentation generation: HLDD, executive summary, stakeholder briefs in Confluence/Markdown | `@doc-writer` |
+
+Skills differ from individual agent invocations in that they encode the **recommended sequence** of agent interactions, pass context between agents automatically, and include built-in validation checkpoints.
+
+---
+
+## Agent Handoff Graph
+
+The 15 agents form a directed graph of handoffs. Each arrow represents a handoff declaration in the agent's YAML frontmatter.
+
+```
+                         ┌─────────────────┐
+                         │   @architect    │  ← Primary entry point
+                         │  (orchestrator) │
+                         └────┬──┬──┬──┬──┘
+                              │  │  │  │
+          ┌───────────────────┘  │  │  └───────────────────┐
+          ▼                      ▼  ▼                      ▼
+   @doc-collector         @deployer  @validator     @diagram-generator
+          │                   │         │                  │
+          ▼                   │         │       ┌──────────┼──────────┬──────────┬──────────┐
+   @doc-extractor             │         │       ▼          ▼          ▼          ▼          ▼
+          │                   │         │  @diagram-   @diagram-  @diagram-  @diagram-  @diagram-
+          │                   │         │  mermaid     plantuml   drawio     structurizr d2
+          ▼                   ▼         ▼       │          │          │          │          │
+   @security-reviewer  @pattern-manager  ◄──────┴──────────┴──────────┴──────────┴──────────┘
+          │
+          ▼
+     @doc-writer ◄──── @diagram-diff
+```
+
+**Entry points** (agents you invoke directly):
+- `@architect` — Start here for fresh modeling or extending existing models
+- `@doc-collector` — Start here if you have existing architecture documents
+- `@pattern-manager` — Start here for pattern-based deployment composition
+- Any agent can be invoked directly if prerequisite YAML files already exist
+
+**Bidirectional handoffs:** Most agents can hand back to `@architect` or `@validator`. The graph above shows primary forward-flow handoffs.
+
+**Agent counts by role:**
+| Role | Count | Agents |
+|------|-------|--------|
+| Orchestrators | 2 | `@architect`, `@diagram-generator` |
+| Document pipeline | 2 | `@doc-collector`, `@doc-extractor` |
+| Modeling | 2 | `@deployer`, `@pattern-manager` |
+| Security | 1 | `@security-reviewer` |
+| Validation | 1 | `@validator` |
+| Renderers | 5 | `@diagram-mermaid`, `@diagram-plantuml`, `@diagram-drawio`, `@diagram-structurizr`, `@diagram-d2` |
+| Comparison | 1 | `@diagram-diff` |
+| Documentation | 1 | `@doc-writer` |
+
+---
+
+## Diagram Syntax Validation Pipeline
+
+LLMs can hallucinate invalid diagram syntax. Doc2ArchAgent prevents this with a **deterministic syntax validator** (`tools/validate-diagram.py`) that runs after every diagram is generated.
+
+### How It Works
+
+```
+LLM generates diagram → validate-diagram.py checks syntax → errors? → fix and regenerate
+                                                           → no errors? → diagram accepted
+```
+
+Every renderer agent (Mermaid, PlantUML, Draw.io) includes a **DETERMINISTIC VALIDATION** section in its instructions requiring it to run the validator after generating each file. The `@diagram-generator` orchestrator runs a final validation gate after all renderers complete.
+
+### Supported Formats
+
+| Format | Checks Performed | Common LLM Errors Caught |
+|--------|-----------------|--------------------------|
+| **Mermaid** (`.md`) | `flowchart` declaration, `graph` deprecation warning, subgraph/end balance, node/edge reference resolution, classDef syntax, `<i>` vs `<small>` tags, direction keyword validation, empty subgraphs | Using `graph TB` instead of `flowchart LR`, unmatched subgraph blocks, dangling edge references |
+| **PlantUML** (`.puml`) | `@startuml`/`@enduml` presence, C4 include paths, alias naming (no hyphens), single quotes in macros, brace balance, SHOW_LEGEND placement, `$technology` vs `$techn` confusion, DashedLine casing, `.puml` in stdlib includes, tag syntax, deprecated RelIndex, Lay_ target resolution, Rel source/target resolution | Hyphens in aliases, `$techn` instead of `$technology`, wrong include paths, italic `//` in URLs |
+| **Draw.io** (`.drawio`) | XML well-formedness, `mxfile` root, `mxGraphModel` structure, required cells (0 and 1), unique IDs, edge source/target resolution, vertex geometry, parent references, geometry overlap detection, style syntax, `mxgraph.c4.*` stencil warnings, container attributes, HTML entities in edge labels | Malformed XML, orphaned edges, missing parent references, Lucidchart-incompatible stencils |
+
+### Usage
+
+```bash
+# Validate a single file (auto-detects format by extension)
+python tools/validate-diagram.py mermaid examples/payment-platform/diagrams/payment-platform-context.md
+python tools/validate-diagram.py plantuml diagrams/system.puml
+python tools/validate-diagram.py drawio diagrams/system.drawio
+
+# Validate all diagrams in a directory
+python tools/validate-diagram.py all architecture/payment-platform/diagrams/
+
+# JSON output for CI integration
+python tools/validate-diagram.py all diagrams/ --format json
+
+# Via the unified agent bridge
+python tools/agent-bridge.py diagram validate architecture/payment-platform/diagrams/
+```
+
+**Exit codes:** `0` = no errors, `1` = errors found. All errors MUST be fixed before diagrams are accepted.
+
+### Lucidchart Import Limitations
+
+When importing `.drawio` files into Lucidchart:
+- **CRITICAL: Edge labels are lost on import.** Lucidchart's Draw.io importer drops the `value` attribute from `<mxCell>` edge elements.
+- **Workaround:** The `@diagram-drawio` agent generates backup text cells positioned along edges to preserve label visibility.
+- **Alternative:** Use the Lucidchart Standard Import API (JSON-based `.lucid` format) for lossless import. See the agent instructions for the full JSON schema.
+
+### Structurizr and D2 Validation
+
+Structurizr DSL (`.dsl`) and D2 (`.d2`) do not yet have dedicated validators in `validate-diagram.py`. The `@diagram-structurizr` and `@diagram-d2` agents perform manual checklist verification:
+- Brace balance, identifier uniqueness, relationship reference resolution, string quoting
+
+Future support may be added to `validate-diagram.py` for these formats.
+
+---
+
+## Ingest Tools (Reverse Engineering Existing Infrastructure)
+
+Doc2ArchAgent can **reverse-engineer existing infrastructure** by ingesting Kubernetes manifests, OpenAPI specs, Terraform configurations, and Structurizr DSL files directly into `system.yaml` format.
+
+### Kubernetes Ingest
+
+```bash
+python tools/ingest-kubernetes.py deployment.yaml [service.yaml] [namespace.yaml]
+```
+
+Extracts: containers, components, listeners (from service ports + container ports), namespaces as contexts, security contexts (runAsNonRoot, readOnlyRootFilesystem, hostNetwork, hostPID), resource limits, image references.
+
+### OpenAPI Ingest
+
+```bash
+python tools/ingest-openapi.py openapi.yaml
+```
+
+Extracts: API components with listeners per server entry, security schemes (OAuth2, API key, bearer, mutual TLS), endpoint paths as component relationships, technology from `x-technology` extensions or server URLs.
+
+### Terraform Ingest
+
+```bash
+python tools/ingest-terraform.py main.tf [variables.tf]
+```
+
+Extracts: VPCs as network zones, subnets with CIDR and availability zone, Lambda/ECS/EC2 as components, security groups as firewall rules, RDS/DynamoDB/S3 as data stores, IAM roles and policies.
+
+### Structurizr DSL Ingest
+
+```bash
+python tools/ingest-structurizr.py workspace.dsl
+```
+
+Extracts: persons, software systems, containers, components, relationships with technology labels, deployment environments, container instances in deployment nodes.
+
+### Ingest Output
+
+All ingest tools output YAML to stdout in `system.yaml` format. Pipe to a file:
+
+```bash
+python tools/ingest-kubernetes.py k8s/*.yaml > architecture/my-system/system.yaml
+```
+
+The output conforms to `system.schema.json` and can be immediately validated:
+
+```bash
+python tools/validate.py architecture/my-system/system.yaml
+```
+
+---
+
+## Complete CLI Tools Reference
+
+All 26 Python tools can be invoked standalone. Here is the complete reference organized by category.
+
+### Validation Tools
+
+| Tool | CLI | Purpose |
+|------|-----|---------|
+| `validate.py` | `python tools/validate.py <system.yaml> [networks.yaml] [--format json\|table\|sarif] [--strict] [--security <path>]` | Main YAML validator. 17 SARIF rules (ARCH001-ARCH017). Auto-detects security overlays. Exit 0=pass, 1=errors, 2=warnings+strict. |
+| `validate-diagram.py` | `python tools/validate-diagram.py mermaid\|plantuml\|drawio\|all <file\|dir> [--format text\|json]` | Diagram syntax validator. Catches LLM hallucination errors. Exit 0=clean, 1=errors. |
+| `validate-patterns.py` | `python tools/validate-patterns.py <path>` | Validates pattern YAML (legacy `.pattern.yaml` and directory format). Accepts directories, catalogs, or individual files. |
+| `validate-provenance.py` | `python tools/validate-provenance.py <provenance.yaml> <context-dir> [system.yaml]` | Validates provenance citations. Fuzzy-matches quotes against source documents (threshold 75%). |
+
+### Threat & Security Tools
+
+| Tool | CLI | Purpose |
+|------|-----|---------|
+| `threat-rules.py` | `python tools/threat-rules.py <system.yaml> [--networks <path>] [--deployment <path>] [--format json\|table\|sarif]` | STRIDE threat rule engine. Loads rules from `context/threat-rules.yaml`, evaluates against architecture, produces findings with CWE/compliance mapping. |
+| `confidence.py` | `python tools/confidence.py score\|enrich\|report\|set-threshold [--threshold N] [--method M]` | Confidence scoring (0-100). Subcommands: `score` (single value), `enrich` (augment provenance.yaml), `report` (statistics), `set-threshold`. |
+| `verify-claims.py` | `python tools/verify-claims.py <claims-file> <source-dir>` | NLI-based claim verification. Checks extracted facts against source documents using natural language inference. |
+| `sync-attack-data.py` | `python tools/sync-attack-data.py [--source capec\|cwe\|stride]` | Syncs STRIDE/CWE/CAPEC threat intelligence data from external sources into `context/` YAML files. |
+
+### Document Processing Tools
+
+| Tool | CLI | Purpose |
+|------|-----|---------|
+| `convert-docs.py` | `python tools/convert-docs.py <input-dir> <output-dir> [--format txt\|md]` | Converts PDF, DOCX, HTML, images to text. Symlink/traversal guards. Graceful degradation per backend. |
+| `classify-sections.py` | `python tools/classify-sections.py <file> [--dry-run] [--output-dir <path>]` | Classifies document sections as network/product/security using keyword scoring. |
+| `section_classifier.py` | `python tools/section_classifier.py <file> [--use-ml] [--ml-weight 0.6] [--detect-entities]` | Enhanced classifier with optional ML ensemble (LiLT transformer) and entity detection. |
+| `detect-tools.py` | `python tools/detect-tools.py` | Detects available conversion tools on the system (pandoc, pdftotext, tesseract, etc.). |
+| `parse-diagram-file.py` | `python tools/parse-diagram-file.py <file.drawio\|file.vsdx>` | Parses Draw.io XML or Visio files into structured JSON (nodes, edges, styles). |
+| `layout_analyzer.py` | `python tools/layout_analyzer.py <file> [--format json] [--schema hld\|lld\|network\|security] [--no-layout]` | ML-powered layout detection (DocLayout-YOLO). Identifies tables, figures, headers before extraction. |
+| `ocr_backends.py` | Python API | Pluggable OCR: Tesseract (default), OpenDoc-0.1B (ONNX), PaddleOCR. Selected via `D2A_OCR_BACKEND` env var. |
+| `vlm_providers.py` | Python API | Vision LLM abstraction: OpenAI GPT-4o, Anthropic Claude Vision, Ollama (local), Stub (testing). |
+
+### Composition & Migration Tools
+
+| Tool | CLI | Purpose |
+|------|-----|---------|
+| `compose.py` | `python tools/compose.py <manifest.yaml> [--validate] [--dry-run]` | Composes deployment from manifest: merges network + product patterns, applies overrides, generates combined YAML. |
+| `migrate-pattern.py` | `python tools/migrate-pattern.py <pattern.yaml>` | Migrates legacy `.pattern.yaml` to directory format with `pattern.meta.yaml`, standalone YAML, and context hierarchy. |
+| `entity_resolver.py` | `python tools/entity_resolver.py <system.yaml> [--threshold 80] [--auto-merge] [--cross-type]` | Cross-document entity deduplication. Abbreviation-aware fuzzy matching (db→database, svc→service). |
+
+### Ingest Tools
+
+| Tool | CLI | Purpose |
+|------|-----|---------|
+| `ingest-kubernetes.py` | `python tools/ingest-kubernetes.py <file> [<file>...]` | Kubernetes YAML → system.yaml (deployments, services, namespaces, security contexts) |
+| `ingest-openapi.py` | `python tools/ingest-openapi.py <spec.yaml>` | OpenAPI 3.x → system.yaml (servers, security schemes, paths) |
+| `ingest-terraform.py` | `python tools/ingest-terraform.py <file> [<file>...]` | Terraform HCL → system.yaml (VPC, subnets, Lambda, RDS, security groups) |
+| `ingest-structurizr.py` | `python tools/ingest-structurizr.py <workspace.dsl>` | Structurizr DSL → system.yaml (persons, systems, containers, relationships) |
+
+### Orchestration Tools
+
+| Tool | CLI | Purpose |
+|------|-----|---------|
+| `agent-bridge.py` | `python tools/agent-bridge.py <command> [args]` | Unified CLI bridge. Subcommands: `validate`, `threat`, `confidence`, `compose`, `check-handoff`, `diagram validate`. |
+| `agent_supervisor.py` | `python tools/agent_supervisor.py <input> [--output <dir>] [--stages <list>] [--threshold N]` | CI/CD pipeline orchestrator. Stages: convert → layout → classify → extract → resolve → validate → threat → confidence. |
+
+---
+
+## Context Files (Threat Intelligence Data)
+
+The `context/` directory contains curated threat intelligence YAML files that power the security analysis engine. These are **not generated** — they are maintained reference data.
+
+| File | Purpose | Key Data |
+|------|---------|----------|
+| `threat-rules.yaml` | STRIDE-based threat detection rules | Rule ID, severity, STRIDE category, CWE mapping, iterate_over (listeners/components/relationships/zones), condition logic |
+| `threat-applicability.yaml` | Which rules apply to which architecture patterns | Maps rule IDs to component types, zone types, and deployment environments |
+| `stride-to-attack.yaml` | Maps STRIDE categories to CAPEC attack patterns | S→credential theft/session hijacking, T→parameter injection/config manipulation, R→log tampering, etc. |
+| `cwe-mappings.yaml` | CWE weakness details for threat findings | CWE ID → name, description, severity, remediation guidance |
+| `compliance-mappings.yaml` | Compliance framework control mappings | Maps CWEs to PCI DSS, SOC 2, NIST 800-53, ISO 27001, HIPAA controls |
+| `compliance-rule-mapping.yaml` | Direct rule-to-compliance mapping | Maps threat rule IDs to compliance control references |
+| `risk-scoring.yaml` | Risk score calculation parameters | Severity weights, likelihood factors, convergence scoring (multiple findings on same entity boost risk) |
+
+### Threat Rule Engine Flow
+
+```
+threat-rules.yaml (rules)
+    + threat-applicability.yaml (which rules apply)
+    + system.yaml + networks.yaml + deployment.yaml (architecture)
+    → threat-rules.py evaluates conditions
+    → findings with severity + STRIDE + CWE
+    + cwe-mappings.yaml (weakness details)
+    + compliance-mappings.yaml (framework controls)
+    + risk-scoring.yaml (numeric risk scores)
+    → enriched findings with compliance coverage
+```
+
+### Updating Threat Data
+
+```bash
+# Sync latest STRIDE/CWE/CAPEC data from external sources
+python tools/sync-attack-data.py --source capec
+python tools/sync-attack-data.py --source cwe
+```
+
+---
+
+## Test Suite
+
+The project includes a comprehensive test suite with **457 tests** across 2 test files and 67 test classes.
+
+### Running Tests
+
+```bash
+# Full suite
+python -m pytest tests/ -v
+
+# Quick smoke tests only
+python -m pytest tests/test_regression.py -k "L1" -v
+
+# Schema validation tests
+python -m pytest tests/test_regression.py -k "L2" -v
+
+# Functional tests
+python -m pytest tests/test_regression.py -k "L4" -v
+```
+
+### Test Organization
+
+| Layer | Focus | Test Count | What It Covers |
+|-------|-------|-----------|----------------|
+| **L1 — Smoke** | Basic sanity | ~30 | Every `.py` file compiles, core modules import, all CLI tools respond to `--help` |
+| **L2 — Schema** | Data integrity | ~30 | All YAML parses, all JSON schemas valid (Draft 2020-12), examples conform to schemas |
+| **L3 — Referential** | Cross-file integrity | ~20 | Context file structure, pattern integrity, agent file references, workflow scripts exist |
+| **L4 — Functional** | Tool behavior | ~80 | Each tool tested with real fixtures: validate, threat-rules, ingest-*, compose, convert-docs, entity-resolver |
+| **L5 — Integration** | End-to-end | ~15 | Full validate pipeline (JSON/SARIF/table output), CLI exit codes, compose pipeline |
+| **L6 — Edge Cases** | Boundary conditions | ~20 | Empty files, unicode, large models, missing optional fields, circular references |
+| **L7 — Security** | Vulnerability checks | ~15 | Path traversal prevention, YAML bomb protection, secrets detection, input sanitization |
+| **L8 — Performance** | Speed gates | ~10 | Validation under 5s for 200 entities, compose under 3s, ingest under 2s |
+| **L9 — Backward Compat** | Migration safety | ~10 | Legacy pattern format, old field names, missing optional sections |
+| **Phase A/B/C** | Enhancement tests | ~30 | Copilot agent features, diagram validation, provenance checks |
+
+### Test Fixtures
+
+Test fixtures are in `tests/fixtures/`:
+
+```
+tests/fixtures/
+├── valid/                    ← Valid YAML files for positive tests
+│   ├── minimal-system.yaml
+│   ├── full-system.yaml
+│   ├── minimal-networks.yaml
+│   └── ...
+├── invalid/                  ← Invalid YAML files for negative tests
+│   ├── missing-fields.yaml
+│   ├── broken-refs.yaml
+│   ├── bad-enum.yaml
+│   └── ...
+└── regression/               ← Edge case and regression fixtures
+    ├── empty-system.yaml
+    ├── unicode-names.yaml
+    ├── large-model.yaml
+    └── ...
+```
+
+### Known Test Issues
+
+- **18 tests skip** when `jsonschema` package is not installed (schema conformance tests)
+- **1 SARIF test** has a pre-existing assertion mismatch (result count)
+- All 430+ other tests pass consistently
+
+### CI/CD Workflows
+
+4 GitHub Actions workflows in `.github/workflows/`:
+
+| Workflow | Trigger | What It Does |
+|----------|---------|-------------|
+| `validate.yml` | Push/PR to main | Runs `python tools/validate.py` on all example YAML |
+| `test.yml` | Push/PR to main | Runs full pytest suite |
+| `pattern-validate.yml` | Push/PR to patterns/ | Validates all patterns with `validate-patterns.py` |
+| `diagram-validate.yml` | Push/PR to diagrams | Validates diagram syntax with `validate-diagram.py` |
+
+---
+
 ## Known Limitations
 
 | Limitation | Mitigation |
@@ -2196,6 +2706,8 @@ Doc2ArchAgent's key differentiator is the **zero-hallucination pipeline**: every
 | PlantUML `!include` fails | Ensure you use `!include <C4/C4_Container>` with the `C4/` prefix. Without it, the stdlib can't find the files. |
 | PlantUML renders `//` as italic | Escape forward slashes in URLs/protocols: use `~/~/` instead of `//`. |
 | Lucidchart import looks wrong | Ensure you import `.drawio` files via File > Import > Draw.io (not drag-and-drop). Elements use simple shapes, not C4 stencils. |
+| Lucidchart import loses edge labels | **Known limitation.** Lucidchart's Draw.io importer drops edge `value` attributes. The agent generates backup text cells as a workaround. For lossless import, use the Lucidchart Standard Import API (JSON-based `.lucid` format). |
+| `validate-diagram.py` reports errors | Fix all errors before accepting diagrams. Common issues: unbalanced subgraph/end blocks (Mermaid), hyphens in aliases (PlantUML), malformed XML (Draw.io). Run with `--format json` for machine-readable output. |
 | Confluence HTML doesn't render | The `.confluence.html` files use Confluence storage format (XHTML + `ac:` macros). Paste into the Confluence editor's source view, or upload via REST API. |
 | Agent skips a question | Required fields are never skipped. If something was skipped, it was optional. Say "go back" to revisit. |
 | YAML looks wrong after editing manually | Run `@validator` to check for structural issues. Hand off to `@architect` to fix. |
