@@ -2982,3 +2982,640 @@ class TestThreatEnrichment:
         d = f.to_dict()
         assert "compliance" in d
         assert d["compliance"][0]["framework"] == "pci_dss"
+
+
+# ============================================================================
+# PHASE A-C ENHANCEMENT TESTS
+# ============================================================================
+
+
+class TestConfidenceScoring:
+    """Tests for tools/confidence.py — Phase A2."""
+
+    def test_import(self):
+        spec = importlib.util.spec_from_file_location(
+            "confidence", TOOLS_DIR / "confidence.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        assert hasattr(mod, "ConfidenceScorer")
+        assert hasattr(mod, "ExtractionMethod")
+
+    def test_native_text_high_confidence(self):
+        spec = importlib.util.spec_from_file_location(
+            "confidence", TOOLS_DIR / "confidence.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+
+        scorer = mod.ConfidenceScorer(default_threshold=95)
+        score = scorer.score(method=mod.ExtractionMethod.NATIVE_TEXT, field_present=True)
+        assert score >= 90, f"Native text should be high confidence, got {score}"
+
+    def test_ocr_lower_confidence(self):
+        spec = importlib.util.spec_from_file_location(
+            "confidence", TOOLS_DIR / "confidence.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+
+        scorer = mod.ConfidenceScorer()
+        native = scorer.score(method=mod.ExtractionMethod.NATIVE_TEXT)
+        ocr = scorer.score(method=mod.ExtractionMethod.OCR)
+        assert native > ocr, "Native text should score higher than OCR"
+
+    def test_verified_always_100(self):
+        spec = importlib.util.spec_from_file_location(
+            "confidence", TOOLS_DIR / "confidence.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+
+        scorer = mod.ConfidenceScorer()
+        score = scorer.score(method=mod.ExtractionMethod.OCR, verified=True)
+        assert score == 100
+
+    def test_absent_field_penalty(self):
+        spec = importlib.util.spec_from_file_location(
+            "confidence", TOOLS_DIR / "confidence.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+
+        scorer = mod.ConfidenceScorer()
+        present = scorer.score(method=mod.ExtractionMethod.NATIVE_TEXT, field_present=True)
+        absent = scorer.score(method=mod.ExtractionMethod.NATIVE_TEXT, field_present=False)
+        assert present > absent, "Absent fields should score lower"
+
+    def test_multi_source_boost(self):
+        spec = importlib.util.spec_from_file_location(
+            "confidence", TOOLS_DIR / "confidence.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+
+        scorer = mod.ConfidenceScorer()
+        single = scorer.score(method=mod.ExtractionMethod.NATIVE_TEXT, source_count=1)
+        multi = scorer.score(method=mod.ExtractionMethod.NATIVE_TEXT, source_count=3)
+        assert multi > single, "Multiple sources should boost confidence"
+
+    def test_category_mapping(self):
+        spec = importlib.util.spec_from_file_location(
+            "confidence", TOOLS_DIR / "confidence.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+
+        scorer = mod.ConfidenceScorer()
+        assert scorer.to_category(95) == "HIGH"
+        assert scorer.to_category(75) == "MEDIUM"
+        assert scorer.to_category(50) == "LOW"
+        assert scorer.to_category(20) == "UNCERTAIN"
+        assert scorer.to_category(0) == "NOT_STATED"
+
+    def test_threshold_check(self):
+        spec = importlib.util.spec_from_file_location(
+            "confidence", TOOLS_DIR / "confidence.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+
+        scorer = mod.ConfidenceScorer(default_threshold=80)
+        assert scorer.meets_threshold(85) is True
+        assert scorer.meets_threshold(75) is False
+        assert scorer.meets_threshold(75, threshold=70) is True
+
+    def test_enrich_provenance(self):
+        spec = importlib.util.spec_from_file_location(
+            "confidence", TOOLS_DIR / "confidence.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+
+        prov = {
+            "extraction_date": "2026-01-01",
+            "documents_analyzed": [{"file": "test.pdf"}],
+            "entities": [{
+                "entity_type": "component",
+                "entity_id": "web-api",
+                "fields": {
+                    "name": {
+                        "value": "Web API",
+                        "confidence": "HIGH",
+                        "pass": "prose",
+                    },
+                    "technology": {
+                        "value": "Java",
+                        "confidence": "MEDIUM",
+                        "pass": "table",
+                    },
+                },
+            }],
+        }
+
+        scorer = mod.ConfidenceScorer(default_threshold=90)
+        enriched = scorer.enrich_provenance(prov)
+
+        # Check scores were added
+        fields = enriched["entities"][0]["fields"]
+        assert "confidence_score" in fields["name"]
+        assert "meets_threshold" in fields["name"]
+        assert isinstance(fields["name"]["confidence_score"], int)
+
+        # Check statistics
+        stats = enriched["statistics"]
+        assert "confidence_threshold" in stats
+        assert stats["confidence_threshold"] == 90
+        assert "average_confidence" in stats
+
+    def test_document_extraction_scoring(self):
+        spec = importlib.util.spec_from_file_location(
+            "confidence", TOOLS_DIR / "confidence.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+
+        scorer = mod.ConfidenceScorer()
+
+        # PyMuPDF result should score high
+        high_result = {"method": "pymupdf", "quality": "high"}
+        score = scorer.score_document_extraction(high_result)
+        assert score >= 85
+
+        # OCR result should score lower
+        ocr_result = {"method": "tesseract-ocr", "quality": "medium", "ocr_confidence": 0.7}
+        ocr_score = scorer.score_document_extraction(ocr_result)
+        assert ocr_score < score
+
+    def test_nli_contradicted_penalty(self):
+        spec = importlib.util.spec_from_file_location(
+            "confidence", TOOLS_DIR / "confidence.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+
+        scorer = mod.ConfidenceScorer()
+        normal = scorer.score(method=mod.ExtractionMethod.NATIVE_TEXT)
+        contradicted = scorer.score(method=mod.ExtractionMethod.NATIVE_TEXT, nli_status="contradicted")
+        assert contradicted < normal * 0.5, "Contradicted NLI should heavily penalize"
+
+
+class TestVLMProviders:
+    """Tests for tools/vlm_providers.py — Phase A3."""
+
+    def test_import(self):
+        spec = importlib.util.spec_from_file_location(
+            "vlm_providers", TOOLS_DIR / "vlm_providers.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        assert hasattr(mod, "create_provider")
+        assert hasattr(mod, "VLMProvider")
+        assert hasattr(mod, "VLMResponse")
+
+    def test_stub_provider(self):
+        spec = importlib.util.spec_from_file_location(
+            "vlm_providers", TOOLS_DIR / "vlm_providers.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+
+        provider = mod.create_provider("stub")
+        assert provider.name == "stub"
+
+        result = provider.analyze_image(b"fake_image", "describe this")
+        assert isinstance(result, mod.VLMResponse)
+        assert result.provider == "stub"
+        assert result.model == "stub"
+
+    def test_stub_with_responses(self):
+        spec = importlib.util.spec_from_file_location(
+            "vlm_providers", TOOLS_DIR / "vlm_providers.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+
+        provider = mod.StubProvider(responses=["response 1", "response 2"])
+        r1 = provider.analyze_image(b"img", "prompt")
+        assert r1.text == "response 1"
+        r2 = provider.analyze_image(b"img", "prompt")
+        assert r2.text == "response 2"
+
+    def test_list_providers(self):
+        spec = importlib.util.spec_from_file_location(
+            "vlm_providers", TOOLS_DIR / "vlm_providers.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+
+        providers = mod.list_providers()
+        assert "stub" in providers
+        assert "openai" in providers
+        assert "anthropic" in providers
+        assert "ollama" in providers
+
+    def test_unknown_provider_raises(self):
+        spec = importlib.util.spec_from_file_location(
+            "vlm_providers", TOOLS_DIR / "vlm_providers.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+
+        with pytest.raises(ValueError, match="Unknown VLM provider"):
+            mod.create_provider("nonexistent_provider")
+
+    def test_analyze_document_page(self):
+        spec = importlib.util.spec_from_file_location(
+            "vlm_providers", TOOLS_DIR / "vlm_providers.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+
+        provider = mod.StubProvider(responses=['{"components": []}'])
+        result = provider.analyze_document_page(b"page_image")
+        assert result.text == '{"components": []}'
+
+
+class TestGapAnalysis:
+    """Tests for ARCH014-ARCH017 gap analysis rules — Phase A4."""
+
+    def _run_validate(self, system_yaml_content, tmp_path, networks=None):
+        spec = importlib.util.spec_from_file_location(
+            "validate", TOOLS_DIR / "validate.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+
+        sys_file = tmp_path / "system.yaml"
+        sys_file.write_text(yaml.dump(system_yaml_content))
+
+        nw_path = None
+        if networks:
+            nw_file = tmp_path / "networks.yaml"
+            nw_file.write_text(yaml.dump(networks))
+            nw_path = str(nw_file)
+
+        return mod.validate(str(sys_file), nw_path)
+
+    def test_missing_file_warning(self, tmp_path):
+        """ARCH014: warn when expected files are missing."""
+        system = {
+            "metadata": {"name": "test", "description": "d", "owner": "o", "status": "active"},
+            "contexts": [{"id": "ctx", "name": "Ctx", "description": "d", "internal": True}],
+            "containers": [],
+            "components": [],
+        }
+        result = self._run_validate(system, tmp_path)
+        arch014 = [w for w in result["warnings"] if w["rule_id"] == "ARCH014"]
+        assert len(arch014) > 0, "Should warn about missing networks.yaml / security files"
+
+    def test_stale_architecture_warning(self, tmp_path):
+        """ARCH016: warn when last_review_date is > 6 months old."""
+        system = {
+            "metadata": {
+                "name": "test", "description": "d", "owner": "o", "status": "active",
+                "last_review_date": "2025-01-01",
+            },
+            "contexts": [{"id": "ctx", "name": "Ctx", "description": "d", "internal": True}],
+            "containers": [],
+            "components": [],
+        }
+        result = self._run_validate(system, tmp_path)
+        arch016 = [w for w in result["warnings"] if w["rule_id"] == "ARCH016"]
+        assert len(arch016) > 0, "Should warn about stale architecture data"
+
+    def test_missing_description_warning(self, tmp_path):
+        """ARCH017: warn when component lacks description."""
+        system = {
+            "metadata": {"name": "test", "description": "d", "owner": "o", "status": "active"},
+            "contexts": [{"id": "ctx", "name": "Ctx", "description": "d", "internal": True}],
+            "containers": [{"id": "ctr", "name": "Ctr", "context_id": "ctx",
+                            "container_type": "service", "technology": "Java"}],
+            "components": [{
+                "id": "comp",
+                "name": "Comp",
+                "container_id": "ctr",
+                "component_type": "service",
+                "technology": "Java",
+                # No description
+            }],
+        }
+        result = self._run_validate(system, tmp_path)
+        arch017 = [w for w in result["warnings"] if w["rule_id"] == "ARCH017"]
+        assert any("no description" in w["message"] for w in arch017)
+
+    def test_listener_no_security_warning(self, tmp_path):
+        """ARCH017: warn when listener has neither authn nor TLS."""
+        system = {
+            "metadata": {"name": "test", "description": "d", "owner": "o", "status": "active"},
+            "contexts": [{"id": "ctx", "name": "Ctx", "description": "d", "internal": True}],
+            "containers": [{"id": "ctr", "name": "Ctr", "context_id": "ctx",
+                            "container_type": "service", "technology": "Java"}],
+            "components": [{
+                "id": "comp", "name": "Comp", "container_id": "ctr",
+                "component_type": "service", "technology": "Java", "description": "Test",
+                "listeners": [{"id": "http", "protocol": "HTTP", "port": 8080}],
+            }],
+        }
+        result = self._run_validate(system, tmp_path)
+        arch017 = [w for w in result["warnings"] if w["rule_id"] == "ARCH017"]
+        assert any("neither authentication nor TLS" in w["message"] for w in arch017)
+
+    def test_no_threat_report_warning(self, tmp_path):
+        """ARCH015: warn when components with listeners have no threat report."""
+        system = {
+            "metadata": {"name": "test", "description": "d", "owner": "o", "status": "active"},
+            "contexts": [{"id": "ctx", "name": "Ctx", "description": "d", "internal": True}],
+            "containers": [{"id": "ctr", "name": "Ctr", "context_id": "ctx",
+                            "container_type": "service", "technology": "Java"}],
+            "components": [{
+                "id": "comp", "name": "Comp", "container_id": "ctr",
+                "component_type": "service", "technology": "Java", "description": "Test",
+                "listeners": [{"id": "http", "protocol": "HTTP", "port": 8080,
+                               "authn_mechanism": "jwt", "tls_enabled": True}],
+            }],
+        }
+        result = self._run_validate(system, tmp_path)
+        arch015 = [w for w in result["warnings"] if w["rule_id"] == "ARCH015"]
+        assert len(arch015) > 0, "Should warn about missing threat report"
+
+
+class TestEntityResolution:
+    """Tests for tools/entity_resolver.py — Phase B9."""
+
+    def test_import(self):
+        spec = importlib.util.spec_from_file_location(
+            "entity_resolver", TOOLS_DIR / "entity_resolver.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        assert hasattr(mod, "find_duplicates")
+        assert hasattr(mod, "normalize_entity_name")
+
+    def test_normalize_name(self):
+        spec = importlib.util.spec_from_file_location(
+            "entity_resolver", TOOLS_DIR / "entity_resolver.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+
+        assert mod.normalize_entity_name("my-web-service") == "my web service"
+        # "primary" is a noise word, gets filtered
+        assert "database" in mod.normalize_entity_name("db-primary")
+        assert mod.normalize_entity_name("api-gw") == "api gateway"
+
+    def test_find_duplicates_exact(self):
+        spec = importlib.util.spec_from_file_location(
+            "entity_resolver", TOOLS_DIR / "entity_resolver.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+
+        entities = [
+            {"type": "component", "id": "web-api", "name": "Web API"},
+            {"type": "component", "id": "web-api-svc", "name": "Web API Service"},
+        ]
+        # web-api-svc normalizes to "web api service", web-api to "web api"
+        # Threshold 60 to account for length difference
+        dups = mod.find_duplicates(entities, threshold=60)
+        assert len(dups) > 0, "Should detect similar component names"
+
+    def test_abbreviation_match(self):
+        spec = importlib.util.spec_from_file_location(
+            "entity_resolver", TOOLS_DIR / "entity_resolver.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+
+        entities = [
+            {"type": "component", "id": "db-primary", "name": "Database Primary"},
+            {"type": "component", "id": "database-primary", "name": "Database Primary"},
+        ]
+        dups = mod.find_duplicates(entities, threshold=80)
+        assert len(dups) > 0, "Should match abbreviated forms"
+
+    def test_no_false_positives(self):
+        spec = importlib.util.spec_from_file_location(
+            "entity_resolver", TOOLS_DIR / "entity_resolver.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+
+        entities = [
+            {"type": "component", "id": "web-api", "name": "Web API"},
+            {"type": "component", "id": "payment-processor", "name": "Payment Processor"},
+        ]
+        dups = mod.find_duplicates(entities, threshold=80)
+        assert len(dups) == 0, "Distinct entities should not match"
+
+    def test_extract_entities(self):
+        spec = importlib.util.spec_from_file_location(
+            "entity_resolver", TOOLS_DIR / "entity_resolver.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+
+        system = {
+            "contexts": [{"id": "ctx-1", "name": "Context 1"}],
+            "containers": [{"id": "ctr-1", "name": "Container 1"}],
+            "components": [{"id": "comp-1", "name": "Component 1"}],
+            "external_systems": [{"id": "ext-1", "name": "External 1"}],
+        }
+        entities = mod.extract_entities(system)
+        assert len(entities) == 4
+        types = {e["type"] for e in entities}
+        assert types == {"context", "container", "component", "external_system"}
+
+
+class TestLayoutAnalyzer:
+    """Tests for tools/layout_analyzer.py — Phase B6/B7/B8."""
+
+    def test_import(self):
+        spec = importlib.util.spec_from_file_location(
+            "layout_analyzer", TOOLS_DIR / "layout_analyzer.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        assert hasattr(mod, "analyze_document")
+        assert hasattr(mod, "detect_document_schema")
+        assert hasattr(mod, "EXTRACTION_TEMPLATES")
+
+    def test_schema_detection_hld(self):
+        spec = importlib.util.spec_from_file_location(
+            "layout_analyzer", TOOLS_DIR / "layout_analyzer.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+
+        text = """
+        # Architecture Overview
+        ## Components
+        The system consists of a web service, database, and message queue.
+        The technology stack includes Java, PostgreSQL, and Kafka.
+        ## Deployment
+        Deployed on Kubernetes with three replicas.
+        """
+        schema, conf = mod.detect_document_schema(text)
+        assert schema == "hld", f"Expected hld, got {schema}"
+        assert conf > 0.3
+
+    def test_schema_detection_network(self):
+        spec = importlib.util.spec_from_file_location(
+            "layout_analyzer", TOOLS_DIR / "layout_analyzer.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+
+        text = """
+        # Network Architecture
+        ## Network Zones
+        DMZ zone with CIDR 10.0.0.0/24
+        ## Firewall Rules
+        Allow ingress on port 443. ACL rules for egress filtering.
+        VLAN segmentation between subnets.
+        """
+        schema, conf = mod.detect_document_schema(text)
+        assert schema == "network", f"Expected network, got {schema}"
+
+    def test_schema_detection_security(self):
+        spec = importlib.util.spec_from_file_location(
+            "layout_analyzer", TOOLS_DIR / "layout_analyzer.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+
+        text = """
+        # Security Architecture
+        ## Authentication
+        OAuth 2.0 with SAML federation. MFA required for admin access.
+        ## Encryption
+        TLS 1.3 for all communications. AES-256 for data at rest.
+        ## Compliance
+        PCI DSS and SOX compliance required.
+        """
+        schema, conf = mod.detect_document_schema(text)
+        assert schema == "security", f"Expected security, got {schema}"
+
+    def test_extraction_templates_exist(self):
+        spec = importlib.util.spec_from_file_location(
+            "layout_analyzer", TOOLS_DIR / "layout_analyzer.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+
+        for tmpl_name in ("hld", "lld", "network", "security"):
+            assert tmpl_name in mod.EXTRACTION_TEMPLATES
+            tmpl = mod.EXTRACTION_TEMPLATES[tmpl_name]
+            assert "name" in tmpl
+            assert "expected_sections" in tmpl
+            assert "key_fields" in tmpl
+
+    def test_extract_with_template(self):
+        spec = importlib.util.spec_from_file_location(
+            "layout_analyzer", TOOLS_DIR / "layout_analyzer.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+
+        text = "# Components\nThe web service uses Java Spring Boot."
+        result = mod.extract_with_template(text, "hld")
+        assert result["template"] == "hld"
+        assert "fields" in result
+        assert "sections_found" in result
+
+    def test_analyze_text_file(self, tmp_path):
+        spec = importlib.util.spec_from_file_location(
+            "layout_analyzer", TOOLS_DIR / "layout_analyzer.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+
+        doc = tmp_path / "test.txt"
+        doc.write_text("# Architecture\nWeb service with PostgreSQL database.")
+
+        analysis = mod.analyze_document(doc, use_layout_detection=False)
+        assert analysis.source_file == str(doc)
+        assert len(analysis.pages) == 1
+        assert analysis.pages[0].full_text != ""
+
+
+class TestOCRBackends:
+    """Tests for tools/ocr_backends.py — Phase C10."""
+
+    def test_import(self):
+        spec = importlib.util.spec_from_file_location(
+            "ocr_backends", TOOLS_DIR / "ocr_backends.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        assert hasattr(mod, "create_ocr_backend")
+        assert hasattr(mod, "list_backends")
+
+    def test_list_backends(self):
+        spec = importlib.util.spec_from_file_location(
+            "ocr_backends", TOOLS_DIR / "ocr_backends.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+
+        backends = mod.list_backends()
+        names = [b["name"] for b in backends]
+        assert "tesseract" in names
+        assert "opendoc" in names
+        assert "paddleocr" in names
+
+    def test_unknown_backend_raises(self):
+        spec = importlib.util.spec_from_file_location(
+            "ocr_backends", TOOLS_DIR / "ocr_backends.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+
+        with pytest.raises(ValueError, match="Unknown OCR backend"):
+            mod.create_ocr_backend("nonexistent")
+
+
+class TestSectionClassifier:
+    """Tests for tools/section_classifier.py — Phase C11."""
+
+    def test_entity_detection(self):
+        spec = importlib.util.spec_from_file_location(
+            "section_classifier", TOOLS_DIR / "section_classifier.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+
+        text = "Server at 192.168.1.100 running PostgreSQL on port 5432 with TLS"
+        entities = mod.detect_entities_in_text(text)
+        assert "ip_address" in entities
+        assert "192.168.1.100" in entities["ip_address"]
+        assert "technology" in entities
+        assert "PostgreSQL" in entities["technology"]
+        assert "protocol" in entities
+        assert "TLS" in entities["protocol"]
+
+
+class TestAgentSupervisor:
+    """Tests for tools/agent_supervisor.py — Phase C12."""
+
+    def test_import(self):
+        spec = importlib.util.spec_from_file_location(
+            "agent_supervisor", TOOLS_DIR / "agent_supervisor.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        assert hasattr(mod, "run_pipeline")
+        assert hasattr(mod, "PipelineStage")
+        assert hasattr(mod, "DEFAULT_PIPELINE")
+
+    def test_pipeline_stages_enum(self):
+        spec = importlib.util.spec_from_file_location(
+            "agent_supervisor", TOOLS_DIR / "agent_supervisor.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+
+        assert mod.PipelineStage.CONVERT == "convert"
+        assert mod.PipelineStage.VALIDATE == "validate"
+        assert mod.PipelineStage.CONFIDENCE == "confidence"
+        assert len(mod.DEFAULT_PIPELINE) >= 5
+
+
+class TestPyprojectToml:
+    """Tests for pyproject.toml — Phase A1."""
+
+    def test_pyproject_exists(self):
+        assert (PROJECT_ROOT / "pyproject.toml").exists()
+
+    def test_pyproject_valid(self):
+        import tomllib
+        with open(PROJECT_ROOT / "pyproject.toml", "rb") as f:
+            data = tomllib.load(f)
+        assert data["project"]["name"] == "doc2archagent"
+        assert "dependencies" in data["project"]
+
+    def test_optional_deps(self):
+        import tomllib
+        with open(PROJECT_ROOT / "pyproject.toml", "rb") as f:
+            data = tomllib.load(f)
+        opt = data["project"]["optional-dependencies"]
+        assert "pdf" in opt
+        assert "ocr" in opt
+        assert "ml" in opt
+        assert "all" in opt
+
+
+class TestDockerfile:
+    """Tests for Dockerfile — Phase A1."""
+
+    def test_dockerfile_exists(self):
+        assert (PROJECT_ROOT / "Dockerfile").exists()
+
+    def test_dockerfile_has_required_stages(self):
+        content = (PROJECT_ROOT / "Dockerfile").read_text()
+        assert "FROM python:" in content
+        assert "requirements.txt" in content
+        assert "INSTALL_ML" in content

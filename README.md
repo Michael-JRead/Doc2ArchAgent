@@ -1932,17 +1932,233 @@ Each view generates up to 3 files (Mermaid, PlantUML, Draw.io) depending on whic
 
 ---
 
+## Advanced Tools & Pipeline
+
+Doc2ArchAgent includes a comprehensive set of CLI tools that can be used standalone or as part of the multi-agent pipeline. All tools follow the principle of **graceful degradation** — they work with minimal dependencies and unlock additional capabilities when optional packages are installed.
+
+### Installation Options
+
+```bash
+# Minimal (validation + threat rules only)
+pip install -r tools/requirements.txt
+
+# Full document processing
+pip install -r tools/requirements.txt "doc2archagent[all]"
+
+# With ML-powered layout detection
+pip install -r tools/requirements.txt "doc2archagent[ml]"
+```
+
+### Docker
+
+```bash
+# Standard build
+docker build -t doc2archagent .
+
+# With ML support
+docker build --build-arg INSTALL_ML=true -t doc2archagent:ml .
+
+# Run validation
+docker run -v $(pwd)/architecture:/workspace/architecture doc2archagent tools.validate architecture/system.yaml
+```
+
+### Confidence Scoring Framework (`tools/confidence.py`)
+
+Every extracted value gets a numeric confidence score (0-100) with a user-adjustable threshold (default: 95%).
+
+```bash
+# Score a single extraction
+python tools/confidence.py score --method native_text --source-count 2 --threshold 90
+
+# Enrich provenance.yaml with numeric scores
+python tools/confidence.py enrich architecture/provenance.yaml --threshold 95
+```
+
+**Scoring factors:**
+| Factor | Effect |
+|--------|--------|
+| Extraction method | Native text (95), structured parse (90-95), table (85), OCR (70), VLM (65), inferred (60) |
+| Field presence | Explicitly stated (+0%) vs. absent/inferred (-40%) |
+| Source count | Each confirming source adds +5 (max +15) |
+| Quote match quality | High match (+5), low match (-15) |
+| NLI verification | Entailed (+5), contradicted (-70%), neutral (-5) |
+| Human verified | Always 100 |
+
+**Category mapping:** HIGH (85-100), MEDIUM (65-84), LOW (40-64), UNCERTAIN (1-39), NOT_STATED (0)
+
+### VLM Provider Abstraction (`tools/vlm_providers.py`)
+
+Swappable vision language model backends for diagram understanding and scanned document analysis. Supports cloud APIs and local/privacy-first options.
+
+```python
+from tools.vlm_providers import create_provider
+
+# Auto-detect from environment variables
+provider = create_provider()
+
+# Or specify explicitly
+provider = create_provider("openai", model="gpt-4o")
+provider = create_provider("anthropic", model="claude-sonnet-4-20250514")
+provider = create_provider("ollama", model="llava:13b")  # Local, privacy-first
+
+result = provider.analyze_document_page(page_image_bytes)
+```
+
+**Auto-detection priority:** `D2A_VLM_PROVIDER` env var > `ANTHROPIC_API_KEY` > `OPENAI_API_KEY` > Ollama (localhost) > Stub (no-op)
+
+| Provider | Use Case | Privacy |
+|----------|----------|---------|
+| `openai` | GPT-4o for architecture diagram analysis | Cloud |
+| `anthropic` | Claude Vision for document understanding | Cloud |
+| `ollama` | LLaVA/Llama Vision for local processing | Local |
+| `stub` | Testing and CI pipelines | N/A |
+
+### Layout-Detection-First Pipeline (`tools/layout_analyzer.py`)
+
+ML-powered document layout analysis that identifies tables, figures, headers, and text regions before extraction. Uses DocLayout-YOLO (Apache 2.0, 2.3M params nano model).
+
+```bash
+# Analyze a document
+python tools/layout_analyzer.py architecture-doc.pdf --format json
+
+# Force a specific extraction template
+python tools/layout_analyzer.py hld-document.pdf --schema hld
+
+# Skip ML detection (text-only)
+python tools/layout_analyzer.py document.pdf --no-layout
+```
+
+**Pipeline flow:**
+```
+PDF Page --> Render to Image --> YOLO Layout Detection
+  |-- Text regions -----> PyMuPDF / OCR
+  |-- Table regions ----> ML table extraction
+  |-- Figure regions ---> VLM analysis / flag for review
+  |-- Section headers --> Structure classification
+  |-- Page headers -----> Metadata extraction
+```
+
+**Schema auto-detection** identifies document type (HLD, LLD, Network, Security) and routes to specialized extraction templates with expected sections and key fields.
+
+### Entity Resolution (`tools/entity_resolver.py`)
+
+Cross-document deduplication using fuzzy matching with architecture-aware normalization. Detects when the same component appears in multiple documents with different names.
+
+```bash
+# Find duplicates
+python tools/entity_resolver.py architecture/system.yaml --threshold 80
+
+# Auto-merge high-confidence matches
+python tools/entity_resolver.py architecture/system.yaml --auto-merge --threshold 95
+
+# Cross-type comparison (e.g., component vs. external_system)
+python tools/entity_resolver.py architecture/system.yaml --cross-type
+```
+
+**Normalization:** Expands abbreviations (`db` -> `database`, `svc` -> `service`, `api-gw` -> `api-gateway`), removes noise words, and applies fuzzy matching with technology-aware scoring.
+
+### Pluggable OCR Backends (`tools/ocr_backends.py`)
+
+Three OCR engines with automatic selection based on available packages:
+
+| Backend | Accuracy | Speed | GPU Required | Install |
+|---------|----------|-------|-------------|---------|
+| **Tesseract** (default) | Good | Fast | No | `pip install pytesseract` |
+| **OpenDoc-0.1B** | Excellent (90.57% OmniDocBench) | Medium | No (ONNX) | `pip install doc2archagent[ml]` |
+| **PaddleOCR** | Very Good (multilingual) | Medium | Optional | `pip install paddleocr` |
+
+```bash
+# Force a specific backend
+D2A_OCR_BACKEND=opendoc python tools/convert-docs.py input/ output/
+```
+
+### Enhanced Section Classifier (`tools/section_classifier.py`)
+
+Extends keyword-based classification with optional ML (LiLT transformer) and architecture entity detection.
+
+```bash
+# Keyword-only (default)
+python tools/section_classifier.py document.md
+
+# With ML ensemble
+python tools/section_classifier.py document.md --use-ml --ml-weight 0.6
+
+# With entity detection
+python tools/section_classifier.py document.md --detect-entities --format json
+```
+
+**Detected entities:** IP addresses, ports, protocols (HTTPS, gRPC, AMQP, etc.), technologies (PostgreSQL, Kafka, etc.), authentication mechanisms (OAuth 2.0, SAML, JWT, mTLS, etc.)
+
+### Multi-Agent Supervisor (`tools/agent_supervisor.py`)
+
+Programmatic pipeline orchestrator that mirrors the GitHub Copilot agent workflow but runs standalone in CI/CD.
+
+```bash
+# Full pipeline
+python tools/agent_supervisor.py architecture/docs/ --output architecture/
+
+# Specific stages only
+python tools/agent_supervisor.py input.pdf --stages convert,classify,validate
+
+# With confidence threshold
+python tools/agent_supervisor.py input/ --output output/ --threshold 90 --format json
+```
+
+**Pipeline stages:** `convert` -> `layout` -> `classify` -> `extract` -> `resolve` -> `validate` -> `threat` -> `confidence`
+
+### Predictive Gap Analysis (ARCH014-ARCH017)
+
+The validator now proactively identifies missing architecture artifacts:
+
+| Rule | What It Detects |
+|------|----------------|
+| **ARCH014** | Missing architecture files (networks.yaml, security overlays) |
+| **ARCH015** | Components with listeners but no threat report |
+| **ARCH016** | Stale architecture data (last_review_date > 6 months) |
+| **ARCH017** | Components without descriptions, listeners without security config |
+
+```bash
+# Run with gap analysis (included by default)
+python tools/validate.py architecture/system.yaml --format table
+```
+
+### Compliance Mapping
+
+Threat findings are mapped to 6 compliance frameworks via `context/compliance-rule-mapping.yaml`:
+
+| Framework | Coverage |
+|-----------|----------|
+| CWE | Common Weakness Enumeration |
+| PCI DSS | Payment Card Industry Data Security Standard |
+| SOC 2 | Service Organization Control 2 |
+| NIST 800-53 | National Institute of Standards and Technology |
+| ISO 27001 | Information Security Management |
+| HIPAA | Health Insurance Portability and Accountability Act |
+
+---
+
 ## How This Compares
 
 | Tool | Approach | Key Difference |
 |------|----------|---------------|
 | **STRIDE GPT** | Chat-based threat modeling | Single-pass, no schema validation, no provenance tracking |
 | **Threagile** | YAML-in, risk-out | Requires manual YAML authoring; Doc2ArchAgent extracts it from documents |
-| **Visual Paradigm AI** | AI-generated diagrams | No zero-hallucination controls, no source traceability |
+| **Structurizr** | DSL-based architecture modeling | Code-first; Doc2ArchAgent is document-first with auto-extraction |
+| **IriusRisk** | Enterprise threat modeling | Commercial SaaS; Doc2ArchAgent is open-source and IDE-native |
+| **IcePanel** | Visual C4 modeling | Cloud SaaS; Doc2ArchAgent runs locally with no vendor lock-in |
 | **pytm** | Python code defines threats | Code-first (not document-first), no multi-pass extraction |
-| **Doc2ArchAgent** | Document → validated C4 model → diagrams + docs + STRIDE + ACLs | Full pipeline: extraction with provenance, deterministic validation, multi-format rendering (Mermaid, PlantUML, Lucidchart), Confluence-ready documentation |
+| **Doc2ArchAgent** | Document -> validated C4 model -> diagrams + docs + STRIDE + ACLs | Full pipeline: extraction with provenance, deterministic validation, multi-format rendering, compliance mapping, gap analysis |
 
 Doc2ArchAgent's key differentiator is the **zero-hallucination pipeline**: every element is traceable to a source document, validated by deterministic code, and rendered with confidence indicators. The output is a verifiable subset, never a plausible guess. The multi-format output (Mermaid, PlantUML, Lucidchart, Confluence, Markdown) ensures integration with any toolchain.
+
+**Unique capabilities no competitor offers:**
+- Document-to-C4 extraction with per-field provenance tracking
+- Numeric confidence scoring (0-100) with user-adjustable thresholds
+- Predictive gap analysis ("you're missing network security docs")
+- Cross-document entity resolution with abbreviation-aware matching
+- Privacy-first local VLM option (Ollama) for sensitive architecture docs
+- Multi-agent pipeline supervisor for CI/CD automation
+- ML-powered layout detection for complex document ingestion
 
 ---
 
