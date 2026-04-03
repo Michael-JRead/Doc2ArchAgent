@@ -81,6 +81,12 @@ Every file MUST start with `@startuml` and end with `@enduml`.
 ### 7. SHOW_LEGEND() must be the LAST line before @enduml
 Nothing except comments may appear between `SHOW_LEGEND()` and `@enduml`.
 
+Available legend macros:
+- `SHOW_LEGEND()` — standard legend at bottom (preferred)
+- `SHOW_FLOATING_LEGEND()` — floating legend box (alternative)
+- `LAYOUT_WITH_LEGEND()` — combined layout + legend (deprecated, use `SHOW_LEGEND()`)
+- `HIDE_LEGEND()` — suppress legend entirely
+
 ### 8. Escape Creole special characters in labels
 PlantUML uses Creole markup. These characters trigger formatting if unescaped:
 
@@ -135,6 +141,8 @@ Include by diagram level:
 - Container → `!include <C4/C4_Container>`
 - Component → `!include <C4/C4_Component>`
 - Deployment → `!include <C4/C4_Deployment>`
+- Dynamic → `!include <C4/C4_Dynamic>`
+- Sequence �� `!include <C4/C4_Sequence>`
 
 ---
 
@@ -262,6 +270,8 @@ AddElementTag("untrusted", $bgColor="#c62828", $fontColor="#ffffff", $borderColo
 
 ### Context-level macros (Person, System)
 **These have NO `$techn` parameter.** The 3rd positional arg is `$descr`.
+
+Full signature: `Person(alias, label, ?descr, ?sprite, ?tags, ?link, ?type)`
 ```
 Person(alias, "Label", "Description", $tags="person")
 Person_Ext(alias, "Label", "Description", $tags="external")
@@ -273,6 +283,8 @@ SystemQueue(alias, "Label", "Description", $tags="system")
 
 ### Container-level macros
 **The 3rd positional arg is `$techn`, 4th is `$descr`.**
+
+Full signature: `Container(alias, label, ?techn, ?descr, ?sprite, ?tags, ?link, ?type)`
 ```
 Container(alias, "Label", "Technology", "Description", $tags="container")
 ContainerDb(alias, "Label", "Technology", "Description", $tags="container")
@@ -284,6 +296,8 @@ ContainerQueue_Ext(alias, "Label", "Technology", "Description", $tags="external"
 
 ### Component-level macros
 **Same parameter order as Container: `$techn` 3rd, `$descr` 4th.**
+
+Full signature: `Component(alias, label, ?techn, ?descr, ?sprite, ?tags, ?link, ?type)`
 ```
 Component(alias, "Label", "Technology", "Description", $tags="component")
 ComponentDb(alias, "Label", "Technology", "Description", $tags="component")
@@ -292,19 +306,43 @@ Component_Ext(alias, "Label", "Technology", "Description", $tags="external")
 ```
 
 ### Deployment macros
-**3rd positional arg is `$type` (NOT `$techn`).**
+**3rd positional arg is `$techn` (used for type/technology).**
+
+Full signature: `Deployment_Node(alias, label, ?techn, ?descr, ?sprite, ?tags, ?link, ?type)`
 ```
 Deployment_Node(alias, "Label", "Type", "Description", $tags="trusted")
 Node(alias, "Label", "Type", "Description", $tags="trusted")
 ```
-Both `Deployment_Node` and `Node` are identical — use either.
+Both `Deployment_Node` and `Node` are identical — use either. `Node_L` and `Node_R` variants exist for left/right alignment.
+
+### Boundary macros — full signatures
+```
+Boundary(alias, label, ?type, ?tags, ?link, ?descr)
+Enterprise_Boundary(alias, label, ?tags, ?link, ?descr)
+System_Boundary(alias, label, ?tags, ?link, ?descr)
+Container_Boundary(alias, label, ?tags, ?link, ?descr)
+```
+
+### Dynamic diagram macros
+For C4_Dynamic diagrams (`!include <C4/C4_Dynamic>`):
+```
+RelIndex(index, from, to, label, ?techn, ?descr, ?sprite, ?tags, ?link)
+```
 
 ### Skipping optional parameters
-Use named parameters to skip positional args:
+Use named parameters (prefixed with `$`) to skip positional args:
 ```
 System(my_sys, "My System", $tags="system")
 Container(my_ctr, "My Container", "Java", $tags="container")
+Person(user, "User", $sprite="person", $tags="person")
 ```
+
+### Optional parameter reference
+All `?` parameters are optional. Common ones:
+- `$sprite` — icon identifier for visual decoration
+- `$tags` — element/rel tags, combine with `+`: `$tags="tag1+tag2"`
+- `$link` — hyperlink URL (clickable in rendered SVG)
+- `$type` — custom classification string
 
 ---
 

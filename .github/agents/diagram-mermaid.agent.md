@@ -299,10 +299,13 @@ python tools/validate-diagram.py all <diagrams-directory>
 
 Mermaid has experimental native C4 diagram support using `C4Context`, `C4Container`, `C4Component`, and `C4Deployment` diagram types. These use a syntax closer to PlantUML C4.
 
+**Status: EXPERIMENTAL** — Mermaid docs state: "The syntax and properties can change in future releases."
+
 **We use `flowchart LR` as our primary approach** because:
 - It renders reliably across all Mermaid environments (GitHub, VS Code, Obsidian, etc.)
 - `flowchart` has the widest rendering engine support (dagre, elk)
-- Native C4 support is still maturing and has limited styling options
+- Native C4 is experimental — syntax may change without notice
+- Native C4 does NOT support: sprites, tags, links, legends, or layout statements (Lay_U/D/L/R)
 - `flowchart` gives us full control over colors, shapes, and layout
 
 ### When to consider native C4 syntax
@@ -337,4 +340,13 @@ C4Context
 - No `subgraph` — use `Boundary`/`System_Boundary`/`Container_Boundary`
 - Parameter syntax uses parentheses: `Person(alias, "label", "descr")`
 - Layout is automatic (less control than `flowchart`)
-- No legend generation (must be done manually or omitted)
+- No legend generation (not supported — must be omitted)
+- No sprite/tags/link support
+- No Lay_U/D/L/R layout helpers
+
+**Unsupported features (confirmed from official docs):**
+- Sprites, tags, and link parameters are parsed but ignored
+- Legend macros do not exist
+- Layout direction statements not available
+- AddElementTag/AddRelTag custom tags not supported
+- Fixed visual styling — cannot define custom color themes
