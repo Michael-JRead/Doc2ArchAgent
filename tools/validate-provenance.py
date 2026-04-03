@@ -273,7 +273,7 @@ def validate_provenance(
         computed_total = sum(
             len(e.get("fields", {})) for e in entities if isinstance(e, dict)
         )
-        if total and computed_total and abs(total - computed_total) > 0:
+        if total != computed_total:
             warnings.append(
                 f"Statistics mismatch: total_fields_extracted={total} "
                 f"but counted {computed_total} fields in entities"

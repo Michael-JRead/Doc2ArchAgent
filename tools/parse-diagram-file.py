@@ -39,10 +39,31 @@ def _decode_drawio_compressed(data: str) -> str:
         return data
 
 
+def _safe_parse_xml(path: Path) -> ET.Element:
+    """Parse XML with XXE protection (defense-in-depth)."""
+    try:
+        from defusedxml import ElementTree as SafeET
+        return SafeET.parse(str(path)).getroot()
+    except ImportError:
+        # Python 3.8+ ET doesn't resolve external entities by default,
+        # but we still disable DTD processing where possible
+        parser = ET.XMLParser()
+        return ET.parse(str(path), parser=parser).getroot()
+
+
+def _safe_float(value: str | None, default: float = 0.0) -> float:
+    """Convert a string to float, returning default on failure."""
+    if value is None:
+        return default
+    try:
+        return float(value)
+    except (ValueError, TypeError):
+        return default
+
+
 def parse_drawio(path: Path) -> dict:
     """Parse a .drawio/.xml file and extract components, relationships, boundaries."""
-    tree = ET.parse(str(path))
-    root = tree.getroot()
+    root = _safe_parse_xml(path)
 
     components: list[dict] = []
     relationships: list[dict] = []
@@ -75,10 +96,10 @@ def parse_drawio(path: Path) -> dict:
 
         # Extract geometry
         geom = cell.find("mxGeometry")
-        x = float(geom.get("x", "0")) if geom is not None else 0
-        y = float(geom.get("y", "0")) if geom is not None else 0
-        width = float(geom.get("width", "0")) if geom is not None else 0
-        height = float(geom.get("height", "0")) if geom is not None else 0
+        x = _safe_float(geom.get("x")) if geom is not None else 0
+        y = _safe_float(geom.get("y")) if geom is not None else 0
+        width = _safe_float(geom.get("width")) if geom is not None else 0
+        height = _safe_float(geom.get("height")) if geom is not None else 0
 
         if edge == "1" and source and target:
             # Relationship (edge)

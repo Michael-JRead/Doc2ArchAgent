@@ -100,10 +100,13 @@ def parse_openapi(content: str) -> dict:
         if "http://" in url:
             tls_enabled = False
             port = 80
-        if ":" in url.split("//")[-1]:
-            port_str = url.split("//")[-1].split(":")[1].split("/")[0]
-            if port_str.isdigit():
-                port = int(port_str)
+        host_part = url.split("//")[-1]
+        if ":" in host_part:
+            parts = host_part.split(":")
+            if len(parts) >= 2:
+                port_str = parts[1].split("/")[0]
+                if port_str.isdigit():
+                    port = int(port_str)
 
     # Extract paths as listener endpoints
     paths = spec.get("paths", {})

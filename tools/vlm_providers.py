@@ -420,13 +420,14 @@ def create_provider(
             # Check if Ollama is running
             try:
                 import urllib.request
+                import urllib.error
                 req = urllib.request.Request(
                     kwargs.get("base_url", "http://localhost:11434") + "/api/tags",
                     method="GET",
                 )
                 with urllib.request.urlopen(req, timeout=2):
                     provider_name = "ollama"
-            except Exception:
+            except (urllib.error.URLError, OSError, ValueError):
                 provider_name = "stub"
 
     cls = _PROVIDERS.get(provider_name)

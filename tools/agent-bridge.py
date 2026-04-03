@@ -32,7 +32,9 @@ def _parse_agent_frontmatter(agent_path: Path) -> dict:
     if not text.startswith("---"):
         return {}
 
-    end = text.index("---", 3)
+    end = text.find("---", 3)
+    if end == -1:
+        return {}
     frontmatter_text = text[3:end].strip()
 
     # Simple YAML parsing for the fields we need

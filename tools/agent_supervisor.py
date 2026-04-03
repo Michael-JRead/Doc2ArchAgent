@@ -417,27 +417,33 @@ def _run_resolve(input_path: Path, output_dir: Path, **kwargs) -> StageResult:
     start = time.monotonic()
 
     try:
-        from tools.entity_resolver import resolve_entities
+        from tools.entity_resolver import extract_entities, find_duplicates, resolve_duplicates
 
-        # Find provenance.yaml
-        prov_path = None
+        # Find system.yaml for entity resolution
+        system_path = None
         for candidate in [
-            output_dir / "provenance.yaml",
-            output_dir.parent / "provenance.yaml",
+            output_dir / "system.yaml",
+            output_dir.parent / "system.yaml",
         ]:
             if candidate.exists():
-                prov_path = candidate
+                system_path = candidate
                 break
 
-        if not prov_path:
+        if not system_path:
             return StageResult(
                 stage=PipelineStage.RESOLVE,
                 status="skipped",
                 duration_ms=int((time.monotonic() - start) * 1000),
-                errors=["No provenance.yaml found for entity resolution"],
+                errors=["No system.yaml found for entity resolution"],
             )
 
-        result = resolve_entities(prov_path)
+        import yaml
+        with open(system_path) as f:
+            system = yaml.safe_load(f) or {}
+
+        entities = extract_entities(system)
+        duplicates = find_duplicates(entities)
+        result = resolve_duplicates(system, duplicates, auto_merge=True)
         elapsed = int((time.monotonic() - start) * 1000)
 
         return StageResult(
@@ -445,9 +451,9 @@ def _run_resolve(input_path: Path, output_dir: Path, **kwargs) -> StageResult:
             status="success",
             duration_ms=elapsed,
             summary={
-                "entities_resolved": result.get("resolved", 0),
-                "conflicts": result.get("conflicts", 0),
-                "merges": result.get("merges", 0),
+                "entities_resolved": result.get("auto_merged", 0),
+                "conflicts": result.get("needs_review", 0),
+                "merges": result.get("auto_merged", 0),
             },
         )
     except Exception as e:

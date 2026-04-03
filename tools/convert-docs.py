@@ -55,16 +55,15 @@ def convert_pdf_text(src: Path, dst: Path) -> dict:
     if fitz is None:
         return {"status": "skipped", "reason": "PyMuPDF not installed (pip install PyMuPDF)"}
 
-    doc = fitz.open(str(src))
     text_pages: list[str] = []
     has_tables = False
 
-    for page in doc:
-        page_text = page.get_text("text")
-        text_pages.append(page_text)
+    with fitz.open(str(src)) as doc:
+        for page in doc:
+            page_text = page.get_text("text")
+            text_pages.append(page_text)
 
     full_text = "\n\n".join(text_pages)
-    doc.close()
 
     # Detect scanned PDF: negligible text output
     if len(full_text.strip()) < 50:

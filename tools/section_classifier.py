@@ -29,15 +29,28 @@ def _load_classify_sections():
     """Load classify-sections.py as a module (hyphenated name)."""
     import importlib.util
     src = Path(__file__).parent / "classify-sections.py"
+    if not src.exists():
+        raise FileNotFoundError(f"Base classifier not found: {src}")
     spec = importlib.util.spec_from_file_location("classify_sections_base", str(src))
+    if spec is None or spec.loader is None:
+        raise ImportError(f"Cannot create module spec for {src}")
     mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
+    try:
+        spec.loader.exec_module(mod)
+    except Exception as e:
+        raise ImportError(f"Failed to load {src}: {e}") from e
     return mod
 
 
-_cs = _load_classify_sections()
-split_sections = _cs.split_sections
-keyword_classify_section = _cs.classify_section
+try:
+    _cs = _load_classify_sections()
+    split_sections = _cs.split_sections
+    keyword_classify_section = _cs.classify_section
+except (FileNotFoundError, ImportError) as _load_err:
+    import sys
+    print(f"Warning: Could not load classify-sections.py: {_load_err}", file=sys.stderr)
+    split_sections = None
+    keyword_classify_section = None
 
 
 # ---------------------------------------------------------------------------

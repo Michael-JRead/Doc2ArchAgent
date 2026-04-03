@@ -55,7 +55,9 @@ def parse_kubernetes_manifests(content: str) -> dict:
         for doc in yaml.safe_load_all(content):
             if doc and isinstance(doc, dict):
                 docs.append(doc)
-    except yaml.YAMLError:
+    except yaml.YAMLError as e:
+        import sys
+        print(f"Warning: Failed to parse Kubernetes YAML: {e}", file=sys.stderr)
         return entities
 
     # First pass: index services by selector for cross-referencing
