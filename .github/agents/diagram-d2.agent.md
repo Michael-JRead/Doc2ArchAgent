@@ -274,6 +274,19 @@ Note in the output which layout engine is recommended based on diagram complexit
 
 ---
 
+## DETERMINISTIC VALIDATION
+
+After writing D2 files, validate that the output is syntactically consistent:
+
+1. Verify all braces `{ }` are balanced
+2. Verify all relationship source/target reference existing nodes (including dot-notation paths)
+3. Verify all hex color values are valid
+4. Verify `direction` is set on each diagram
+
+Note: `tools/validate-diagram.py` currently supports Mermaid, PlantUML, and Draw.io formats. For D2, perform manual verification against the checklist above. Future support may be added.
+
+---
+
 ## Micro-Confirmations
 
 ```

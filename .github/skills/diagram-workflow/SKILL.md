@@ -150,3 +150,63 @@ When security overlays are present, diagrams should include:
 - **Encrypted connections** — Lock icons or TLS labels on edges
 - **Confidence indicators** — Color-coding by confidence level (green=HIGH, yellow=MEDIUM, red=LOW)
 - **Authentication markers** — Auth method labels on listener nodes
+
+## Deterministic Syntax Validation
+
+After generating any diagram file, validate syntax deterministically using `tools/validate-diagram.py`:
+
+```bash
+# Validate a single file
+python tools/validate-diagram.py mermaid <file.md>
+python tools/validate-diagram.py plantuml <file.puml>
+python tools/validate-diagram.py drawio <file.drawio>
+
+# Validate all diagrams in a directory
+python tools/validate-diagram.py all <diagrams-directory>
+
+# Output as JSON (for programmatic consumption)
+python tools/validate-diagram.py plantuml <file.puml> --format json
+```
+
+**Exit codes:** `0` = no errors, `1` = errors found.
+
+### What the Validator Checks
+
+| Format | Key Checks |
+|--------|-----------|
+| **Mermaid** | `flowchart` declaration (not `graph`), balanced `subgraph`/`end`, lowercase `end`, node/edge reference consistency, empty subgraph detection |
+| **PlantUML** | `@startuml`/`@enduml`, `!include <C4/C4_*>` prefix, snake_case aliases, double quotes only, single-line macros, balanced braces, `SHOW_LEGEND()` position, include-level matching, Creole escaping, no Rel between boundaries |
+| **Draw.io** | XML well-formedness, `mxfile` hierarchy, required cells 0/1, unique IDs, edge source/target refs, geometry presence, parent refs, overlap detection |
+
+### Integration Rule
+
+All renderer agents MUST run `validate-diagram.py` after writing each file. **Fix ALL errors before handoff.** Warnings should be reviewed but may be acceptable.
+
+The `@diagram-generator` orchestrator runs `validate-diagram.py all` after all renderers complete as a final gate.
+
+## Syntax Quick Reference
+
+### Mermaid Conventions
+- Always use `flowchart LR` (not `graph TB` or `graph LR`)
+- Use `%%{init: {...}}%%` preamble for spacing control
+- Use `classDef` with C4 color scheme: person=`#08427b`, system=`#1168BD`, container=`#438DD5`, component=`#85BBF0`, external=`#999999`
+- Legend as final `subgraph Legend[" Legend"]` with invisible link `Legend ~~~ first_node`
+- Labels: `"Name<br/><small>[Type: Technology]</small>"`
+
+### PlantUML C4 Conventions
+- Include: `!include <C4/C4_Container>` (with `C4/` prefix, no `.puml` extension)
+- All aliases in snake_case (convert kebab-case IDs: `api-tier` → `api_tier`)
+- All string arguments in double quotes (never single quotes)
+- All macro calls on ONE line
+- Use `LAYOUT_LANDSCAPE()` (never `LAYOUT_LEFT_RIGHT()`)
+- Use `polyline` line type (never `ortho`)
+- Tags combine with `+`: `$tags="sync+encrypted"`
+- `SHOW_LEGEND()` must be last line before `@enduml`
+
+### Draw.io/Lucidchart Conventions
+- Use simple shapes: rounded rectangles, `cylinder3`, text — NOT `mxgraph.c4.*` stencils
+- All elements have explicit x,y coordinates (no auto-layout)
+- Use `orthogonalEdgeStyle` for clean right-angle edges
+- Children inside containers use `parent="<container-id>"` with relative coordinates
+- Use `labelBackgroundColor=#ffffff` on edges
+- Set `container=1;collapsible=0` on boundary cells

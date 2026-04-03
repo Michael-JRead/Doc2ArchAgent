@@ -254,6 +254,31 @@ If validation fails, fix the issue before writing the file. Report any warnings:
 
 ---
 
+## DETERMINISTIC VALIDATION
+
+After writing each diagram file, run the syntax validator to catch errors deterministically:
+
+```bash
+python tools/validate-diagram.py mermaid <file.md>
+```
+
+The validator checks:
+- `flowchart` declaration (not `graph`)
+- Balanced `subgraph`/`end` pairs
+- Lowercase `end` (not `End` or `END`)
+- Node ID definitions and edge reference consistency
+- Empty subgraph detection
+- Unquoted special characters in labels
+
+**Fix ALL errors** (exit code 1) before completing. Warnings should be reviewed.
+
+To validate all diagrams in a directory at once:
+```bash
+python tools/validate-diagram.py all <diagrams-directory>
+```
+
+---
+
 ## KNOWN MERMAID ISSUES
 
 | Issue | Workaround |
@@ -263,3 +288,53 @@ If validation fails, fix the issue before writing the file. Report any warnings:
 | Subgraph `direction` ignored when child linked externally | Link to subgraph, not internal nodes |
 | Long edge labels shift nodes | Max 25 chars per line, 2 lines max |
 | Themes don't work for C4-style | Use explicit `classDef` colors always |
+| `graph` keyword deprecated | Always use `flowchart` instead |
+| `End` or `END` breaks parsing | Always use lowercase `end` |
+| Unquoted parentheses in labels | Wrap node labels with double quotes: `["..."]` |
+| `<i>` renders inconsistently | Use `<small>` for secondary text |
+
+---
+
+## MERMAID NATIVE C4 DIAGRAMS (ALTERNATIVE APPROACH)
+
+Mermaid has experimental native C4 diagram support using `C4Context`, `C4Container`, `C4Component`, and `C4Deployment` diagram types. These use a syntax closer to PlantUML C4.
+
+**We use `flowchart LR` as our primary approach** because:
+- It renders reliably across all Mermaid environments (GitHub, VS Code, Obsidian, etc.)
+- `flowchart` has the widest rendering engine support (dagre, elk)
+- Native C4 support is still maturing and has limited styling options
+- `flowchart` gives us full control over colors, shapes, and layout
+
+### When to consider native C4 syntax
+
+Only if a user explicitly requests it or if the target rendering environment specifically supports it.
+
+### Native C4 syntax reference (for awareness only)
+
+```mermaid
+C4Context
+    title Payment Platform — System Context
+
+    Person(customer, "Customer", "A bank customer")
+    System(payment_platform, "Payment Platform", "Core payment processing")
+    System_Ext(card_network, "Card Network", "Visa / Mastercard")
+
+    Rel(customer, payment_platform, "Makes payments", "HTTPS")
+    Rel(payment_platform, card_network, "Authorizes", "ISO 8583")
+
+    UpdateElementStyle(customer, $fontColor="white", $bgColor="#08427b")
+    UpdateElementStyle(card_network, $fontColor="white", $bgColor="#999999")
+```
+
+**Native C4 keywords:** `Person`, `Person_Ext`, `System`, `System_Ext`, `SystemDb`, `SystemQueue`, `Container`, `Container_Ext`, `ContainerDb`, `ContainerQueue`, `Component`, `Component_Ext`, `Boundary`, `System_Boundary`, `Container_Boundary`, `Enterprise_Boundary`, `Deployment_Node`, `Node`
+
+**Native C4 relationship keywords:** `Rel`, `BiRel`, `Rel_U`, `Rel_D`, `Rel_L`, `Rel_R`, `Rel_Back`, `Rel_Neighbor`
+
+**Styling:** `UpdateElementStyle(alias, $fontColor, $bgColor, $borderColor, $shadowing, $shape)`, `UpdateRelStyle(from, to, $textColor, $lineColor, $offsetX, $offsetY)`, `UpdateLayoutConfig($c4ShapeInRow, $c4BoundaryInRow)`
+
+**Key differences from flowchart approach:**
+- No `classDef` — use `UpdateElementStyle` instead
+- No `subgraph` — use `Boundary`/`System_Boundary`/`Container_Boundary`
+- Parameter syntax uses parentheses: `Person(alias, "label", "descr")`
+- Layout is automatic (less control than `flowchart`)
+- No legend generation (must be done manually or omitted)

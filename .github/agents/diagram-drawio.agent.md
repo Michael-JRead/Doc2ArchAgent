@@ -345,3 +345,30 @@ Report warnings:
 ```
 ⚠ 1 warning: nodes "api-gw" and "auth-svc" would overlap at (340,60) — shifted auth-svc to row 1
 ```
+
+---
+
+## DETERMINISTIC VALIDATION
+
+After writing each diagram file, run the syntax validator to catch errors deterministically:
+
+```bash
+python tools/validate-diagram.py drawio <file.drawio>
+```
+
+The validator checks:
+- XML well-formedness
+- `mxfile > diagram > mxGraphModel > root` hierarchy
+- Required cells with `id="0"` and `id="1"`
+- All cell IDs are unique
+- All edge `source`/`target` reference existing vertex IDs
+- All vertices have `<mxGeometry>` elements
+- All `parent` references point to existing cells
+- No overlapping vertex geometries (same-parent siblings)
+
+**Fix ALL errors** (exit code 1) before completing. Warnings should be reviewed.
+
+To validate all diagrams in a directory at once:
+```bash
+python tools/validate-diagram.py all <diagrams-directory>
+```

@@ -158,6 +158,39 @@ def validate_mermaid(filepath: Path) -> dict:
                         f"use double quotes: [\"...\"]"
                     )
 
+        # Check 7a: Warn on <i> tags (should use <small> for descriptions)
+        for i, line in enumerate(lines, 1):
+            stripped = line.strip()
+            if "<i>" in stripped and "<small>" not in stripped:
+                warnings.append(
+                    f"Line {i}: Use <small> instead of <i> for description text "
+                    f"(consistent with C4 styling conventions)"
+                )
+
+        # Check 7b: classDef syntax validation
+        for i, line in enumerate(lines, 1):
+            stripped = line.strip()
+            if stripped.startswith("classDef "):
+                # Check for spaces around : in properties (should be key:value not key: value)
+                props = stripped.split(" ", 2)
+                if len(props) >= 3:
+                    prop_str = props[2]
+                    if re.search(r'\w+:\s+\S', prop_str):
+                        # spaces after : are actually fine in Mermaid classDef
+                        pass
+
+        # Check 7c: Validate direction inside subgraphs
+        for i, line in enumerate(lines, 1):
+            stripped = line.strip()
+            if stripped.startswith("direction "):
+                valid_directions = {"TB", "TD", "BT", "LR", "RL"}
+                parts = stripped.split()
+                if len(parts) == 2 and parts[1] not in valid_directions:
+                    errors.append(
+                        f"Line {i}: Invalid direction '{parts[1]}' — "
+                        f"must be one of: TB, TD, BT, LR, RL"
+                    )
+
         # Check 7: Empty subgraphs
         in_subgraph = False
         subgraph_start = 0
@@ -373,6 +406,72 @@ def validate_plantuml(filepath: Path) -> dict:
                 f"use wrapWidth and linetype instead"
             )
 
+    # Check 12b: $technology vs $techn parameter name
+    for i, line in enumerate(lines, 1):
+        stripped = line.strip()
+        if stripped.startswith("'"):
+            continue
+        if "$technology" in stripped and "$techn" not in stripped:
+            warnings.append(
+                f"Line {i}: '$technology' is not a valid C4-PlantUML parameter — "
+                f"use '$techn' (abbreviated form)"
+            )
+
+    # Check 12c: DashedLine() capitalization
+    for i, line in enumerate(lines, 1):
+        stripped = line.strip()
+        if stripped.startswith("'"):
+            continue
+        if re.search(r'dashedline\(\)', stripped, re.IGNORECASE) and "DashedLine()" not in stripped:
+            warnings.append(
+                f"Line {i}: DashedLine() must be capitalized exactly as 'DashedLine()'"
+            )
+
+    # Check 12d: .puml extension in stdlib includes
+    for inc in includes:
+        stripped = inc.strip()
+        if re.search(r'!include\s+<C4/C4_\w+\.puml>', stripped):
+            warnings.append(
+                f"No .puml extension needed for stdlib includes: '{stripped}' — "
+                f"use '!include <C4/C4_...>' without extension"
+            )
+
+    # Check 12e: linetype ortho (known bug with label misplacement)
+    for i, line in enumerate(lines, 1):
+        if re.match(r'\s*skinparam\s+linetype\s+ortho', line):
+            warnings.append(
+                f"Line {i}: 'linetype ortho' has known label misplacement bug — "
+                f"use 'linetype polyline' instead"
+            )
+
+    # Check 12f: Validate AddElementTag/AddRelTag syntax
+    for i, line in enumerate(lines, 1):
+        stripped = line.strip()
+        if stripped.startswith("'"):
+            continue
+        if re.match(r'Add(Element|Rel)Tag\(', stripped):
+            open_count = stripped.count("(")
+            close_count = stripped.count(")")
+            if open_count != close_count:
+                errors.append(
+                    f"Line {i}: Unbalanced parentheses in AddElementTag/AddRelTag"
+                )
+
+    # Check 12g: Lay_R/Lay_D target aliases exist
+    lay_pattern = re.compile(r'Lay_[RLUD]\(\s*(\w+)\s*,\s*(\w+)')
+    for i, line in enumerate(lines, 1):
+        match = lay_pattern.search(line.strip())
+        if match:
+            src, tgt = match.group(1), match.group(2)
+            if aliases and src not in aliases and src not in boundary_aliases:
+                warnings.append(
+                    f"Line {i}: Lay_ source '{src}' not found as defined element"
+                )
+            if aliases and tgt not in aliases and tgt not in boundary_aliases:
+                warnings.append(
+                    f"Line {i}: Lay_ target '{tgt}' not found as defined element"
+                )
+
     # Check 13: Include level matches macros used
     has_component_macro = any(
         re.search(r'\bComponent(Db|Queue|_Ext|Db_Ext|Queue_Ext)?\s*\(', l)
@@ -580,6 +679,44 @@ def validate_drawio(filepath: Path) -> dict:
                     ):
                         # Some style values are flags without =
                         pass  # Allow flag-style values
+
+        # Check 12: Warn on mxgraph.c4.* stencils (Lucidchart incompatible)
+        for cell in cells:
+            style = cell.get("style", "")
+            if "mxgraph.c4." in style:
+                warnings.append(
+                    f"Cell id='{cell.get('id')}': uses mxgraph.c4.* stencil — "
+                    f"these don't import correctly into Lucidchart. "
+                    f"Use simple rounded rectangles with C4 colors instead."
+                )
+
+        # Check 13: Boundary cells should have container=1;collapsible=0
+        for cell in cells:
+            cell_id = cell.get("id")
+            if cell_id in ("0", "1"):
+                continue
+            style = cell.get("style", "")
+            # If a cell has children (other cells reference it as parent), it should be a container
+            has_children = any(
+                c.get("parent") == cell_id and c.get("id") not in ("0", "1")
+                for c in cells
+            )
+            if has_children and cell.get("vertex") == "1":
+                if "container=1" not in style:
+                    warnings.append(
+                        f"Cell id='{cell_id}': has child cells but missing 'container=1' "
+                        f"in style — may cause Lucidchart grouping issues"
+                    )
+
+        # Check 14: Edge value should use HTML entities
+        for edge in edges:
+            value = edge.get("value", "")
+            if value:
+                # Check for unescaped < > & in value (should be &lt; &gt; &amp;)
+                if re.search(r'(?<!&)(?:(?!&lt;|&gt;|&amp;|&quot;|&nbsp;))[<>&]', value):
+                    # Actually, the value attribute uses HTML entities already
+                    # Only check for bare < > that aren't part of HTML tags
+                    pass  # HTML entity validation is complex, skip for now
 
     return {
         "valid": len(errors) == 0,

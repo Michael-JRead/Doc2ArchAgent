@@ -233,8 +233,15 @@ Write `<output-dir>/diagrams/layout-plan.yaml` following the schema below, where
 ### Phase 4: Ask User and Dispatch
 Present the plan summary, ask which formats to generate, then hand off to the appropriate renderer agent(s). Hand off one at a time — each renderer will offer to hand off to the next.
 
-### Phase 5: Update Index
-After all renderers complete, write/update `<output-dir>/diagrams/_index.yaml` listing all generated diagrams.
+### Phase 5: Validate All Outputs
+After all renderers complete, run the deterministic syntax validator across all generated files:
+```bash
+python tools/validate-diagram.py all <output-dir>/diagrams/
+```
+Report the results. If any errors are found, hand back to the appropriate renderer to fix.
+
+### Phase 6: Update Index
+After all renderers complete and validation passes, write/update `<output-dir>/diagrams/_index.yaml` listing all generated diagrams.
 
 ---
 

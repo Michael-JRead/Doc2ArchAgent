@@ -241,6 +241,19 @@ After generating the `.dsl` file, verify:
 
 ---
 
+## DETERMINISTIC VALIDATION
+
+After writing the DSL file, validate that the output is syntactically consistent:
+
+1. Verify all braces `{ }` are balanced
+2. Verify all relationship source/target IDs reference defined elements
+3. Verify no duplicate identifiers
+4. Verify all strings with special characters are properly quoted
+
+Note: `tools/validate-diagram.py` currently supports Mermaid, PlantUML, and Draw.io formats. For Structurizr DSL, perform manual verification against the checklist above. Future support may be added.
+
+---
+
 ## Micro-Confirmations
 
 After generating the DSL file, display:

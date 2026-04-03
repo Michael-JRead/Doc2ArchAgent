@@ -489,6 +489,38 @@ Report warnings:
 
 ---
 
+## DETERMINISTIC VALIDATION
+
+After writing each diagram file, run the syntax validator to catch errors deterministically:
+
+```bash
+python tools/validate-diagram.py plantuml <file.puml>
+```
+
+The validator checks:
+- `@startuml`/`@enduml` presence
+- `!include <C4/C4_*>` with required `C4/` prefix
+- All aliases are snake_case (no hyphens)
+- No single quotes in macro arguments
+- No multi-line macro calls
+- Balanced boundary braces `{ }`
+- `SHOW_LEGEND()` positioned correctly (last before `@enduml`)
+- `LAYOUT_LANDSCAPE()` used (not `LAYOUT_LEFT_RIGHT()`)
+- No `!pragma layout elk`
+- No `Rel()` between boundaries
+- Include level matches macros used (Component needs C4_Component)
+- Unescaped Creole characters (`//`, `**`) in labels
+- Rel source/target reference defined aliases
+
+**Fix ALL errors** (exit code 1) before completing. Warnings should be reviewed.
+
+To validate all diagrams in a directory at once:
+```bash
+python tools/validate-diagram.py all <diagrams-directory>
+```
+
+---
+
 ## COMPLETE WORKING EXAMPLE
 
 ```plantuml

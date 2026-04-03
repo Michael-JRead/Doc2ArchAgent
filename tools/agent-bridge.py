@@ -13,6 +13,7 @@ Usage:
     python tools/agent-bridge.py compose <manifest.yaml> [--validate] [--dry-run]
     python tools/agent-bridge.py check-handoff [<source-agent> <target-agent>]
     python tools/agent-bridge.py check-handoff --all
+    python tools/agent-bridge.py diagram validate <file-or-directory>
 """
 
 import argparse
@@ -194,6 +195,36 @@ def cmd_check_handoff(args):
         sys.exit(1)
 
 
+def cmd_diagram(args):
+    """Delegate to validate-diagram.py for diagram syntax validation."""
+    import subprocess
+
+    validate_script = PROJECT_ROOT / "tools" / "validate-diagram.py"
+    if not validate_script.exists():
+        print("Error: tools/validate-diagram.py not found", file=sys.stderr)
+        sys.exit(1)
+
+    path = args.path
+    if path.is_dir():
+        cmd = [sys.executable, str(validate_script), "all", str(path)]
+    elif path.suffix == ".puml":
+        cmd = [sys.executable, str(validate_script), "plantuml", str(path)]
+    elif path.suffix == ".drawio":
+        cmd = [sys.executable, str(validate_script), "drawio", str(path)]
+    elif path.suffix == ".md":
+        cmd = [sys.executable, str(validate_script), "mermaid", str(path)]
+    else:
+        print(f"Error: Unknown diagram format for '{path}'", file=sys.stderr)
+        sys.exit(1)
+
+    if hasattr(args, "format") and args.format == "json":
+        cmd.append("--format")
+        cmd.append("json")
+
+    result = subprocess.run(cmd, capture_output=False)
+    sys.exit(result.returncode)
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Unified bridge for Copilot agents to invoke deterministic tools.",
@@ -234,6 +265,16 @@ def main():
     p_handoff.add_argument("--all", action="store_true",
                            help="Check all agents for consistency")
 
+    # diagram
+    p_diagram = subparsers.add_parser("diagram",
+                                       help="Diagram validation and utilities")
+    diagram_sub = p_diagram.add_subparsers(dest="diagram_command", required=True)
+    p_diag_val = diagram_sub.add_parser("validate",
+                                         help="Validate diagram syntax")
+    p_diag_val.add_argument("path", type=Path,
+                            help="Diagram file or directory to validate")
+    p_diag_val.add_argument("--format", choices=["text", "json"], default="text")
+
     args = parser.parse_args()
 
     commands = {
@@ -242,6 +283,7 @@ def main():
         "confidence": cmd_confidence,
         "compose": cmd_compose,
         "check-handoff": cmd_check_handoff,
+        "diagram": cmd_diagram,
     }
 
     commands[args.command](args)
