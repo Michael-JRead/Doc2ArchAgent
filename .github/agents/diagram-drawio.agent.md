@@ -230,6 +230,8 @@ Children inside use `parent="<boundary-id>"` and relative coordinates.
 - Context level: omit protocol from value
 - Container/Component level: include protocol
 
+**IMPORTANT: Lucidchart drops edge labels on import.** For each edge, also generate a backup text cell positioned at the edge midpoint (see Lucidchart Compatibility Notes below).
+
 ### Security Overlay Edges
 - Encrypted: `strokeColor=#2e7d32` (green)
 - Unencrypted: `strokeColor=#c62828` (red)
@@ -322,12 +324,50 @@ Add confidence entries to the legend.
 
 ## LUCIDCHART COMPATIBILITY NOTES
 
-1. **Use simple shapes** — rounded rectangles, cylinders, text. Avoid `mxgraph.c4.*` stencils
-2. **Set explicit x,y on everything** — never rely on auto-layout
-3. **Use `orthogonalEdgeStyle`** — produces clean right-angle edges in Lucidchart
+### What works
+1. **Use simple shapes** — rounded rectangles, cylinders, text. Avoid `mxgraph.c4.*` stencils (Lucidchart maps shapes to its own library, custom stencils are lost)
+2. **Set explicit x,y on everything** — never rely on auto-layout (Lucidchart does not auto-layout imported diagrams)
+3. **Use `orthogonalEdgeStyle`** — produces clean right-angle edges (note: elbow points may not be perfectly preserved)
 4. **Use `labelBackgroundColor=#ffffff`** on edges — prevents label/line overlap
 5. **Container children use relative coords** — `parent="<container-id>"` with x,y relative to container
-6. **Test import**: open `.drawio` file in diagrams.net first, then import into Lucidchart
+6. **Basic shapes, text content, and connectors** import cleanly
+7. **Multi-page diagrams** are supported
+
+### Known Lucidchart import limitations (confirmed from help center/community)
+1. **CRITICAL: Edge labels are NOT preserved** — Lucidchart drops `value` text from edge cells during import. Workaround: Add a separate text `mxCell` positioned along the edge path as a label overlay (vertex, not edge)
+2. **Rectangles may import as text shapes** — uncompressed XML rectangles sometimes become text objects. Use `rounded=1` in style to help Lucidchart classify correctly
+3. **Custom mxGraph stencils are lost** — Lucidchart maps to its own shape library, not mxGraph stencils. This is why we avoid `mxgraph.c4.*`
+4. **Visual fidelity is approximate** — Lucidchart prioritizes functional fidelity over visual fidelity; colors/fonts/spacing may differ slightly
+5. **No round-trip** — Lucidchart can import Draw.io XML but cannot export back to Draw.io format
+6. **No API import** — Draw.io import only works through the Lucidchart editor UI, not the REST API
+7. **Blank page on import** — if this occurs, try switching between compressed/uncompressed XML format
+
+### Edge label workaround
+Since edge labels are dropped on import, add critical labels as separate positioned text cells:
+
+```xml
+<!-- Edge (label will be lost in Lucidchart) -->
+<mxCell id="edge-1" value="&lt;b&gt;Routes requests&lt;/b&gt;&lt;br&gt;HTTPS"
+        style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=classic;strokeColor=#333333;strokeWidth=2;"
+        edge="1" parent="1" source="api-tier" target="app-core">
+  <mxGeometry relative="1" as="geometry" />
+</mxCell>
+
+<!-- Backup label as text cell (survives Lucidchart import) -->
+<mxCell id="edge-1-label" value="Routes requests (HTTPS)"
+        style="text;html=1;align=center;verticalAlign=middle;fontSize=10;fontColor=#333333;labelBackgroundColor=#ffffff;"
+        vertex="1" parent="1">
+  <mxGeometry x="450" y="85" width="130" height="20" as="geometry" />
+</mxCell>
+```
+
+Position the text cell at the midpoint of the edge path.
+
+### Test import workflow
+1. Open `.drawio` file in diagrams.net (draw.io) first — verify rendering
+2. Import into Lucidchart via `File > Import > Draw.io`
+3. Check: shapes rendered correctly, edge connections preserved, text labels visible
+4. Manual fix: re-add any edge labels that were dropped
 
 ---
 

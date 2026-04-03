@@ -210,3 +210,4 @@ The `@diagram-generator` orchestrator runs `validate-diagram.py all` after all r
 - Children inside containers use `parent="<container-id>"` with relative coordinates
 - Use `labelBackgroundColor=#ffffff` on edges
 - Set `container=1;collapsible=0` on boundary cells
+- **CRITICAL**: Lucidchart drops edge labels on import — generate backup text cells at edge midpoints
