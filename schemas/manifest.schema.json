@@ -213,7 +213,7 @@
         }
       },
       "required": ["id", "name", "environment", "products"],
-      "anyOf": [
+      "oneOf": [
         { "required": ["network"] },
         { "required": ["networks"] }
       ],

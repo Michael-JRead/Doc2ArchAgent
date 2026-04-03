@@ -8,7 +8,7 @@
 # composed network output alongside zones from network patterns.
 
 network_zones:
-  - id: mq-isolation
+  - id: isolation
     name: "MQ Message Bus Zone (EXAMPLE)"
     zone_type: private
     internet_routable: false
@@ -17,6 +17,9 @@ network_zones:
       EXAMPLE — Isolated zone for MQ queue managers and channel
       infrastructure. No direct internet access. Only application-tier
       components with valid certificates can reach this zone.
-    allowed_ingress_zones:
-      - private-app-tier
+    # NOTE: Do NOT list allowed_ingress_zones here — cross-pattern zone
+    # references are handled by cross_network_links in the deployment
+    # manifest, since the actual zone IDs depend on the network pattern's
+    # id_prefix at composition time.
+    allowed_ingress_zones: []
     allowed_egress_zones: []

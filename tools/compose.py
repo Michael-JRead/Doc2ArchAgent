@@ -274,8 +274,8 @@ def compose_networks(manifest: dict) -> dict:
         dupes = [z for z in zone_ids if zone_ids.count(z) > 1]
         raise ValueError(f"Zone ID collision across network patterns: {set(dupes)}")
 
-    # Apply cross_network_links
-    _apply_cross_network_links(all_zones, manifest.get("cross_network_links", []))
+    # NOTE: cross_network_links are applied later in compose() after product
+    # zones have been merged, so they can reference product-contributed zones.
 
     composed = {
         "network_zones": all_zones,
@@ -411,9 +411,13 @@ def compose_system(manifest: dict) -> dict:
         if product_networks_path.exists():
             with open(product_networks_path) as f:
                 prod_net_data = yaml.safe_load(f) or {}
+            # Don't prefix allowed_ingress/egress_zones — those reference zones
+            # from OTHER patterns whose final IDs depend on the other pattern's
+            # id_prefix. Cross-pattern zone links should use cross_network_links
+            # in the manifest instead.
             prod_zones = _prefix_ids_in_list(
                 prod_net_data.get("network_zones", []), prefix,
-                ref_fields=["allowed_ingress_zones", "allowed_egress_zones"]
+                ref_fields=[]
             )
             prod_resources = _prefix_ids_in_list(
                 prod_net_data.get("infrastructure_resources", []), prefix,
@@ -656,8 +660,11 @@ def _load_pattern_dataflows(pattern_dir: Path, prefix: str) -> list[dict]:
         fpath = pattern_dir / fname
         if not fpath.exists():
             continue
-        with open(fpath) as f:
-            data = yaml.safe_load(f) or {}
+        try:
+            with open(fpath) as f:
+                data = yaml.safe_load(f) or {}
+        except yaml.YAMLError as e:
+            raise ValueError(f"Cannot parse {fpath}: {e}") from e
         flows = data.get("dataflows", [])
         prefixed = _prefix_ids_in_list(
             flows, prefix,
@@ -746,6 +753,13 @@ def compose(manifest_path: Path, dry_run: bool = False,
         networks.setdefault("infrastructure_resources", [])
         networks["infrastructure_resources"].extend(product_resources)
 
+    # Apply cross_network_links AFTER product zones are merged so links
+    # can reference both network-pattern and product-contributed zones
+    _apply_cross_network_links(
+        networks.get("network_zones", []),
+        manifest.get("cross_network_links", [])
+    )
+
     # Load and merge dataflows from all patterns
     all_dataflows = []
     try:
@@ -777,6 +791,16 @@ def compose(manifest_path: Path, dry_run: bool = False,
                         f"Dataflow '{flow_id}': {field} '{flow[field]}' "
                         f"not found in composed output"
                     )
+
+    # Validate infrastructure_resources zone_id refs
+    zone_ids_all = {z["id"] for z in networks.get("network_zones", [])}
+    for res in networks.get("infrastructure_resources", []):
+        zid = res.get("zone_id")
+        if zid and zid not in zone_ids_all:
+            dataflow_warnings.append(
+                f"Infrastructure resource '{res.get('id', '?')}': "
+                f"zone_id '{zid}' not found in composed zones"
+            )
 
     # Build security overlay stubs from composed data
     system_security = _build_system_security_stub(manifest, system)

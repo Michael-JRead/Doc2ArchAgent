@@ -244,15 +244,15 @@ def _validate_dataflows(df_path: Path, fname: str, zone_ids: set, comp_ids: set,
 
         # Referential integrity (warnings only — may reference external entities)
         if has_src_zone and zone_ids and flow["source_zone"] not in zone_ids:
-            warnings.append(f"{fname}: dataflow '{fid}': source_zone '{flow['source_zone']}' not in pattern zones")
+            warnings.append(f"{fname}: dataflow '{fid}': source_zone '{flow['source_zone']}' not in pattern zones (may be an external reference)")
         if has_tgt_zone and zone_ids and flow["target_zone"] not in zone_ids:
-            warnings.append(f"{fname}: dataflow '{fid}': target_zone '{flow['target_zone']}' not in pattern zones")
+            warnings.append(f"{fname}: dataflow '{fid}': target_zone '{flow['target_zone']}' not in pattern zones (may be an external reference)")
         src_comp = flow.get("source_component")
         if src_comp and comp_ids and src_comp not in comp_ids:
-            warnings.append(f"{fname}: dataflow '{fid}': source_component '{src_comp}' not in pattern components")
+            warnings.append(f"{fname}: dataflow '{fid}': source_component '{src_comp}' not in pattern components (may be an external reference)")
         tgt_comp = flow.get("target_component")
         if tgt_comp and comp_ids and tgt_comp not in comp_ids:
-            warnings.append(f"{fname}: dataflow '{fid}': target_component '{tgt_comp}' not in pattern components")
+            warnings.append(f"{fname}: dataflow '{fid}': target_component '{tgt_comp}' not in pattern components (may be an external reference)")
 
 
 def _validate_files_array(pattern_dir: Path, meta_path: Path,
@@ -316,6 +316,18 @@ def validate_new_format_dir(pattern_dir: Path) -> dict:
             except Exception as e:
                 errors.append(f"{dirname}/system.yaml: cannot load: {e}")
 
+    # Load known context IDs from _context.yaml for referential integrity
+    _ctx_path = pattern_dir / "contexts" / "_context.yaml"
+    _known_ctx_ids: set[str] = set()
+    if _ctx_path.exists():
+        try:
+            with open(_ctx_path) as f:
+                _ctx_data = yaml.safe_load(f) or {}
+            _known_ctx_ids = {c.get("id") for c in _ctx_data.get("contexts", [])
+                              if isinstance(c, dict) and c.get("id")}
+        except Exception:
+            pass
+
     # Unified patterns: validate optional cross-files
     if ptype == 'network':
         opt_system = pattern_dir / "system.yaml"
@@ -323,7 +335,8 @@ def validate_new_format_dir(pattern_dir: Path) -> dict:
             try:
                 with open(opt_system) as f:
                     opt_sys_data = yaml.safe_load(f) or {}
-                _validate_product_system(opt_sys_data, f"{dirname}/system.yaml (unified)", errors, warnings)
+                _validate_product_system(opt_sys_data, f"{dirname}/system.yaml (unified)",
+                                         errors, warnings, known_context_ids=_known_ctx_ids)
             except Exception as e:
                 errors.append(f"{dirname}/system.yaml: cannot load: {e}")
     elif ptype == 'product':
@@ -413,8 +426,14 @@ def _validate_network_content(net_data: dict, fname: str, errors: list, warnings
             warnings.append(f"{fname}: infrastructure_resource id '{rid}' is not kebab-case")
 
 
-def _validate_product_system(sys_data: dict, fname: str, errors: list, warnings: list):
-    """Validate product pattern system.yaml content."""
+def _validate_product_system(sys_data: dict, fname: str, errors: list, warnings: list,
+                             known_context_ids: set | None = None):
+    """Validate product pattern system.yaml content.
+
+    Args:
+        known_context_ids: Context IDs from _context.yaml (if loaded externally).
+            Merged with inline contexts for referential integrity checks.
+    """
     # Metadata
     metadata = sys_data.get('metadata', {})
     if not isinstance(metadata, dict):
@@ -424,9 +443,13 @@ def _validate_product_system(sys_data: dict, fname: str, errors: list, warnings:
             if not metadata.get(field):
                 errors.append(f"{fname}: metadata.{field} is required")
 
-    # Contexts
-    contexts = sys_data.get('contexts', [])
-    if not contexts:
+    # Contexts (inline + external _context.yaml)
+    inline_contexts = sys_data.get('contexts', [])
+    all_context_ids = set(known_context_ids or set())
+    for ctx in inline_contexts:
+        if isinstance(ctx, dict) and ctx.get("id"):
+            all_context_ids.add(ctx["id"])
+    if not inline_contexts and not all_context_ids:
         warnings.append(f"{fname}: no contexts defined")
 
     # Containers

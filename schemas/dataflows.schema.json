@@ -116,7 +116,7 @@
           }
         },
         "required": ["id", "label", "protocol"],
-        "dependencies": {
+        "dependentRequired": {
           "source_zone": ["target_zone"],
           "target_zone": ["source_zone"]
         },
