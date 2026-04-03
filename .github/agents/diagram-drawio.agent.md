@@ -1,6 +1,6 @@
 ---
 description: Generates draw.io XML diagrams for Lucidchart import from the layout plan.
-tools: ['read', 'edit']
+tools: ['read', 'edit', 'execute']
 disable-model-invocation: true
 agents: ['diagram-mermaid', 'diagram-plantuml', 'diagram-generator', 'validator']
 handoffs:

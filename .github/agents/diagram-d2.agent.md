@@ -283,7 +283,9 @@ After writing D2 files, validate that the output is syntactically consistent:
 3. Verify all hex color values are valid
 4. Verify `direction` is set on each diagram
 
-Note: `tools/validate-diagram.py` currently supports Mermaid, PlantUML, and Draw.io formats. For D2, perform manual verification against the checklist above. Future support may be added.
+**VALIDATION GATE — MANDATORY:** Fix ALL issues from the checklist above before completing. Do NOT offer handoff options until the D2 file passes every check. If any check fails, fix the error and re-verify from step 1.
+
+Note: `tools/validate-diagram.py` currently supports Mermaid, PlantUML, and Draw.io formats. For D2, perform manual verification against the checklist above until automated support is added.
 
 ---
 

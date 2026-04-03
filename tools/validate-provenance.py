@@ -42,7 +42,8 @@ VALID_EXTRACTION_METHODS = {
 }
 
 # Fuzzy match threshold for quote verification (0-100)
-QUOTE_MATCH_THRESHOLD = 75
+# Enterprise-grade threshold: 85 reduces false negatives on paraphrased claims
+QUOTE_MATCH_THRESHOLD = 85
 
 
 # ---------------------------------------------------------------------------

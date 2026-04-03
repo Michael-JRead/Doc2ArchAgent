@@ -818,3 +818,154 @@ rules:
         operator: not_equals
         value: "none"
     remediation: Set cors_policy to 'restrictive' with an explicit allowlist of trusted origins.
+
+  # ============================================================
+  # KUBERNETES / CONTAINER SECURITY RULES (new)
+  # ============================================================
+
+  - id: container-no-resource-limits
+    title: Container Without Resource Limits
+    description: >
+      A containerized component has no resource limits (CPU/memory) defined.
+      Without limits, a single container can consume all node resources,
+      enabling denial of service against co-located workloads.
+    stride: denial_of_service
+    cwe: 770
+    cwe_name: Allocation of Resources Without Limits or Throttling
+    severity: medium
+    iterate_over: components
+    conditions:
+      - field: component.platform
+        operator: in
+        value: ["kubernetes", "k8s", "docker", "ecs", "gke", "aks", "eks"]
+      - field: component.resource_limits_set
+        operator: in
+        value: [false, null]
+    severity_overrides:
+      - when: component.availability in ["critical", "high"]
+        then: high
+        reason: Critical workloads without resource limits risk cascading failures
+    remediation: >
+      Define CPU and memory limits in the container spec. Use LimitRange
+      and ResourceQuota policies at the namespace level.
+
+  - id: container-privileged-execution
+    title: Container Running in Privileged Mode
+    description: >
+      A containerized component runs with elevated privileges (root user,
+      allowPrivilegeEscalation, or privileged mode). Compromised containers
+      with elevated privileges can escape to the host, compromising the
+      entire node and co-located workloads.
+    stride: elevation_of_privilege
+    cwe: 250
+    cwe_name: Execution with Unnecessary Privileges
+    severity: high
+    iterate_over: components
+    conditions:
+      - field: component.platform
+        operator: in
+        value: ["kubernetes", "k8s", "docker", "ecs", "gke", "aks", "eks"]
+      - field: component.runs_as_root
+        operator: in
+        value: [true, null]
+    severity_overrides:
+      - when: zone.internet_routable equals true
+        then: critical
+        reason: Internet-facing privileged containers enable full host compromise
+    false_positive_note: >
+      Some system-level components (CNI plugins, storage drivers) require
+      elevated privileges. Document in accepted_risks with compensating controls.
+    remediation: >
+      Set runAsNonRoot=true, allowPrivilegeEscalation=false, and
+      readOnlyRootFilesystem=true in the container security context.
+
+  - id: container-no-network-policy
+    title: Container Without Network Policy
+    description: >
+      A containerized component in a Kubernetes cluster has no network
+      policy restricting ingress/egress traffic. Without network policies,
+      any pod can communicate with any other pod, enabling lateral movement
+      after initial compromise.
+    stride: elevation_of_privilege
+    cwe: 668
+    cwe_name: Exposure of Resource to Wrong Sphere
+    severity: medium
+    iterate_over: components
+    conditions:
+      - field: component.platform
+        operator: in
+        value: ["kubernetes", "k8s", "gke", "aks", "eks"]
+      - field: component.network_policy_enforced
+        operator: in
+        value: [false, null]
+    severity_overrides:
+      - when: data_classification in ["confidential", "restricted"]
+        then: high
+        reason: Sensitive workloads must have network segmentation at the pod level
+    remediation: >
+      Apply Kubernetes NetworkPolicy resources restricting ingress and egress
+      traffic to only required communication paths.
+
+  # ============================================================
+  # SECRETS MANAGEMENT RULES (new)
+  # ============================================================
+
+  - id: missing-secrets-manager
+    title: Authenticated Component Without Secrets Manager
+    description: >
+      A component that handles authentication does not reference a
+      secrets manager for credential storage. Hardcoded or environment
+      variable credentials are vulnerable to exposure through container
+      inspection, log leakage, or source control.
+    stride: information_disclosure
+    cwe: 798
+    cwe_name: Use of Hard-coded Credentials
+    severity: medium
+    iterate_over: components
+    conditions:
+      - field: component.has_authenticated_listeners
+        operator: equals
+        value: true
+      - field: component.secrets_manager_ref
+        operator: in
+        value: [null, ""]
+    severity_overrides:
+      - when: zone.internet_routable equals true
+        then: high
+        reason: Internet-facing components with potential hardcoded credentials are high risk
+      - when: data_classification in ["confidential", "restricted"]
+        then: high
+        reason: Components handling sensitive data must use centralized secrets management
+    false_positive_note: >
+      May be acceptable when credentials are injected by a service mesh
+      sidecar (e.g., Istio) or platform-native secrets (e.g., AWS Secrets Manager
+      via IAM role) not explicitly modeled in the architecture.
+    remediation: >
+      Reference a secrets_vault infrastructure resource via secrets_manager_ref.
+      Ensure credentials are rotated and never stored in environment variables or source code.
+
+  - id: database-no-secrets-manager
+    title: Database Component Without Secrets Manager
+    description: >
+      A database component does not reference a secrets manager for
+      connection credential management. Database credentials in config
+      files or environment variables risk exposure.
+    stride: information_disclosure
+    cwe: 798
+    cwe_name: Use of Hard-coded Credentials
+    severity: high
+    iterate_over: components
+    conditions:
+      - field: component.component_type
+        operator: equals
+        value: "database"
+      - field: component.secrets_manager_ref
+        operator: in
+        value: [null, ""]
+    severity_overrides:
+      - when: component.processes_pii equals true
+        then: critical
+        reason: Database storing PII with exposed credentials is critical risk
+    remediation: >
+      Configure secrets_manager_ref to point to a secrets_vault resource.
+      Use dynamic credential rotation where supported.

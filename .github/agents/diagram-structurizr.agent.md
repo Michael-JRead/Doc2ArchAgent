@@ -250,7 +250,9 @@ After writing the DSL file, validate that the output is syntactically consistent
 3. Verify no duplicate identifiers
 4. Verify all strings with special characters are properly quoted
 
-Note: `tools/validate-diagram.py` currently supports Mermaid, PlantUML, and Draw.io formats. For Structurizr DSL, perform manual verification against the checklist above. Future support may be added.
+**VALIDATION GATE — MANDATORY:** Fix ALL issues from the checklist above before completing. Do NOT offer handoff options until the DSL passes every check. If any check fails, fix the error and re-verify from step 1.
+
+Note: `tools/validate-diagram.py` currently supports Mermaid, PlantUML, and Draw.io formats. For Structurizr DSL, perform manual verification against the checklist above until automated support is added.
 
 ---
 

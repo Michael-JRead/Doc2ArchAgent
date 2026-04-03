@@ -447,6 +447,39 @@ def _build_deployment_security_stub(manifest: dict, deployment: dict) -> dict:
     return stub
 
 
+def _detect_circular_refs(manifest: dict) -> list[str]:
+    """Detect circular ID references in the composed manifest.
+
+    Checks that container→context, component→container, and relationship
+    source→target references don't form cycles.  Returns a list of error
+    strings (empty = no cycles).
+    """
+    errors: list[str] = []
+
+    # Check for duplicate id_prefix values (already checked in compose_system
+    # but we also guard here for the full pipeline)
+    prefixes = [p["id_prefix"] for p in manifest.get("products", [])]
+    if manifest.get("network", {}).get("id_prefix"):
+        prefixes.append(manifest["network"]["id_prefix"])
+    seen = set()
+    for p in prefixes:
+        if p in seen:
+            errors.append(f"Duplicate id_prefix '{p}' would cause ID collisions")
+        seen.add(p)
+
+    # Check cross_product_relationships for self-referencing cycles
+    for i, rel in enumerate(manifest.get("cross_product_relationships", [])):
+        src = rel.get("source_component", "")
+        tgt = rel.get("target_component", "")
+        if src and tgt and src == tgt:
+            errors.append(
+                f"cross_product_relationships[{i}]: self-referencing "
+                f"relationship '{src}' → '{tgt}'"
+            )
+
+    return errors
+
+
 def compose(manifest_path: Path, dry_run: bool = False,
             validate: bool = False) -> dict:
     """Main composition pipeline."""
@@ -456,6 +489,14 @@ def compose(manifest_path: Path, dry_run: bool = False,
     manifest = raw.get("manifest")
     if not manifest:
         raise ValueError(f"Manifest file missing top-level 'manifest' key: {manifest_path}")
+
+    # Pre-composition: detect circular references and ID collisions
+    cycle_errors = _detect_circular_refs(manifest)
+    if cycle_errors:
+        raise ValueError(
+            "Circular reference / ID collision detected:\n  "
+            + "\n  ".join(cycle_errors)
+        )
 
     # Compose
     networks = compose_network(manifest)

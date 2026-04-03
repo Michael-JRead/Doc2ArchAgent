@@ -237,6 +237,83 @@ def find_duplicates(
     return duplicates
 
 
+def _rewrite_references(system: dict, old_id: str, new_id: str) -> int:
+    """Rewrite all references from old_id to new_id across the system YAML.
+
+    Returns the number of references rewritten.
+    """
+    count = 0
+
+    # Reference fields in relationships that may point to entities
+    REF_FIELDS = {
+        "context_relationships": ["source_context", "target_context"],
+        "container_relationships": ["source_container", "target_container"],
+        "component_relationships": [
+            "source_component", "target_component", "target_listener_ref",
+        ],
+    }
+
+    # Rewrite relationship references
+    for rel_key, fields in REF_FIELDS.items():
+        for rel in system.get(rel_key, []):
+            if not isinstance(rel, dict):
+                continue
+            for field in fields:
+                if rel.get(field) == old_id:
+                    rel[field] = new_id
+                    count += 1
+
+    # Rewrite container→context references
+    for ctr in system.get("containers", []):
+        if isinstance(ctr, dict) and ctr.get("context_id") == old_id:
+            ctr["context_id"] = new_id
+            count += 1
+
+    # Rewrite component→container references
+    for comp in system.get("components", []):
+        if isinstance(comp, dict) and comp.get("container_id") == old_id:
+            comp["container_id"] = new_id
+            count += 1
+
+    # Rewrite data_entities references in relationships
+    for rel in system.get("component_relationships", []):
+        if isinstance(rel, dict) and isinstance(rel.get("data_entities"), list):
+            for i, de_id in enumerate(rel["data_entities"]):
+                if de_id == old_id:
+                    rel["data_entities"][i] = new_id
+                    count += 1
+
+    # Rewrite trust_boundary zone references
+    for tb in system.get("trust_boundaries", []):
+        if isinstance(tb, dict):
+            if tb.get("source_zone") == old_id:
+                tb["source_zone"] = new_id
+                count += 1
+            if tb.get("target_zone") == old_id:
+                tb["target_zone"] = new_id
+                count += 1
+
+    return count
+
+
+def _remove_entity_by_id(system: dict, entity_id: str, entity_type: str) -> bool:
+    """Remove a duplicate entity from its collection. Returns True if removed."""
+    TYPE_TO_KEY = {
+        "context": "contexts",
+        "container": "containers",
+        "component": "components",
+        "external_system": "external_systems",
+        "data_entity": "data_entities",
+    }
+    key = TYPE_TO_KEY.get(entity_type, "")
+    if not key or key not in system:
+        return False
+
+    before = len(system[key])
+    system[key] = [e for e in system[key] if not (isinstance(e, dict) and e.get("id") == entity_id)]
+    return len(system[key]) < before
+
+
 def resolve_duplicates(
     system: dict,
     duplicates: list[dict],
@@ -248,7 +325,9 @@ def resolve_duplicates(
     Args:
         system: The system YAML dict.
         duplicates: Duplicate pairs from find_duplicates().
-        auto_merge: If True, automatically merge high-confidence duplicates.
+        auto_merge: If True, automatically merge high-confidence duplicates
+                    (score >= 95), rewriting all references to the canonical ID
+                    and removing the duplicate entity.
 
     Returns:
         Dict with resolution summary and optionally modified system.
@@ -267,8 +346,24 @@ def resolve_duplicates(
         }
 
         if auto_merge and dup["combined_score"] >= 95:
+            canonical = dup["suggested_canonical"]
+            obsolete_id = (
+                dup["entity_b"]["id"]
+                if canonical == dup["entity_a"]["id"]
+                else dup["entity_a"]["id"]
+            )
+            obsolete_type = (
+                dup["entity_b"]["type"]
+                if canonical == dup["entity_a"]["id"]
+                else dup["entity_a"]["type"]
+            )
+
+            refs_rewritten = _rewrite_references(system, obsolete_id, canonical)
+            removed = _remove_entity_by_id(system, obsolete_id, obsolete_type)
+
             resolution["action"] = "auto-merged"
-            # In a real implementation, rewrite references here
+            resolution["refs_rewritten"] = refs_rewritten
+            resolution["entity_removed"] = removed
         elif dup["combined_score"] >= 90:
             resolution["action"] = "likely-duplicate"
         elif dup["combined_score"] >= 80:

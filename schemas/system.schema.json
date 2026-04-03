@@ -109,7 +109,9 @@
               "message_queue", "cache", "file_storage", "cdn",
               "reverse_proxy", "load_balancer", "batch_processor",
               "stream_processor", "search_engine", "monitoring",
-              "logging", "identity_provider", "other"
+              "logging", "identity_provider", "bastion_host",
+              "secrets_vault", "directory_service", "siem",
+              "dns_server", "vpn_gateway", "other"
             ]
           },
           "technology": { "type": "string", "minLength": 1 },
@@ -232,6 +234,15 @@
           "audit_log_destination": {
             "type": "string",
             "description": "Reference to a logging infrastructure_resource ID where audit logs are sent."
+          },
+          "audit_log_retention_days": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Audit log retention in days. HIPAA requires 2190 (6 years), PCI-DSS requires 365 (1 year)."
+          },
+          "audit_log_tamper_proof": {
+            "type": "boolean",
+            "description": "Whether audit logs are stored in immutable/append-only storage. Required for SOC2 CC7.2."
           },
           "rto_minutes": {
             "type": "integer",
@@ -458,6 +469,24 @@
           "data_residency": {
             "type": "string",
             "description": "Geographic region where this external system processes/stores data (e.g., US, EU, APAC)."
+          },
+          "vendor_risk_rating": {
+            "type": "string",
+            "enum": ["critical", "high", "medium", "low"],
+            "description": "Vendor risk tier from third-party risk assessment. Critical vendors require quarterly review."
+          },
+          "vendor_audit_frequency": {
+            "type": "string",
+            "enum": ["quarterly", "semi_annually", "annually", "on_demand", "none"],
+            "description": "How often this vendor undergoes security audit. Drives vendor management cadence."
+          },
+          "country_of_operation": {
+            "type": "string",
+            "description": "Primary country of vendor operations. Enables sanctions and export control screening."
+          },
+          "subprocessor_allowed": {
+            "type": "boolean",
+            "description": "Whether the vendor is permitted to use sub-processors. GDPR Art 28 requirement."
           }
         },
         "required": ["id", "name"],
@@ -521,6 +550,28 @@
             "type": "string",
             "enum": ["low", "medium", "high", "very_high"],
             "description": "Data volume indicator. High-volume data exfiltration has greater blast radius."
+          },
+          "data_owner": {
+            "type": "string",
+            "description": "Accountable party for this data entity. Required for GDPR Art 5 and SOC2 compliance."
+          },
+          "data_steward": {
+            "type": "string",
+            "description": "Operational manager responsible for data quality and access control."
+          },
+          "retention_period_days": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Formal retention period in days. HIPAA requires minimum 2190 days (6 years) for PHI."
+          },
+          "purpose_limitation": {
+            "type": "string",
+            "description": "Permitted uses for this data. GDPR Art 5(1)(b) requires purpose limitation documentation."
+          },
+          "cross_border_transfer": {
+            "type": "boolean",
+            "default": false,
+            "description": "Whether this data is transferred across jurisdictional borders. Triggers GDPR Art 44-49 checks."
           }
         },
         "required": ["id", "name"],

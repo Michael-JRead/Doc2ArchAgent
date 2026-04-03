@@ -603,24 +603,29 @@ def validate(system_path: str, networks_path: str | None = None,
 
     # --- 15. Predictive gap analysis ---
     # 15a. Missing architecture files
+    # Only check for missing sibling files when the system.yaml defines real
+    # architecture (has contexts or containers).  Minimal stubs used in tests
+    # should not trigger spurious ARCH014 warnings.
     system_dir = Path(system_path).parent
     arch_root = system_dir if system_dir.name != "." else system_dir.parent
 
-    expected_files = {
-        "networks.yaml": "Network zone definitions",
-        "system-security.yaml": "Security annotations for system components",
-        "networks-security.yaml": "Security annotations for network zones",
-    }
-    for fname, description in expected_files.items():
-        candidate = arch_root / fname
-        if not candidate.exists():
-            # Also check parent directory
-            alt = arch_root.parent / fname
-            if not alt.exists():
-                add_warning(
-                    f"Missing architecture file: {fname} ({description})",
-                    rule_id="ARCH014",
-                )
+    has_architecture = bool(system.get("contexts") or system.get("containers"))
+    if has_architecture:
+        expected_files = {
+            "networks.yaml": "Network zone definitions",
+            "system-security.yaml": "Security annotations for system components",
+            "networks-security.yaml": "Security annotations for network zones",
+        }
+        for fname, description in expected_files.items():
+            candidate = arch_root / fname
+            if not candidate.exists():
+                # Also check parent directory
+                alt = arch_root.parent / fname
+                if not alt.exists():
+                    add_warning(
+                        f"Missing architecture file: {fname} ({description})",
+                        rule_id="ARCH014",
+                    )
 
     # 15b. Missing threat coverage — components with listeners but no threat findings
     # We check by looking for threat-report files

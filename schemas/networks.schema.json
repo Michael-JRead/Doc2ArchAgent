@@ -15,7 +15,7 @@
           "name": { "type": "string", "minLength": 1 },
           "zone_type": {
             "type": "string",
-            "enum": ["external", "dmz", "private", "management", "data", "custom"],
+            "enum": ["external", "dmz", "private", "management", "data", "guest", "disaster_recovery", "quarantine", "compliance", "custom"],
             "description": "Zone classification. Custom values permitted for non-standard topologies."
           },
           "internet_routable": { "type": "boolean" },

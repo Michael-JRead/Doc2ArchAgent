@@ -111,10 +111,24 @@ def cmd_confidence(args):
     """Run confidence scoring via tools/confidence.py."""
     import subprocess
     cmd = [sys.executable, str(PROJECT_ROOT / "tools" / "confidence.py")]
-    cmd.extend(["--threshold", str(args.threshold)])
-    if args.method:
-        cmd.extend(["--method", args.method])
-    cmd.append("--field-present")
+    subcmd = getattr(args, "confidence_command", "score")
+    cmd.append(subcmd)
+    if subcmd == "score":
+        cmd.extend(["--threshold", str(args.threshold)])
+        if args.method:
+            cmd.extend(["--method", args.method])
+        if getattr(args, "field_present", False):
+            cmd.append("--field-present")
+        if getattr(args, "source_count", None) is not None:
+            cmd.extend(["--source-count", str(args.source_count)])
+    elif subcmd == "enrich":
+        if getattr(args, "provenance", None):
+            cmd.append(str(args.provenance))
+        cmd.extend(["--threshold", str(args.threshold)])
+    elif subcmd == "report":
+        if getattr(args, "provenance", None):
+            cmd.append(str(args.provenance))
+        cmd.extend(["--threshold", str(args.threshold)])
     result = subprocess.run(cmd, capture_output=False)
     sys.exit(result.returncode)
 
@@ -248,8 +262,23 @@ def main():
 
     # confidence
     p_conf = subparsers.add_parser("confidence", help="Score confidence")
-    p_conf.add_argument("--threshold", type=int, default=95)
-    p_conf.add_argument("--method", default=None)
+    conf_sub = p_conf.add_subparsers(dest="confidence_command")
+    conf_score = conf_sub.add_parser("score", help="Calculate a confidence score")
+    conf_score.add_argument("--threshold", type=int, default=95)
+    conf_score.add_argument("--method", default=None,
+                            help="Extraction method (native_text, ocr, vlm, etc.)")
+    conf_score.add_argument("--field-present", action="store_true",
+                            help="Field was explicitly stated in source")
+    conf_score.add_argument("--source-count", type=int, default=1,
+                            help="Number of confirming sources")
+    conf_enrich = conf_sub.add_parser("enrich",
+                                       help="Enrich provenance YAML with numeric scores")
+    conf_enrich.add_argument("provenance", type=Path, help="provenance.yaml path")
+    conf_enrich.add_argument("--threshold", type=int, default=95)
+    conf_report = conf_sub.add_parser("report",
+                                       help="Generate markdown confidence report")
+    conf_report.add_argument("provenance", type=Path, help="provenance.yaml path")
+    conf_report.add_argument("--threshold", type=int, default=95)
 
     # compose
     p_comp = subparsers.add_parser("compose", help="Compose deployment from manifest")
