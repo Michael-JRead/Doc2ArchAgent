@@ -21,30 +21,59 @@ Read the source YAML files to understand what to diagram:
 
 ### Phase 2: Build Layout Plan
 
-Generate `layout-plan.yaml` — the intermediate representation that all renderers consume:
+Generate `layout-plan.yaml` — the intermediate representation that all renderers consume.
+
+The authoritative schema is defined in `diagram-generator.agent.md`. Key structure:
 
 ```yaml
-layout_plan:
-  title: "Payment Platform - Container Diagram"
-  diagram_type: container  # context | container | component | deployment
-  nodes:
-    - id: payment-gateway
-      type: container       # context | container | component | zone | external
-      label: "Payment Gateway"
-      technology: "Java 17"
-      grid_position: {row: 1, col: 2}
-      zone: private-app-tier  # only for deployment diagrams
-  edges:
-    - from: payment-gateway
-      to: card-processor
-      label: "Processes payments"
-      protocol: "HTTPS/TLS 1.3"
-      bidirectional: false
-  groups:
-    - id: private-app-tier
-      label: "Private App Tier"
-      type: zone
-      members: [payment-gateway, fraud-engine]
+system_id: payment-platform
+system_name: Payment Processing Platform
+generated: "2026-04-03T12:00:00Z"
+complexity: simple | medium | complex
+
+colors:
+  person: "#08427b"
+  system: "#1168BD"
+  container: "#438DD5"
+  component: "#85BBF0"
+  external: "#999999"
+  infra: "#ff8f00"
+
+diagrams:
+  - level: context | container | component | deployment
+    title: "Payment Platform — Container Diagram"
+    nodes:
+      - id: payment-gateway          # kebab-case
+        type: container              # person | system | system_ext | container | container_ext | container_db | container_queue | component | infra | deployment_node
+        label: "Payment Gateway"     # max 30 chars
+        technology: "Java 17"
+        description: "Handles payments"  # max 60 chars
+        boundary_id: payment-platform    # parent boundary, if inside one
+        grid_col: 2                  # 0-based, left-to-right
+        grid_row: 0                  # 0-based, top-to-bottom
+        confidence: high             # only if provenance.yaml exists
+    boundaries:
+      - id: payment-platform
+        label: "Payment Platform"
+        type: system                 # enterprise | system | container | zone
+        trust: trusted               # only for zone type
+        contains: [payment-gateway, app-core, data-tier]
+    edges:
+      - id: gw-to-app
+        source: payment-gateway      # node id (kebab-case)
+        target: app-core
+        label: "Routes requests"     # max 25 chars
+        protocol: "HTTPS"            # max 40 chars, empty at context level
+        sync: true
+        data_classification: confidential
+        warnings: []                 # zone_crossing, trust_boundary, no_tls, no_authn
+    legend:
+      elements:
+        - color: "#438DD5"
+          label: "Container"
+      flows:
+        - style: solid
+          label: "Synchronous request"
 ```
 
 ### Phase 3: Dispatch to Renderers
