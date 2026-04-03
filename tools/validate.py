@@ -130,6 +130,34 @@ SARIF_RULES = {
         "help": {"text": "Add a component_security entry for this component."},
         "defaultConfiguration": {"level": "warning"},
     },
+    "ARCH014": {
+        "id": "ARCH014",
+        "shortDescription": {"text": "Missing architecture file"},
+        "fullDescription": {"text": "An expected architecture file is missing from the architecture directory."},
+        "help": {"text": "Generate the missing file using the appropriate agent or tool."},
+        "defaultConfiguration": {"level": "warning"},
+    },
+    "ARCH015": {
+        "id": "ARCH015",
+        "shortDescription": {"text": "Missing threat coverage"},
+        "fullDescription": {"text": "A component with listeners has no threat modeling coverage."},
+        "help": {"text": "Run tools/threat-rules.py to generate threat findings for this component."},
+        "defaultConfiguration": {"level": "warning"},
+    },
+    "ARCH016": {
+        "id": "ARCH016",
+        "shortDescription": {"text": "Stale architecture data"},
+        "fullDescription": {"text": "Architecture metadata indicates the model has not been reviewed recently."},
+        "help": {"text": "Update metadata.last_review_date after reviewing the architecture."},
+        "defaultConfiguration": {"level": "warning"},
+    },
+    "ARCH017": {
+        "id": "ARCH017",
+        "shortDescription": {"text": "Missing coverage gap"},
+        "fullDescription": {"text": "A component or listener is missing an expected annotation or configuration."},
+        "help": {"text": "Add the missing annotation to improve architecture completeness."},
+        "defaultConfiguration": {"level": "warning"},
+    },
 }
 
 
@@ -572,6 +600,86 @@ def validate(system_path: str, networks_path: str | None = None,
                 add_error(
                     f"networks-security.yaml: zone_id '{zid}' does not exist in networks.yaml",
                     rule_id="ARCH012", file=networks_security_path)
+
+    # --- 15. Predictive gap analysis ---
+    # 15a. Missing architecture files
+    system_dir = Path(system_path).parent
+    arch_root = system_dir if system_dir.name != "." else system_dir.parent
+
+    expected_files = {
+        "networks.yaml": "Network zone definitions",
+        "system-security.yaml": "Security annotations for system components",
+        "networks-security.yaml": "Security annotations for network zones",
+    }
+    for fname, description in expected_files.items():
+        candidate = arch_root / fname
+        if not candidate.exists():
+            # Also check parent directory
+            alt = arch_root.parent / fname
+            if not alt.exists():
+                add_warning(
+                    f"Missing architecture file: {fname} ({description})",
+                    rule_id="ARCH014",
+                )
+
+    # 15b. Missing threat coverage — components with listeners but no threat findings
+    # We check by looking for threat-report files
+    threat_report = arch_root / "threat-report.sarif"
+    threat_report_alt = arch_root.parent / "threat-report.sarif"
+    has_threat_report = threat_report.exists() or threat_report_alt.exists()
+
+    components_with_listeners = [
+        comp_id for comp_id, comp in components.items()
+        if comp.get("listeners")
+    ]
+    if components_with_listeners and not has_threat_report:
+        add_warning(
+            f"{len(components_with_listeners)} component(s) with listeners have no threat "
+            f"report — run tools/threat-rules.py to generate threat analysis",
+            rule_id="ARCH015",
+        )
+
+    # 15c. Staleness detection — last_review_date older than 6 months
+    last_review = metadata.get("last_review_date", "") if isinstance(metadata, dict) else ""
+    if last_review:
+        try:
+            from datetime import datetime, timezone
+            review_str = str(last_review).replace("Z", "+00:00")
+            review_date = datetime.fromisoformat(review_str)
+            if review_date.tzinfo is None:
+                review_date = review_date.replace(tzinfo=timezone.utc)
+            now = datetime.now(timezone.utc)
+            days_since = (now - review_date).days
+            if days_since > 180:
+                add_warning(
+                    f"Architecture model last reviewed {days_since} days ago "
+                    f"(last_review_date: {last_review}) — consider re-reviewing",
+                    rule_id="ARCH016",
+                )
+        except (ValueError, TypeError):
+            pass  # Non-parseable date, skip
+
+    # 15d. Missing coverage — components without description
+    for comp_id, comp in components.items():
+        if not comp.get("description"):
+            add_warning(
+                f"component '{comp_id}' has no description — extraction may be incomplete",
+                rule_id="ARCH017",
+            )
+
+    # 15e. Listeners without security configuration
+    for comp_id, comp in components.items():
+        for listener in comp.get("listeners", []):
+            if not isinstance(listener, dict):
+                continue
+            has_authn = listener.get("authn_mechanism") and listener["authn_mechanism"] != "none"
+            has_tls = listener.get("tls_enabled")
+            if not has_authn and not has_tls:
+                add_warning(
+                    f"component '{comp_id}' listener '{listener.get('id', '?')}' has neither "
+                    f"authentication nor TLS configured",
+                    rule_id="ARCH017",
+                )
 
     return {
         "valid": len(errors) == 0,

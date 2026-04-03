@@ -1,0 +1,90 @@
+# Copyright (c) 2026 Michael J. Read. All rights reserved.
+# SPDX-License-Identifier: BUSL-1.1
+
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "doc2archagent"
+version = "0.3.0"
+description = "Document-to-architecture extraction, validation, threat modeling, and diagram generation"
+readme = "README.md"
+license = {text = "BUSL-1.1"}
+requires-python = ">=3.10"
+authors = [
+    {name = "Michael J. Read"},
+]
+keywords = ["architecture", "c4-model", "threat-modeling", "validation", "sarif"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Topic :: Security",
+    "Topic :: Software Development :: Documentation",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
+
+dependencies = [
+    "pyyaml>=6.0,<7.0",
+    "pydantic>=2.6.0,<3.0",
+    "rapidfuzz>=3.6.0,<4.0",
+]
+
+[project.optional-dependencies]
+pdf = [
+    "PyMuPDF>=1.25.0,<2.0",
+    "pdfplumber>=0.11.0,<1.0",
+]
+ocr = [
+    "pytesseract>=0.3.10,<1.0",
+    "Pillow>=10.0.0,<14.0",
+    "pdf2image>=1.17.0,<2.0",
+]
+docx = [
+    "python-docx>=1.1.0,<2.0",
+]
+html = [
+    "beautifulsoup4>=4.12.0,<5.0",
+    "html2text>=2024.2.26",
+]
+visio = [
+    "vsdx>=0.6.0,<1.0",
+]
+ml = [
+    "doclayout-yolo>=0.0.2",
+    "onnxruntime>=1.17.0,<2.0",
+    "Pillow>=10.0.0,<14.0",
+]
+all = [
+    "doc2archagent[pdf,ocr,docx,html,visio,ml]",
+]
+dev = [
+    "pytest>=7.0",
+    "bandit>=1.7",
+    "pip-audit",
+]
+
+[project.scripts]
+d2a-validate = "tools.validate:main"
+d2a-convert = "tools.convert_docs:main"
+d2a-threat-rules = "tools.threat_rules:main"
+d2a-classify = "tools.classify_sections:main"
+
+[project.urls]
+Homepage = "https://github.com/Michael-JRead/Doc2ArchAgent"
+Repository = "https://github.com/Michael-JRead/Doc2ArchAgent"
+Issues = "https://github.com/Michael-JRead/Doc2ArchAgent/issues"
+
+[tool.setuptools.packages.find]
+include = ["tools*"]
+
+[tool.bandit]
+exclude_dirs = ["tests"]
+skips = ["B311"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -107,9 +107,14 @@ def convert_pdf_text(src: Path, dst: Path) -> dict:
 
 
 def convert_pdf_ocr(src: Path, dst: Path) -> dict:
-    """OCR a scanned PDF using pytesseract + pdf2image."""
+    """OCR a scanned PDF using pytesseract + pdf2image, with optional VLM fallback."""
     pytesseract = _try_import("pytesseract")
     pdf2image = _try_import("pdf2image")
+
+    # Try VLM-based extraction first if available (higher accuracy for architecture docs)
+    vlm_result = _try_vlm_extraction(src, dst)
+    if vlm_result is not None:
+        return vlm_result
 
     if pytesseract is None or pdf2image is None:
         return {
@@ -122,6 +127,9 @@ def convert_pdf_ocr(src: Path, dst: Path) -> dict:
     except Exception as e:
         return {"status": "error", "reason": f"pdf2image failed: {e}"}
 
+    # Run layout detection if available, for region-aware extraction
+    layout_results = _try_layout_detection(images)
+
     ocr_pages: list[str] = []
     for img in images:
         text = pytesseract.image_to_string(img)
@@ -130,6 +138,15 @@ def convert_pdf_ocr(src: Path, dst: Path) -> dict:
     full_text = "\n\n".join(ocr_pages)
     if len(full_text.strip()) < 20:
         return {"status": "error", "reason": "OCR produced no usable text"}
+
+    # Append layout detection metadata if available
+    if layout_results:
+        full_text += "\n\n---\n## Layout Detection Results\n"
+        for page_idx, regions in enumerate(layout_results):
+            if regions:
+                full_text += f"\n### Page {page_idx + 1} regions:\n"
+                for r in regions:
+                    full_text += f"- {r['label']} (confidence: {r['confidence']:.2f})\n"
 
     dst.write_text(full_text, encoding="utf-8")
 
@@ -141,13 +158,116 @@ def convert_pdf_ocr(src: Path, dst: Path) -> dict:
     except Exception:
         avg_conf = 0
 
+    method = "tesseract-ocr"
+    if layout_results:
+        method += "+layout-detection"
+
     return {
         "status": "converted",
-        "method": "tesseract-ocr",
+        "method": method,
         "quality": "medium",
         "ocr_confidence": round(avg_conf / 100, 2),
         "pages": len(images),
+        "layout_detected": bool(layout_results),
     }
+
+
+def _try_vlm_extraction(src: Path, dst: Path) -> dict | None:
+    """Attempt VLM-based document extraction. Returns result dict or None."""
+    try:
+        from tools.vlm_providers import create_provider
+    except ImportError:
+        return None
+
+    try:
+        provider = create_provider()
+        if provider.name == "stub":
+            return None  # No real VLM available
+    except Exception:
+        return None
+
+    pdf2image = _try_import("pdf2image")
+    if pdf2image is None:
+        return None
+
+    try:
+        images = pdf2image.convert_from_path(str(src))
+    except Exception:
+        return None
+
+    pages: list[str] = []
+    for img in images:
+        import io
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        try:
+            resp = provider.analyze_document_page(buf.getvalue())
+            pages.append(resp.text)
+        except Exception:
+            return None  # Fall back to OCR
+
+    full_text = "\n\n".join(pages)
+    if len(full_text.strip()) < 20:
+        return None
+
+    dst.write_text(full_text, encoding="utf-8")
+    return {
+        "status": "converted",
+        "method": f"vlm-{provider.name}",
+        "quality": "medium",
+        "pages": len(images),
+    }
+
+
+def _try_layout_detection(images: list) -> list[list[dict]] | None:
+    """Attempt ML layout detection on page images. Returns per-page region lists or None."""
+    try:
+        from doclayout_yolo import YOLOv10
+    except ImportError:
+        return None
+
+    # Look for model file in standard locations
+    model_paths = [
+        Path(__file__).parent / "models" / "doclayout_yolo_docstructbench.pt",
+        Path.home() / ".cache" / "doc2archagent" / "doclayout_yolo.pt",
+    ]
+    model_path = None
+    for p in model_paths:
+        if p.exists():
+            model_path = p
+            break
+
+    if model_path is None:
+        return None
+
+    try:
+        model = YOLOv10(str(model_path))
+    except Exception:
+        return None
+
+    all_results: list[list[dict]] = []
+    for img in images:
+        try:
+            results = model.predict(img, conf=0.25)
+            page_regions = []
+            for r in results:
+                if hasattr(r, "boxes") and r.boxes is not None:
+                    for box in r.boxes:
+                        label_idx = int(box.cls[0]) if box.cls is not None else -1
+                        conf = float(box.conf[0]) if box.conf is not None else 0.0
+                        label_names = getattr(r, "names", {})
+                        label = label_names.get(label_idx, f"class_{label_idx}")
+                        bbox = box.xyxy[0].tolist() if box.xyxy is not None else []
+                        page_regions.append({
+                            "label": label,
+                            "confidence": conf,
+                            "bbox": bbox,
+                        })
+            all_results.append(page_regions)
+        except Exception:
+            all_results.append([])
+
+    return all_results if any(r for r in all_results) else None
 
 
 def convert_pdf(src: Path, dst: Path) -> dict:
@@ -264,7 +384,23 @@ def convert_html(src: Path, dst: Path) -> dict:
 
 
 def convert_image(src: Path, dst: Path) -> dict:
-    """OCR an image file using pytesseract."""
+    """OCR an image file, with VLM fallback for architecture diagrams."""
+    # Try VLM first for diagram understanding
+    try:
+        from tools.vlm_providers import create_provider
+        provider = create_provider()
+        if provider.name != "stub":
+            resp = provider.analyze_document_page(src)
+            if len(resp.text.strip()) >= 10:
+                dst.write_text(resp.text, encoding="utf-8")
+                return {
+                    "status": "converted",
+                    "method": f"vlm-{provider.name}",
+                    "quality": "medium",
+                }
+    except Exception:
+        pass  # Fall through to OCR
+
     pytesseract = _try_import("pytesseract")
     pil = _try_import("PIL")
 
