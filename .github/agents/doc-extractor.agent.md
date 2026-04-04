@@ -218,12 +218,22 @@ Process each document in separate focused passes to prevent cross-contamination:
 
 **Pass 3 — DIAGRAMS:** For parsed diagram files (JSON from `tools/parse-diagram-file.py`), map components and relationships to the architecture schema.
 
-**Pass 4 — CROSS-REFERENCE:** Compare entities found across all passes and all documents:
+**Pass 4 — ENTITY RESOLUTION:** Run the entity resolver to deduplicate and link entities across passes and documents:
+```bash
+python tools/entity_resolver.py resolve <system-id> --sources context/<system-id>/ --format json
+```
+The tool detects:
+- Duplicate entities (same name with case/whitespace/abbreviation variants)
+- Alias groups (e.g., "payment-api" and "Payment API Service" → same entity)
+- Conflicting field values across sources
+Merge confirmed duplicates, flag conflicts as UNCERTAIN for human review, and record alias mappings in provenance.yaml.
+
+**Pass 5 — CROSS-REFERENCE:** Compare entities found across all passes and all documents:
 - Same entity confirmed in multiple passes → increase confidence by one level
 - Same entity with different values → mark UNCERTAIN, trigger conflict resolution
 - Entity found in only one pass → note single-source in provenance
 
-Track which pass produced each extraction: `[source: filename, section, pass: prose|table|diagram|cross-ref]`
+Track which pass produced each extraction: `[source: filename, section, pass: prose|table|diagram|cross-ref|entity-resolution]`
 
 ---
 
@@ -341,7 +351,18 @@ Extract from all documents:
 
 ### STEP 3 — Self-Verification (Claim-Level Verification)
 
-After extracting all layers but BEFORE the consolidated review, re-verify each extraction:
+After extracting all layers but BEFORE the consolidated review, run the claims verifier deterministically:
+
+```bash
+python tools/verify-claims.py <system.yaml> --sources context/<system-id>/ --provenance <provenance.yaml> --format json
+```
+
+The tool checks each extracted claim against its cited source passage and reports:
+- **verified** — exact supporting text found in cited source
+- **downgraded** — supporting text not found, confidence reduced
+- **removed** — claim contradicted or completely unsupported
+
+Then perform manual verification for claims the tool could not resolve:
 
 **For each entity with confidence HIGH:**
 1. Re-read the cited source passage
@@ -489,7 +510,17 @@ Every relationship must have a source quote showing BOTH endpoints. "The API con
 Before finalizing extraction for each layer, ask yourself: "What did I extract that the document does NOT explicitly state?" Remove or downgrade to LOW confidence anything identified. If you find yourself thinking "this system probably has X," STOP — that is hallucination.
 
 ### Confidence Scoring (Numerical)
-Assign numerical confidence (0.0–1.0) to each extracted field using this formula:
+Assign numerical confidence (0.0–1.0) to each extracted field. Run the confidence scoring tool deterministically:
+```bash
+python tools/confidence.py score --method <extraction_method> --source-count <N> --field-present --threshold 95
+```
+
+Or enrich an entire provenance file at once:
+```bash
+python tools/confidence.py enrich <provenance.yaml> --threshold 95
+```
+
+The tool applies this formula:
 ```
 confidence = min(source_clarity, extraction_method_cap, cross_doc_boost, self_verification_penalty)
 ```
@@ -501,3 +532,8 @@ Factor values:
 - **self_verification_penalty**: 1.0 (passed), 0.85 (skipped), 0.70 (failed)
 
 Only include entities with confidence >= the threshold in `metadata.confidence_threshold` (default 0.95). Place lower-confidence entities in a separate `## Needs Verification` section for human review.
+
+Generate the confidence report for the developer:
+```bash
+python tools/confidence.py report <provenance.yaml> --threshold 95
+```

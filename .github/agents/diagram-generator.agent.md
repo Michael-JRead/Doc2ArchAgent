@@ -228,6 +228,19 @@ Count total nodes and relationships across all requested diagram levels:
 | Complex | 17+ | 26+ | complex |
 
 ### Phase 3: Build Layout Plan
+
+Before writing the layout plan, run the layout analyzer to optimize node positioning:
+```bash
+python tools/layout_analyzer.py analyze <system.yaml> --format json
+```
+The tool detects:
+- Document layout patterns (HLD, network, security diagram types)
+- Optimal grid assignments based on data flow direction
+- Potential node overlaps and spacing conflicts
+- Suggested positioning for complex diagrams (17+ nodes)
+
+Use the analyzer output to inform grid_col/grid_row assignments. For simple diagrams (≤8 nodes), the analyzer output is advisory. For complex diagrams, follow its positioning suggestions to prevent overlap.
+
 Write `<output-dir>/diagrams/layout-plan.yaml` following the schema below, where `<output-dir>` is determined by the active mode.
 
 ### Phase 4: Ask User and Dispatch

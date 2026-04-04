@@ -240,6 +240,22 @@ How are your architecture documents formatted?
 3. Paste content directly
    I'll paste text or images into this chat.
    → I'll work from what you paste.
+
+4. Import from OpenAPI / Swagger specification
+   I have OpenAPI or Swagger YAML/JSON files describing APIs.
+   → I'll parse them into architecture entities automatically.
+
+5. Import from Terraform modules
+   I have Terraform .tf files describing infrastructure.
+   → I'll extract network topology, zones, and resources.
+
+6. Import from Kubernetes manifests
+   I have K8s YAML files (deployments, services, configmaps).
+   → I'll extract containers, listeners, and network policies.
+
+7. Import from Structurizr DSL
+   I have Structurizr .dsl or .json workspace files.
+   → I'll convert existing architecture models to our schema.
 ```
 
 ---
@@ -347,6 +363,78 @@ When image files are encountered or images are pasted:
 **Stage E — VISUAL VERIFICATION:** Present assembled model to developer for confirmation.
 
 **For ALL image extractions:** Confidence capped at MEDIUM unless text corroborates. Every citation references "pasted image" or "image from [filename]".
+
+---
+
+### Option 4 — Import from OpenAPI / Swagger
+
+The developer points to OpenAPI or Swagger specification files.
+
+1. Ask for the file or directory path
+2. Run the ingestion tool:
+   ```bash
+   python tools/ingest-openapi.py <spec-file-or-dir> --output context/<system-id>/ --format json
+   ```
+3. Parse the JSON output — the tool extracts:
+   - Components (one per API path group or tag)
+   - Listeners (from servers with protocol, port, basePath)
+   - Relationships (from endpoint dependencies and $ref links)
+   - Data entities (from schema definitions)
+4. Report extraction summary, then proceed to STEP 2
+
+---
+
+### Option 5 — Import from Terraform Modules
+
+The developer points to a Terraform configuration directory.
+
+1. Ask for the directory path (e.g., `infrastructure/terraform/`)
+2. Run the ingestion tool:
+   ```bash
+   python tools/ingest-terraform.py <tf-dir> --output context/<system-id>/ --format json
+   ```
+3. Parse the JSON output — the tool extracts:
+   - Network zones (from VPCs, subnets, security groups)
+   - Infrastructure resources (from aws_instance, aws_rds_instance, etc.)
+   - Network links (from security group rules, route tables)
+   - Trust boundaries (from public/private subnet classification)
+4. Report extraction summary, then proceed to STEP 2
+
+---
+
+### Option 6 — Import from Kubernetes Manifests
+
+The developer points to Kubernetes YAML files or a directory.
+
+1. Ask for the file or directory path
+2. Run the ingestion tool:
+   ```bash
+   python tools/ingest-kubernetes.py <k8s-dir> --output context/<system-id>/ --format json
+   ```
+3. Parse the JSON output — the tool extracts:
+   - Components (from Deployments, StatefulSets, DaemonSets)
+   - Listeners (from Service ports, Ingress rules)
+   - Relationships (from service selectors, environment variable references)
+   - Security contexts (from pod security policies, network policies)
+4. Report extraction summary, then proceed to STEP 2
+
+---
+
+### Option 7 — Import from Structurizr DSL
+
+The developer points to a Structurizr workspace file.
+
+1. Ask for the file path (`.dsl` or `.json`)
+2. Run the ingestion tool:
+   ```bash
+   python tools/ingest-structurizr.py <workspace-file> --output context/<system-id>/ --format json
+   ```
+3. Parse the JSON output — the tool extracts:
+   - People, software systems, containers, components (from model)
+   - Relationships with descriptions and technologies (from model relationships)
+   - Deployment nodes and infrastructure (from deployment environments)
+   - Views metadata (for diagram generation hints)
+4. Report extraction summary, then proceed to STEP 2
 
 ---
 

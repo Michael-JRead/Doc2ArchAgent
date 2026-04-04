@@ -1,7 +1,7 @@
 ---
 description: Security reviewer that analyzes architecture YAML for vulnerabilities, trust boundary issues, blast radius, and network crossing risks.
 argument-hint: Which system to review? Or say "review all"
-tools: ['read', 'search', 'web']
+tools: ['read', 'search', 'web', 'execute']
 agents: ['architect', 'deployer', 'diagram-generator', 'validator', 'doc-writer']
 handoffs:
   - label: "Fix in architecture"
@@ -135,10 +135,26 @@ Always include a blank line between findings.
    - Search for all deployment YAML files under `architecture/*/deployments/` and their corresponding `deployment-security.yaml` files
    - Summarize what was found
 
-2. **Run security analysis**
-   Produce a comprehensive security findings report covering all checks below.
+2. **Run codified threat rules (deterministic baseline)**
+   Execute the threat rules engine to generate the deterministic baseline findings:
+   ```bash
+   python tools/threat-rules.py <system.yaml> --networks <networks.yaml> --deployment <deployment.yaml> --format json
+   ```
+   Or via the agent bridge:
+   ```bash
+   python tools/agent-bridge.py threat <system.yaml> --networks <networks.yaml> --deployment <deployment.yaml> --format json
+   ```
+   Parse the JSON output. These findings are the **deterministic baseline** — they are reproducible and non-hallucinatory.
 
-3. **Write findings**
+3. **Enrich with LLM-inferred analysis**
+   Using the codified baseline from step 2, add LLM-inferred findings for threats that codified rules cannot detect:
+   - Business logic flaws
+   - Architectural design weaknesses
+   - Implicit trust assumptions
+   - Cross-system attack chains
+   Do NOT duplicate findings already in the baseline.
+
+4. **Write findings**
    Write to: `architecture/<system-id>/diagrams/security-findings.md`
 
 ---
@@ -408,6 +424,13 @@ Maps compliance frameworks (PCI-DSS, SOC2, GDPR, HIPAA) to specific architecture
 ```
 - **Compliance Impact:** PCI DSS Req 4.1 — Encrypt cardholder data in transit
 ```
+
+### ATT&CK Techniques (`context/attack-techniques.yaml`)
+MITRE ATT&CK technique descriptions and metadata, synced from the STIX repository. To refresh this data on demand:
+```bash
+python tools/sync-attack-data.py --output context/attack-techniques.yaml
+```
+This runs automatically via CI on a monthly schedule (`.github/workflows/sync-attack-data.yml`), but can be triggered manually when new techniques are relevant to a review.
 
 ### Risk Scoring (`context/risk-scoring.yaml`)
 Quantifies risk using likelihood × impact (1-4 each, yielding 1-16 score). Include risk score and severity in each finding:
