@@ -177,7 +177,9 @@ def find_duplicates(
         List of duplicate candidate dicts with match details.
     """
     if fuzz is None:
-        return [{"error": "rapidfuzz not installed (pip install rapidfuzz)"}]
+        import sys
+        print("Warning: rapidfuzz not installed — skipping duplicate detection (pip install rapidfuzz)", file=sys.stderr)
+        return []
 
     duplicates = []
     seen_pairs: set[tuple[str, str]] = set()

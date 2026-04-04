@@ -24,6 +24,7 @@ from pathlib import Path
 
 class PipelineStage(str, Enum):
     """Pipeline processing stages."""
+    INGEST = "ingest"             # Structured format ingestion (OpenAPI, Terraform, K8s, Structurizr)
     CONVERT = "convert"           # Document format conversion
     LAYOUT = "layout"             # Layout detection and region classification
     CLASSIFY = "classify"         # Section classification by concern
@@ -33,10 +34,12 @@ class PipelineStage(str, Enum):
     THREAT = "threat"             # Threat rule evaluation
     DIAGRAM = "diagram"           # Diagram generation
     CONFIDENCE = "confidence"     # Confidence scoring enrichment
+    VERIFY = "verify"             # Claim verification against sources
 
 
 # Default pipeline order
 DEFAULT_PIPELINE = [
+    PipelineStage.INGEST,
     PipelineStage.CONVERT,
     PipelineStage.LAYOUT,
     PipelineStage.CLASSIFY,
@@ -45,6 +48,7 @@ DEFAULT_PIPELINE = [
     PipelineStage.VALIDATE,
     PipelineStage.THREAT,
     PipelineStage.CONFIDENCE,
+    PipelineStage.VERIFY,
 ]
 
 
@@ -417,27 +421,33 @@ def _run_resolve(input_path: Path, output_dir: Path, **kwargs) -> StageResult:
     start = time.monotonic()
 
     try:
-        from tools.entity_resolver import resolve_entities
+        from tools.entity_resolver import extract_entities, find_duplicates, resolve_duplicates
 
-        # Find provenance.yaml
-        prov_path = None
+        # Find system.yaml for entity resolution
+        system_path = None
         for candidate in [
-            output_dir / "provenance.yaml",
-            output_dir.parent / "provenance.yaml",
+            output_dir / "system.yaml",
+            output_dir.parent / "system.yaml",
         ]:
             if candidate.exists():
-                prov_path = candidate
+                system_path = candidate
                 break
 
-        if not prov_path:
+        if not system_path:
             return StageResult(
                 stage=PipelineStage.RESOLVE,
                 status="skipped",
                 duration_ms=int((time.monotonic() - start) * 1000),
-                errors=["No provenance.yaml found for entity resolution"],
+                errors=["No system.yaml found for entity resolution"],
             )
 
-        result = resolve_entities(prov_path)
+        import yaml
+        with open(system_path) as f:
+            system = yaml.safe_load(f) or {}
+
+        entities = extract_entities(system)
+        duplicates = find_duplicates(entities)
+        result = resolve_duplicates(system, duplicates, auto_merge=True)
         elapsed = int((time.monotonic() - start) * 1000)
 
         return StageResult(
@@ -445,9 +455,9 @@ def _run_resolve(input_path: Path, output_dir: Path, **kwargs) -> StageResult:
             status="success",
             duration_ms=elapsed,
             summary={
-                "entities_resolved": result.get("resolved", 0),
-                "conflicts": result.get("conflicts", 0),
-                "merges": result.get("merges", 0),
+                "entities_resolved": result.get("auto_merged", 0),
+                "conflicts": result.get("needs_review", 0),
+                "merges": result.get("auto_merged", 0),
             },
         )
     except Exception as e:
@@ -459,8 +469,163 @@ def _run_resolve(input_path: Path, output_dir: Path, **kwargs) -> StageResult:
         )
 
 
+def _run_ingest(input_path: Path, output_dir: Path, **kwargs) -> StageResult:
+    """Run structured format ingestion stage.
+
+    Auto-detects input format (OpenAPI, Terraform, K8s, Structurizr) and
+    delegates to the appropriate ingest-*.py script.
+    """
+    import subprocess
+    import time
+    start = time.monotonic()
+
+    # Detect format from file extensions
+    ingest_map = {
+        ".tf": ("ingest-terraform.py", "terraform"),
+        ".tfvars": ("ingest-terraform.py", "terraform"),
+        ".dsl": ("ingest-structurizr.py", "structurizr"),
+    }
+
+    files = []
+    if input_path.is_dir():
+        files = list(input_path.rglob("*"))
+    else:
+        files = [input_path]
+
+    # Detect format
+    detected_format = None
+    for f in files:
+        if f.suffix in ingest_map:
+            detected_format = ingest_map[f.suffix]
+            break
+        # Check file content for format clues
+        if f.suffix in (".yaml", ".yml", ".json"):
+            try:
+                content = f.read_text(encoding="utf-8")[:500]
+                if "openapi:" in content or "swagger:" in content:
+                    detected_format = ("ingest-openapi.py", "openapi")
+                    break
+                if "apiVersion:" in content and "kind:" in content:
+                    detected_format = ("ingest-kubernetes.py", "kubernetes")
+                    break
+            except Exception:
+                pass
+
+    if not detected_format:
+        return StageResult(
+            stage=PipelineStage.INGEST,
+            status="skipped",
+            duration_ms=int((time.monotonic() - start) * 1000),
+            summary={"reason": "No structured format detected — skipping ingest"},
+        )
+
+    script_name, fmt_name = detected_format
+    script = Path(__file__).parent / script_name
+
+    if not script.exists():
+        return StageResult(
+            stage=PipelineStage.INGEST,
+            status="error",
+            duration_ms=int((time.monotonic() - start) * 1000),
+            errors=[f"{script_name} not found"],
+        )
+
+    cmd = [sys.executable, str(script), str(input_path),
+           "--output", str(output_dir), "--format", "json"]
+
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+        elapsed = int((time.monotonic() - start) * 1000)
+
+        if result.returncode != 0:
+            return StageResult(
+                stage=PipelineStage.INGEST,
+                status="error",
+                duration_ms=elapsed,
+                errors=[result.stderr.strip() or f"{script_name} exited with code {result.returncode}"],
+            )
+
+        return StageResult(
+            stage=PipelineStage.INGEST,
+            status="success",
+            duration_ms=elapsed,
+            summary={"format": fmt_name, "source": str(input_path)},
+        )
+    except subprocess.TimeoutExpired:
+        return StageResult(
+            stage=PipelineStage.INGEST,
+            status="error",
+            duration_ms=int((time.monotonic() - start) * 1000),
+            errors=[f"{script_name} timed out after 120s"],
+        )
+    except Exception as e:
+        return StageResult(
+            stage=PipelineStage.INGEST,
+            status="error",
+            duration_ms=int((time.monotonic() - start) * 1000),
+            errors=[str(e)],
+        )
+
+
+def _run_verify(input_path: Path, output_dir: Path, **kwargs) -> StageResult:
+    """Run claim verification stage against source documents."""
+    import subprocess
+    import time
+    start = time.monotonic()
+
+    # Find system.yaml and provenance.yaml in output
+    system_files = list(output_dir.rglob("system.yaml"))
+    prov_files = list(output_dir.rglob("provenance.yaml"))
+
+    if not system_files:
+        return StageResult(
+            stage=PipelineStage.VERIFY,
+            status="skipped",
+            duration_ms=int((time.monotonic() - start) * 1000),
+            summary={"reason": "No system.yaml found — skipping verification"},
+        )
+
+    script = Path(__file__).parent / "verify-claims.py"
+    if not script.exists():
+        return StageResult(
+            stage=PipelineStage.VERIFY,
+            status="skipped",
+            duration_ms=int((time.monotonic() - start) * 1000),
+            summary={"reason": "verify-claims.py not found — skipping"},
+        )
+
+    verified = 0
+    errors_list = []
+
+    for sys_file in system_files:
+        cmd = [sys.executable, str(script), str(sys_file),
+               "--sources", str(input_path), "--format", "json"]
+        prov_match = [p for p in prov_files if p.parent == sys_file.parent]
+        if prov_match:
+            cmd.extend(["--provenance", str(prov_match[0])])
+
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+            if result.returncode == 0:
+                verified += 1
+            else:
+                errors_list.append(f"{sys_file}: {result.stderr.strip()}")
+        except Exception as e:
+            errors_list.append(f"{sys_file}: {e}")
+
+    elapsed = int((time.monotonic() - start) * 1000)
+    return StageResult(
+        stage=PipelineStage.VERIFY,
+        status="success" if not errors_list else "warning",
+        duration_ms=elapsed,
+        summary={"systems_verified": verified, "errors": len(errors_list)},
+        errors=errors_list if errors_list else None,
+    )
+
+
 # Stage runner registry
 STAGE_RUNNERS = {
+    PipelineStage.INGEST: _run_ingest,
     PipelineStage.CONVERT: _run_convert,
     PipelineStage.LAYOUT: _run_layout,
     PipelineStage.CLASSIFY: _run_classify,
@@ -468,6 +633,7 @@ STAGE_RUNNERS = {
     PipelineStage.CONFIDENCE: _run_confidence,
     PipelineStage.THREAT: _run_threat,
     PipelineStage.RESOLVE: _run_resolve,
+    PipelineStage.VERIFY: _run_verify,
     # EXTRACT, DIAGRAM — require LLM interaction, run via Copilot agents
 }
 

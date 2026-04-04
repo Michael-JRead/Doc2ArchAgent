@@ -228,6 +228,19 @@ Count total nodes and relationships across all requested diagram levels:
 | Complex | 17+ | 26+ | complex |
 
 ### Phase 3: Build Layout Plan
+
+Before writing the layout plan, run the layout analyzer to optimize node positioning:
+```bash
+python tools/layout_analyzer.py analyze <system.yaml> --format json
+```
+The tool detects:
+- Document layout patterns (HLD, network, security diagram types)
+- Optimal grid assignments based on data flow direction
+- Potential node overlaps and spacing conflicts
+- Suggested positioning for complex diagrams (17+ nodes)
+
+Use the analyzer output to inform grid_col/grid_row assignments. For simple diagrams (≤8 nodes), the analyzer output is advisory. For complex diagrams, follow its positioning suggestions to prevent overlap.
+
 Write `<output-dir>/diagrams/layout-plan.yaml` following the schema below, where `<output-dir>` is determined by the active mode.
 
 ### Phase 4: Ask User and Dispatch
@@ -357,7 +370,9 @@ Include one entry per node type actually used in the diagram:
 - Green edge: "Encrypted (TLS)"
 - Red edge: "Unencrypted"
 - Grey edge: "TLS unknown"
-- Red border: "Unauthenticated listener"
+- Red border: "No Authentication"
+- Orange border: "No Authorization"
+- Blue border: "Has Authorization (RBAC/ABAC/ACL)"
 
 ### Confidence Legend (when provenance.yaml exists)
 - Blue `#1565c0`: "HIGH — Source confirmed"
@@ -407,14 +422,199 @@ Renderers will apply format-specific styling based on the confidence field.
 ## SECURITY OVERLAY
 
 When asked "Generate security overlay":
-Build a special layout plan variant with these additions to edges:
-- Set `tls_status: encrypted | unencrypted | unknown` from listener data
-- Set `warnings` array: `zone_crossing`, `trust_boundary`, `no_tls`, `no_authn`
-- Set `data_classification` on edges carrying classified data
-- For components with `authn_mechanism: none`, add `[NO AUTH]` to node label
-- If `stride-analysis.md` exists, add STRIDE badges to node descriptions
+Build a special layout plan variant. Read `system-security.yaml` (and `networks-security.yaml` / `deployment-security.yaml` if present) alongside the base YAML files.
 
-Write as a separate layout plan: `layout-plan-security.yaml`
+### Security Layout Plan Schema
+
+The security layout plan follows the same schema as the standard layout plan with these additional fields:
+
+**Additional node fields:**
+- `authn_status: none | weak | strong` — derived from listener_security authn_mechanism
+  - `none` → authn_mechanism is "none"
+  - `weak` → authn_mechanism is "basic" or "password"
+  - `strong` → everything else (oauth2, mtls, oidc, etc.)
+- `authz_model: none | rbac | abac | acl | pbac | rebac | custom` — from listener_security authz_model
+  - `none` → authz_required is false or authz_model is "none"
+  - When authz_required is true but authz_model is missing → treat as "none" and add `no_authz` warning
+- `stride_categories: [S, T, R, I, D, E]` — from stride-analysis.md if present
+- `data_stores_pii: true | false` — from component_security
+
+**Additional edge fields:**
+- `tls_status: encrypted | unencrypted | unknown` — from listener_security tls_enabled
+- `tls_version: "1.2" | "1.3"` — from listener_security tls_version_min
+- `authn_mechanism: "oauth2" | "mtls" | "none"` — from listener/relationship security
+- `authz_model: "rbac" | "abac" | "acl" | "none"` — from listener_security authz_model
+- `warnings: [zone_crossing, trust_boundary, no_tls, no_authn, no_authz]` — computed:
+  - `zone_crossing` — source and target are in different network zones
+  - `trust_boundary` — edge crosses a trust boundary defined in system-security.yaml
+  - `no_tls` — tls_enabled is false
+  - `no_authn` — authn_mechanism is none
+  - `no_authz` — authz_required is false or authz_model is "none"
+- `data_classification: public | internal | confidential | restricted` — from data_entities
+
+**Additional boundary fields:**
+- `trust: trusted | semi_trusted | untrusted` — from zone trust level or trust_boundaries
+
+### Security Label Construction
+
+For **node descriptions** (NOT labels — labels stay short):
+- If `authn_status: none` → append `\n[NO AUTH]`
+- If `authn_status: weak` → append `\n[WEAK AUTH]`
+- If `stride_categories` present → append `\n[S][T][R]` etc.
+- Keep total description under 60 chars; truncate STRIDE if needed
+
+For **edge protocol/technology strings**:
+```
+<protocol> :<port> / TLS <version> / <authn>
+```
+- All `/` must be escaped as `~/~/` in PlantUML output (Creole italic prevention)
+- If `tls_status: unencrypted` → use `NO TLS` instead of `TLS <version>`
+- If `data_classification` present → append `[RESTRICTED]` etc.
+
+### Color Rules — CRITICAL FOR PLANTUML
+
+**ALL colors in the layout plan MUST be hex codes** (`"#2e7d32"`), never color names (`"green"`).
+PlantUML C4 `AddElementTag` and `AddRelTag` macros do NOT accept named colors — they cause `No such color` errors.
+
+Standard security palette:
+- Encrypted/trusted/strong: `"#2e7d32"` (green)
+- Unencrypted/untrusted/no-auth: `"#c62828"` (red)
+- Warning/semi-trusted/weak: `"#f9a825"` (amber)
+- Unknown: `"#9e9e9e"` (grey)
+
+### Example layout-plan-security.yaml
+
+```yaml
+system_id: payment-platform
+system_name: "Payment Platform — Security Overlay"
+generated: "2026-03-31T15:00:00Z"
+complexity: complex
+source: layout-plan-security.yaml
+
+colors:
+  person: "#08427b"
+  system: "#1168BD"
+  container: "#438DD5"
+  component: "#85BBF0"
+  external: "#999999"
+  infra: "#ff8f00"
+  encrypted: "#2e7d32"
+  unencrypted: "#c62828"
+  tls_unknown: "#9e9e9e"
+  trusted: "#2e7d32"
+  semi_trusted: "#f9a825"
+  untrusted: "#c62828"
+
+diagrams:
+  - level: deployment
+    deployment_id: payment-prod
+    title: "Payment Platform — Security Overlay (Deployment)"
+    nodes:
+      - id: api-tier
+        type: container
+        label: API Tier
+        technology: Kong Gateway
+        description: "OAuth2 / RBAC / TLS 1.3"
+        boundary_id: dmz-zone
+        grid_col: 1
+        grid_row: 0
+        authn_status: strong
+        authz_model: rbac
+      - id: app-core
+        type: container
+        label: Application Core
+        technology: "Java / Spring Boot"
+        description: "mTLS / RBAC / cert auth"
+        boundary_id: app-zone
+        grid_col: 2
+        grid_row: 0
+        authn_status: strong
+        authz_model: rbac
+      - id: data-tier
+        type: container_db
+        label: Data Tier
+        technology: PostgreSQL 15
+        description: "mTLS / ACL / AES-256 at rest"
+        boundary_id: app-zone
+        grid_col: 3
+        grid_row: 0
+        authn_status: strong
+        authz_model: acl
+        data_stores_pii: true
+      - id: card-network
+        type: system_ext
+        label: "Visa / Mastercard"
+        technology: ""
+        description: "External [SEMI-TRUSTED]"
+        grid_col: 4
+        grid_row: 0
+    boundaries:
+      - id: dmz-zone
+        label: DMZ
+        type: zone
+        trust: semi_trusted
+        contains: [api-tier]
+      - id: app-zone
+        label: Application Tier
+        type: zone
+        trust: trusted
+        contains: [app-core, data-tier]
+    edges:
+      - id: api-to-app
+        source: api-tier
+        target: app-core
+        label: "Routes requests"
+        protocol: "HTTPS :8443 / TLS 1.3 / mTLS / RBAC"
+        sync: true
+        tls_status: encrypted
+        authn_mechanism: mtls
+        authz_model: rbac
+      - id: app-to-data
+        source: app-core
+        target: data-tier
+        label: "Reads/writes"
+        protocol: "JDBC :5432 / TLS 1.2 / cert / ACL"
+        sync: true
+        tls_status: encrypted
+        authn_mechanism: certificate
+        authz_model: acl
+        data_classification: restricted
+      - id: app-to-cards
+        source: app-core
+        target: card-network
+        label: "Authorizes"
+        protocol: "ISO 8583 :443 / TLS 1.2 / mTLS / RBAC"
+        sync: true
+        tls_status: encrypted
+        authn_mechanism: mtls
+        authz_model: rbac
+        data_classification: restricted
+        warnings: [zone_crossing]
+    legend:
+      elements:
+        - color: "#438DD5"
+          label: Container
+        - color: "#999999"
+          label: "External System"
+        - color: "#2e7d32"
+          label: "Trusted Zone"
+        - color: "#f9a825"
+          label: "Semi-Trusted Zone"
+        - color: "#c62828"
+          label: "Untrusted Zone"
+      flows:
+        - style: solid
+          color: "#2e7d32"
+          label: "Encrypted (TLS)"
+        - style: solid
+          color: "#c62828"
+          label: "Unencrypted"
+        - style: dashed
+          color: "#9e9e9e"
+          label: "TLS Unknown"
+```
+
+Write as: `layout-plan-security.yaml` in the diagrams directory.
 
 ---
 

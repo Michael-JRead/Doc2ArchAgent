@@ -394,7 +394,15 @@ Updated: 1 deployment file
 3. **Bump version:**
    - Ask: "Bump type? (1) Patch 1.0.1 (2) Minor 1.1.0 (3) Major 2.0.0"
    - Ask: "Change description?"
-   - Update `metadata.version` and append to `version_history[]`
+   - Run the migration tool to update the pattern and all consumers:
+     ```bash
+     python tools/migrate-pattern.py <pattern-id> --bump <patch|minor|major> --description "<change description>"
+     ```
+     The tool:
+     - Updates `metadata.version` and appends to `version_history[]`
+     - Scans architecture files for systems using this pattern
+     - Reports which systems need updating to the new version
+     - Optionally applies schema migrations for breaking changes (major bumps)
    - Write the updated pattern file
 
 4. **Toggle version tracking:**

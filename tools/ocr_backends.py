@@ -77,7 +77,10 @@ class TesseractBackend(OCRBackend):
             return False
 
     def extract_text(self, image) -> str:
-        import pytesseract
+        try:
+            import pytesseract
+        except ImportError:
+            raise RuntimeError("pytesseract is required for TesseractBackend (pip install pytesseract)")
         return pytesseract.image_to_string(image)
 
     def extract_with_confidence(self, image) -> OCRResult:
@@ -171,7 +174,18 @@ class OpenDocBackend(OCRBackend):
             outputs = session.run(None, {input_name: img_array})
 
             # Parse outputs (format depends on specific model export)
-            text = str(outputs[0]) if outputs else ""
+            if outputs and len(outputs) > 0:
+                raw = outputs[0]
+                if hasattr(raw, 'flatten'):
+                    # numpy array — decode character indices or extract text
+                    flat = raw.flatten()
+                    text = "".join(chr(int(c)) for c in flat if 32 <= int(c) < 127) if flat.size > 0 else ""
+                elif isinstance(raw, (list, tuple)):
+                    text = " ".join(str(item) for item in raw)
+                else:
+                    text = str(raw)
+            else:
+                text = ""
             confidence = 0.9  # OpenDoc typically achieves ~90% on OmniDocBench
 
             return OCRResult(
@@ -231,13 +245,22 @@ class PaddleOCRBackend(OCRBackend):
 
         if results and results[0]:
             for line in results[0]:
-                bbox, (text, conf) = line[0], line[1]
+                try:
+                    if not isinstance(line, (list, tuple)) or len(line) < 2:
+                        continue
+                    bbox = line[0]
+                    text_conf = line[1]
+                    if not isinstance(text_conf, (list, tuple)) or len(text_conf) < 2:
+                        continue
+                    text, conf = text_conf[0], text_conf[1]
+                except (IndexError, TypeError, ValueError):
+                    continue
                 lines.append(text)
                 confidences.append(conf)
                 regions.append({
                     "text": text,
                     "confidence": conf,
-                    "bbox": [coord for point in bbox for coord in point],
+                    "bbox": [coord for point in bbox for coord in point] if isinstance(bbox, list) else [],
                 })
 
         avg_conf = sum(confidences) / len(confidences) if confidences else 0.0

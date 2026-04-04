@@ -100,7 +100,39 @@ rules:
       - when: component.multi_tenant equals true
         then: critical
         reason: Multi-tenant without authz enables cross-tenant data access
-    remediation: Enable authz_required and implement role-based access control.
+    remediation: >
+      Enable authz_required and set authz_model to an appropriate model
+      (rbac, abac, acl, pbac, rebac, or custom) based on access control requirements.
+
+  - id: missing-authz-model
+    title: Authorization Enabled Without Model
+    description: >
+      A listener has authz_required set to true but no authz_model specified.
+      Without an explicit authorization model, enforcement may be inconsistent
+      or missing at implementation time.
+    stride: elevation_of_privilege
+    cwe: 863
+    cwe_name: Incorrect Authorization
+    severity: low
+    iterate_over: listeners
+    conditions:
+      - field: listener.authz_required
+        operator: equals
+        value: true
+      - field: listener.authz_model
+        operator: in
+        value: ["none", null]
+    severity_overrides:
+      - when: data_classification in ["confidential", "restricted"]
+        then: medium
+        reason: Sensitive data requires an explicit authorization model
+      - when: listener.exposure in ["public", "partner"]
+        then: medium
+        reason: Externally-exposed listeners need defined authz models
+    remediation: >
+      Set authz_model to one of: rbac, abac, acl, pbac, rebac, or custom.
+      RBAC is recommended for most API endpoints. ABAC is preferred when
+      fine-grained attribute-based decisions are needed.
 
   # ============================================================
   # ENCRYPTION RULES

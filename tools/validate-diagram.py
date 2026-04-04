@@ -516,6 +516,51 @@ def validate_plantuml(filepath: Path) -> dict:
                     f"Line {i}: Lay_ target '{tgt}' not found as defined element"
                 )
 
+    # Check 12l: Named colors in AddElementTag/AddRelTag (must be hex)
+    named_colors = {
+        "red", "green", "blue", "yellow", "orange", "purple", "grey", "gray",
+        "black", "white", "pink", "brown", "cyan", "magenta", "lime", "teal",
+        "navy", "maroon", "olive", "aqua", "silver", "gold", "coral",
+    }
+    color_param_pattern = re.compile(
+        r'\$(bgColor|fontColor|borderColor|lineColor|textColor)\s*=\s*"?([^",\)]+)"?'
+    )
+    for i, line in enumerate(lines, 1):
+        stripped = line.strip()
+        if stripped.startswith("'"):
+            continue
+        if "AddElementTag(" in stripped or "AddRelTag(" in stripped:
+            for match in color_param_pattern.finditer(stripped):
+                param_name = match.group(1)
+                color_val = match.group(2).strip().strip('"')
+                if color_val.lower() in named_colors:
+                    errors.append(
+                        f"Line {i}: Named color '{color_val}' in ${param_name} — "
+                        f"PlantUML C4 tags require hex codes (e.g., '#c62828'), "
+                        f"not color names"
+                    )
+                elif color_val and not color_val.startswith("#") and color_val not in (
+                    "DashedLine()", "BoldLine()", "DottedLine()",
+                ):
+                    warnings.append(
+                        f"Line {i}: ${param_name} value '{color_val}' may not be a valid "
+                        f"hex color — use '#rrggbb' format"
+                    )
+
+    # Check 12m: $lineStyle as string instead of macro
+    for i, line in enumerate(lines, 1):
+        stripped = line.strip()
+        if stripped.startswith("'"):
+            continue
+        style_match = re.search(r'\$lineStyle\s*=\s*"([^"]*)"', stripped)
+        if style_match:
+            style_val = style_match.group(1)
+            if style_val.lower() in ("dashed", "bold", "dotted"):
+                errors.append(
+                    f"Line {i}: $lineStyle=\"{style_val}\" is invalid — "
+                    f"use macro form: $lineStyle=DashedLine() or $lineStyle=BoldLine()"
+                )
+
     # Check 13: Include level matches macros used
     has_component_macro = any(
         re.search(r'\bComponent(Db|Queue|_Ext|Db_Ext|Queue_Ext)?\s*\(', l)
@@ -761,6 +806,84 @@ def validate_drawio(filepath: Path) -> dict:
                     # Actually, the value attribute uses HTML entities already
                     # Only check for bare < > that aren't part of HTML tags
                     pass  # HTML entity validation is complex, skip for now
+
+        # Check 15: fontFamily on all content cells
+        for cell in cells:
+            cell_id = cell.get("id")
+            if cell_id in ("0", "1"):
+                continue
+            style = cell.get("style", "")
+            value = cell.get("value", "")
+            # Only check cells that have visible content (value or are edges with labels)
+            if value and style and "fontFamily" not in style:
+                warnings.append(
+                    f"Cell id='{cell_id}': missing 'fontFamily' in style — "
+                    f"rendering may vary across platforms. Add fontFamily=Helvetica."
+                )
+
+        # Check 16: Minimum element dimensions
+        for cell_id, cell in vertices.items():
+            if cell_id in ("0", "1"):
+                continue
+            geo = cell.find("mxGeometry")
+            if geo is not None and geo.get("relative") != "1":
+                try:
+                    w = float(geo.get("width", 0))
+                    h = float(geo.get("height", 0))
+                    if 0 < w < 120 or 0 < h < 60:
+                        warnings.append(
+                            f"Vertex id='{cell_id}': dimensions {w}x{h} below "
+                            f"minimum 120x60 — text may clip"
+                        )
+                except (ValueError, TypeError):
+                    pass
+
+        # Check 17: Boundary children within bounds
+        for cell in cells:
+            parent_id = cell.get("parent")
+            if not parent_id or parent_id in ("0", "1"):
+                continue
+            if parent_id not in vertices:
+                continue
+            parent_cell = vertices[parent_id]
+            parent_geo = parent_cell.find("mxGeometry")
+            child_geo = cell.find("mxGeometry")
+            if parent_geo is None or child_geo is None:
+                continue
+            if child_geo.get("relative") == "1":
+                continue
+            try:
+                pw = float(parent_geo.get("width", 0))
+                ph = float(parent_geo.get("height", 0))
+                cx = float(child_geo.get("x", 0))
+                cy = float(child_geo.get("y", 0))
+                cw = float(child_geo.get("width", 0))
+                ch = float(child_geo.get("height", 0))
+                if pw > 0 and ph > 0 and cw > 0 and ch > 0:
+                    if cx + cw > pw or cy + ch > ph or cx < 0 or cy < 0:
+                        warnings.append(
+                            f"Cell id='{cell.get('id')}': extends outside "
+                            f"parent '{parent_id}' bounds "
+                            f"(child: {cx},{cy} {cw}x{ch}, parent: {pw}x{ph})"
+                        )
+            except (ValueError, TypeError):
+                pass
+
+        # Check 18: Edge backup label existence
+        edge_ids_with_value = set()
+        for edge in edges:
+            edge_id = edge.get("id", "")
+            value = edge.get("value", "")
+            if value and edge_id:
+                edge_ids_with_value.add(edge_id)
+
+        for edge_id in edge_ids_with_value:
+            label_id = f"{edge_id}-label"
+            if label_id not in all_ids:
+                warnings.append(
+                    f"Edge id='{edge_id}': has label text but no backup "
+                    f"text cell '{label_id}' — label will be lost in Lucidchart import"
+                )
 
     return {
         "valid": len(errors) == 0,

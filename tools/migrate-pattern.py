@@ -19,7 +19,11 @@ import json
 import sys
 from pathlib import Path
 
-import yaml
+try:
+    import yaml
+except ImportError:
+    print("Error: pyyaml required. pip install pyyaml", file=sys.stderr)
+    sys.exit(1)
 
 
 def migrate_pattern(pattern_path: Path, remove_old: bool = False) -> dict:

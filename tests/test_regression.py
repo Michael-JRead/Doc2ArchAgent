@@ -3751,3 +3751,248 @@ class TestDockerfile:
         assert "FROM python:" in content
         assert "requirements.txt" in content
         assert "INSTALL_ML" in content
+
+
+# ==========================================================================
+# L8 — Security Overlay Diagram Validation
+# ==========================================================================
+
+
+class TestSecurityOverlayDiagramValidation:
+    """Tests for PlantUML security overlay diagram validation."""
+
+    def _validate(self, puml_text: str) -> dict:
+        """Helper to validate a PUML string via temp file."""
+        import tempfile
+        sys.path.insert(0, str(TOOLS_DIR))
+        mod = importlib.import_module("validate-diagram")
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".puml", delete=False) as f:
+            f.write(puml_text)
+            f.flush()
+            result = mod.validate_plantuml(Path(f.name))
+        Path(f.name).unlink(missing_ok=True)
+        return result
+
+    def test_named_color_detected_as_error(self):
+        """Named colors in AddElementTag/AddRelTag must be caught."""
+        puml = """@startuml
+!include <C4/C4_Deployment>
+LAYOUT_LANDSCAPE()
+AddElementTag("trusted", $bgColor="green", $fontColor="white")
+AddRelTag("encrypted", $lineColor="green")
+Node(n1, "Test", "type", "desc", $tags="trusted")
+SHOW_LEGEND()
+@enduml"""
+        result = self._validate(puml)
+        color_errors = [e for e in result["errors"] if "Named color" in e]
+        assert len(color_errors) >= 2, f"Expected named color errors, got: {result['errors']}"
+
+    def test_hex_colors_pass_validation(self):
+        """Hex colors in tags should not trigger errors."""
+        puml = """@startuml
+!include <C4/C4_Deployment>
+LAYOUT_LANDSCAPE()
+AddElementTag("trusted", $bgColor="#2e7d32", $fontColor="#ffffff", $borderColor="#1b5e20")
+AddRelTag("encrypted", $textColor="#2e7d32", $lineColor="#2e7d32")
+Node(n1, "Test", "type", "desc", $tags="trusted")
+SHOW_LEGEND()
+@enduml"""
+        result = self._validate(puml)
+        color_errors = [e for e in result["errors"] if "color" in e.lower()]
+        assert len(color_errors) == 0, f"Unexpected color errors: {color_errors}"
+
+    def test_linestyle_string_detected_as_error(self):
+        """$lineStyle='dashed' (string) must be caught — use DashedLine() macro."""
+        puml = """@startuml
+!include <C4/C4_Deployment>
+LAYOUT_LANDSCAPE()
+AddRelTag("tls_unknown", $lineColor="#9e9e9e", $lineStyle="dashed")
+Node(n1, "A", "t", "d")
+Node(n2, "B", "t", "d")
+Rel(n1, n2, "test", $tags="tls_unknown")
+SHOW_LEGEND()
+@enduml"""
+        result = self._validate(puml)
+        style_errors = [e for e in result["errors"] if "lineStyle" in e]
+        assert len(style_errors) >= 1, f"Expected lineStyle error, got: {result['errors']}"
+
+    def test_security_overlay_complete_example_passes(self):
+        """The complete security overlay example from the agent doc should pass validation."""
+        puml = """@startuml
+' Payment Platform — Security Overlay (Deployment View)
+' Generated: 2026-03-31T12:00:00Z
+
+!include <C4/C4_Deployment>
+
+skinparam wrapWidth 250
+skinparam linetype polyline
+
+LAYOUT_LANDSCAPE()
+HIDE_STEREOTYPE()
+
+AddElementTag("container", $bgColor="#438DD5", $fontColor="#ffffff", $borderColor="#2E6295")
+AddElementTag("external", $bgColor="#999999", $fontColor="#ffffff", $borderColor="#666666")
+AddElementTag("trusted", $bgColor="#2e7d32", $fontColor="#ffffff", $borderColor="#1b5e20")
+AddElementTag("semi_trusted", $bgColor="#f9a825", $fontColor="#000000", $borderColor="#f57f17")
+
+AddRelTag("encrypted", $textColor="#2e7d32", $lineColor="#2e7d32")
+AddRelTag("unencrypted", $textColor="#c62828", $lineColor="#c62828", $lineStyle=BoldLine())
+AddRelTag("tls_unknown", $textColor="#9e9e9e", $lineColor="#9e9e9e", $lineStyle=DashedLine())
+
+Deployment_Node(dmz_zone, "DMZ", "network zone", "Internet-facing", $tags="semi_trusted") {
+    Container(api_tier, "API Tier", "Kong Gateway", "OAuth2 ~/~/ TLS 1.3", $tags="container")
+}
+
+Deployment_Node(app_zone, "Application Tier", "network zone", "Internal only", $tags="trusted") {
+    Container(app_core, "Application Core", "Java ~/~/ Spring Boot", "mTLS ~/~/ cert auth", $tags="container")
+    ContainerDb(data_tier, "Data Tier", "PostgreSQL 15", "mTLS ~/~/ AES-256 at rest", $tags="container")
+}
+
+System_Ext(card_network, "Visa ~/~/ Mastercard", "External card network", $tags="external")
+
+Rel_R(api_tier, app_core, "Routes requests", "HTTPS :8443 ~/~/ TLS 1.3 ~/~/ mTLS", $tags="encrypted")
+Rel_R(app_core, data_tier, "Reads~/~/writes", "JDBC :5432 ~/~/ TLS 1.2 ~/~/ cert [RESTRICTED]", $tags="encrypted")
+Rel_R(app_core, card_network, "Authorizes", "ISO 8583 :443 ~/~/ TLS 1.2 ~/~/ mTLS [RESTRICTED]", $tags="encrypted")
+
+SHOW_LEGEND()
+@enduml"""
+        result = self._validate(puml)
+        assert result["valid"], f"Security overlay example should pass, errors: {result['errors']}"
+
+    def test_plantuml_agent_has_security_color_rules(self):
+        """The PlantUML agent doc must include hex color guidance for security overlays."""
+        content = (PROJECT_ROOT / ".github" / "agents" / "diagram-plantuml.agent.md").read_text()
+        assert "No such color" in content
+        assert "#2e7d32" in content
+        assert "#c62828" in content
+        assert "~/~/" in content
+        assert "BoldLine()" in content
+
+    def test_diagram_generator_has_security_layout_plan_example(self):
+        """The diagram-generator agent must include a security layout plan example."""
+        content = (PROJECT_ROOT / ".github" / "agents" / "diagram-generator.agent.md").read_text()
+        assert "layout-plan-security.yaml" in content
+        assert "tls_status" in content
+        assert "authn_status" in content
+        assert "semi_trusted" in content
+
+
+class TestDrawioProfessionalPolish:
+    """Tests for Draw.io diagram professional quality standards."""
+
+    def _validate_drawio(self, xml_text: str) -> dict:
+        """Helper to validate a Draw.io XML string via temp file."""
+        import tempfile
+        sys.path.insert(0, str(TOOLS_DIR))
+        mod = importlib.import_module("validate-diagram")
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".drawio", delete=False) as f:
+            f.write(xml_text)
+            f.flush()
+            result = mod.validate_drawio(Path(f.name))
+        Path(f.name).unlink(missing_ok=True)
+        return result
+
+    def test_drawio_agent_has_font_family(self):
+        """The Draw.io agent doc must mandate fontFamily=Helvetica."""
+        content = (PROJECT_ROOT / ".github" / "agents" / "diagram-drawio.agent.md").read_text()
+        assert "fontFamily=Helvetica" in content
+        assert "CRITICAL" in content and "fontFamily" in content
+
+    def test_drawio_agent_has_professional_sizes(self):
+        """The Draw.io agent doc must have updated element sizes."""
+        content = (PROJECT_ROOT / ".github" / "agents" / "diagram-drawio.agent.md").read_text()
+        # System: 200x120
+        assert "200" in content and "120" in content
+        # Container: 190x100
+        assert "190" in content and "100" in content
+        # Component: 170x90
+        assert "170" in content and "90" in content
+        # Grid spacing: 300px columns, 200px rows
+        assert "300" in content and "200" in content
+
+    def test_drawio_agent_has_security_overlay(self):
+        """The Draw.io agent doc must have a security overlay section."""
+        content = (PROJECT_ROOT / ".github" / "agents" / "diagram-drawio.agent.md").read_text()
+        assert "## SECURITY OVERLAY" in content
+        assert "#2e7d32" in content  # encrypted green
+        assert "#c62828" in content  # unencrypted red
+        assert "#9e9e9e" in content  # unknown grey
+        assert "NO AUTHN" in content
+        assert "NO AUTHZ" in content
+        assert "authz_model" in content
+
+    def test_drawio_agent_has_title_cell(self):
+        """The Draw.io agent doc must have a title cell template."""
+        content = (PROJECT_ROOT / ".github" / "agents" / "diagram-drawio.agent.md").read_text()
+        assert "## TITLE CELL" in content
+        assert "id=\"title\"" in content
+
+    def test_validator_catches_missing_font_family(self):
+        """Validator should warn when fontFamily is missing from content cells."""
+        xml = """<?xml version="1.0" encoding="UTF-8"?>
+<mxfile><diagram name="test"><mxGraphModel><root>
+<mxCell id="0"/><mxCell id="1" parent="0"/>
+<mxCell id="n1" value="No Font" style="rounded=1;fillColor=#438DD5;" vertex="1" parent="1">
+  <mxGeometry x="100" y="100" width="190" height="100" as="geometry"/>
+</mxCell>
+</root></mxGraphModel></diagram></mxfile>"""
+        result = self._validate_drawio(xml)
+        font_warnings = [w for w in result["warnings"] if "fontFamily" in w]
+        assert len(font_warnings) >= 1, f"Expected fontFamily warning, got: {result['warnings']}"
+
+    def test_validator_catches_undersized_elements(self):
+        """Validator should warn when elements are below minimum 120x60."""
+        xml = """<?xml version="1.0" encoding="UTF-8"?>
+<mxfile><diagram name="test"><mxGraphModel><root>
+<mxCell id="0"/><mxCell id="1" parent="0"/>
+<mxCell id="tiny" value="Tiny" style="rounded=1;fontFamily=Helvetica;" vertex="1" parent="1">
+  <mxGeometry x="100" y="100" width="80" height="40" as="geometry"/>
+</mxCell>
+</root></mxGraphModel></diagram></mxfile>"""
+        result = self._validate_drawio(xml)
+        size_warnings = [w for w in result["warnings"] if "minimum" in w or "clip" in w]
+        assert len(size_warnings) >= 1, f"Expected size warning, got: {result['warnings']}"
+
+    def test_validator_catches_missing_backup_label(self):
+        """Validator should warn when edge has label but no backup text cell."""
+        xml = """<?xml version="1.0" encoding="UTF-8"?>
+<mxfile><diagram name="test"><mxGraphModel><root>
+<mxCell id="0"/><mxCell id="1" parent="0"/>
+<mxCell id="s" value="Src" style="rounded=1;fontFamily=Helvetica;" vertex="1" parent="1">
+  <mxGeometry x="100" y="100" width="190" height="100" as="geometry"/>
+</mxCell>
+<mxCell id="t" value="Tgt" style="rounded=1;fontFamily=Helvetica;" vertex="1" parent="1">
+  <mxGeometry x="400" y="100" width="190" height="100" as="geometry"/>
+</mxCell>
+<mxCell id="e1" value="Missing backup" style="edgeStyle=orthogonalEdgeStyle;fontFamily=Helvetica;" edge="1" source="s" target="t" parent="1">
+  <mxGeometry relative="1" as="geometry"/>
+</mxCell>
+</root></mxGraphModel></diagram></mxfile>"""
+        result = self._validate_drawio(xml)
+        label_warnings = [w for w in result["warnings"] if "backup" in w.lower() or "label" in w.lower()]
+        assert len(label_warnings) >= 1, f"Expected backup label warning, got: {result['warnings']}"
+
+    def test_validator_catches_child_outside_bounds(self):
+        """Validator should warn when child extends outside parent bounds."""
+        xml = """<?xml version="1.0" encoding="UTF-8"?>
+<mxfile><diagram name="test"><mxGraphModel><root>
+<mxCell id="0"/><mxCell id="1" parent="0"/>
+<mxCell id="box" value="Box" style="rounded=1;container=1;fontFamily=Helvetica;" vertex="1" parent="1">
+  <mxGeometry x="50" y="50" width="200" height="150" as="geometry"/>
+</mxCell>
+<mxCell id="child" value="Overflows" style="rounded=1;fontFamily=Helvetica;" vertex="1" parent="box">
+  <mxGeometry x="10" y="10" width="250" height="100" as="geometry"/>
+</mxCell>
+</root></mxGraphModel></diagram></mxfile>"""
+        result = self._validate_drawio(xml)
+        bounds_warnings = [w for w in result["warnings"] if "outside" in w.lower() or "bounds" in w.lower()]
+        assert len(bounds_warnings) >= 1, f"Expected bounds warning, got: {result['warnings']}"
+
+    def test_minimal_fixture_passes_validation(self):
+        """The updated minimal-drawio.drawio fixture should pass validation."""
+        sys.path.insert(0, str(TOOLS_DIR))
+        mod = importlib.import_module("validate-diagram")
+        fixture = REGRESSION_DIR / "minimal-drawio.drawio"
+        if fixture.exists():
+            result = mod.validate_drawio(fixture)
+            assert result["valid"], f"Fixture should pass, errors: {result['errors']}"

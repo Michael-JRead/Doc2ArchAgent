@@ -291,6 +291,9 @@ patterns/<type>/<category>/<pattern-id>/diagrams/
 | detail | Optional: container scope for component diagrams |
 | format | `.md` (Mermaid), `.puml`, `.drawio`, `.dsl`, `.d2` |
 
+### PlantUML Security Overlay Rules
+When generating security overlay `.puml` diagrams: ALL colors must use hex codes (`#2e7d32`), never named colors (`green`) — named colors cause `No such color` errors in C4 tag macros. Escape all `/` in protocol strings as `~/~/` to prevent Creole italic rendering. Use `$lineStyle=DashedLine()` (macro), not `$lineStyle="dashed"` (string). Trust zone tag names use underscores: `semi_trusted` not `semi-trusted`.
+
 ### _index.yaml
 Each `diagrams/` directory contains `_index.yaml` cataloging all generated and custom diagrams. The `@doc-writer` agent reads this to discover diagrams without globbing. Schema: `diagram-index.schema.json`.
 
@@ -323,6 +326,9 @@ Run validation: `python tools/validate.py <system.yaml> [networks.yaml] [--secur
 
 ### authn_mechanism
 `none`, `api_key`, `basic`, `oauth2`, `oidc`, `saml`, `mtls`, `certificate`, `jwt`, `mfa`, `password`, `custom`
+
+### authz_model
+`none`, `rbac`, `abac`, `acl`, `pbac`, `rebac`, `custom`
 
 ### data_classification
 `public`, `internal`, `confidential`, `restricted`

@@ -254,6 +254,7 @@ PASS 2 — SEMANTIC VALIDATION
 - tls_enabled (required, boolean)
 - authn_mechanism (required)
 - authz_required (required, boolean)
+- authz_model (optional, enum: none/rbac/abac/acl/pbac/rebac/custom)
 
 **networks.yaml — zones:**
 - id (required, kebab-case, unique within zones)

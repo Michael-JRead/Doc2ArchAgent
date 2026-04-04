@@ -507,12 +507,168 @@ Apply confidence tag instead of type tag. UNRESOLVED nodes get `[NEEDS REVIEW]` 
 
 ## SECURITY OVERLAY
 
-When rendering from `layout-plan-security.yaml`:
+When rendering from `layout-plan-security.yaml`, use this complete template. The security overlay builds on the standard deployment diagram but adds TLS status on edges, trust boundary styling, auth warnings on nodes, and a security-specific legend.
+
+### COLOR RULES — CRITICAL
+
+**ALL colors MUST use hex codes (`#2e7d32`), NEVER color names (`green`, `red`, `grey`).** PlantUML C4 `AddElementTag`/`AddRelTag` do NOT accept named colors — they cause `No such color` errors.
+
+### Security Element Tags
+
+Include these **in addition to** the standard element type tags (person, container, etc.):
+
 ```
-AddRelTag("encrypted", $lineColor="#2e7d32")
-AddRelTag("unencrypted", $lineColor="#c62828")
-AddRelTag("tls_unknown", $lineColor="#9e9e9e")
+' --- Standard element tags (always include the ones you use) ---
+AddElementTag("person", $bgColor="#08427b", $fontColor="#ffffff", $borderColor="#052e56")
+AddElementTag("container", $bgColor="#438DD5", $fontColor="#ffffff", $borderColor="#2E6295")
+AddElementTag("component", $bgColor="#85BBF0", $fontColor="#000000", $borderColor="#5A9BD5")
+AddElementTag("external", $bgColor="#999999", $fontColor="#ffffff", $borderColor="#666666")
+AddElementTag("infra", $bgColor="#ff8f00", $fontColor="#ffffff", $borderColor="#e65100")
+
+' --- Trust zone boundary tags (for Deployment_Node boundaries) ---
+AddElementTag("trusted", $bgColor="#2e7d32", $fontColor="#ffffff", $borderColor="#1b5e20")
+AddElementTag("semi_trusted", $bgColor="#f9a825", $fontColor="#000000", $borderColor="#f57f17")
+AddElementTag("untrusted", $bgColor="#c62828", $fontColor="#ffffff", $borderColor="#b71c1c")
+
+' --- Security-specific node tags (authn + authz) ---
+AddElementTag("no_auth", $bgColor="#c62828", $fontColor="#ffffff", $borderColor="#b71c1c")
+AddElementTag("weak_auth", $bgColor="#f9a825", $fontColor="#000000", $borderColor="#f57f17")
+AddElementTag("strong_auth", $bgColor="#2e7d32", $fontColor="#ffffff", $borderColor="#1b5e20")
+AddElementTag("no_authz", $bgColor="#e65100", $fontColor="#ffffff", $borderColor="#bf360c")
+AddElementTag("has_authz", $bgColor="#1565c0", $fontColor="#ffffff", $borderColor="#0d47a1")
+
+' --- TLS status edge tags ---
+AddRelTag("encrypted", $textColor="#2e7d32", $lineColor="#2e7d32")
+AddRelTag("unencrypted", $textColor="#c62828", $lineColor="#c62828", $lineStyle=BoldLine())
+AddRelTag("tls_unknown", $textColor="#9e9e9e", $lineColor="#9e9e9e", $lineStyle=DashedLine())
+
+' --- Standard flow tags (keep for non-security edges if needed) ---
+AddRelTag("sync", $textColor="#333333", $lineColor="#333333")
+AddRelTag("async", $textColor="#666666", $lineColor="#666666", $lineStyle=DashedLine())
 ```
+
+### Security Node Labels
+
+When the layout plan node has security annotations:
+- `authn_mechanism: none` → append `\\n[NO AUTHN]` to the description (NOT the label)
+- `authn_mechanism: basic` or `password` → append `\\n[WEAK AUTHN]` to description
+- `authz_model: none` or missing when `authz_required: false` → append `\\n[NO AUTHZ]` to description
+- `authz_model` present → append to description: `\\n[RBAC]` or `\\n[ABAC]` etc. (uppercase model name)
+- Combined: `\\n[NO AUTHN][NO AUTHZ]` or `\\n[OAuth2][RBAC]` — keep on one line
+- STRIDE badges → append to description: `\\n[S][T][R]` (each letter for applicable STRIDE category)
+- Use `\\n` for newlines in descriptions — never use bare newlines or Creole `\n`
+
+**CRITICAL:** Escape Creole special characters in ALL security annotations:
+- `//` → `~/~/` (prevents italic)
+- `**` → `~*~*` (prevents bold)
+- `__` → `~_~_` (prevents underline)
+
+### Security Edge Labels
+
+Build the technology string from security data:
+```
+<protocol> :<port> ~/~/ TLS <version> ~/~/ <authn> ~/~/ <authz>
+```
+
+Examples:
+- `"HTTPS :443 ~/~/ TLS 1.3 ~/~/ OAuth2 ~/~/ RBAC"` (fully secured)
+- `"HTTPS :443 ~/~/ TLS 1.3 ~/~/ OAuth2 ~/~/ NO AUTHZ"` (authn but no authz — elevation of privilege risk)
+- `"HTTP :80 ~/~/ NO TLS ~/~/ None ~/~/ None"` (insecure — use `$tags="unencrypted"`)
+- `"JDBC :5432 ~/~/ TLS 1.2 ~/~/ mTLS ~/~/ ACL"` (database connection)
+
+Edge tag selection:
+- `tls_enabled: true` → `$tags="encrypted"`
+- `tls_enabled: false` → `$tags="unencrypted"`
+- TLS status unknown → `$tags="tls_unknown"`
+
+If the edge also has `data_classification`, append it to the label: `"HTTPS :443 ~/~/ TLS 1.3 [RESTRICTED]"`
+
+### Security Edge Warnings
+
+When the layout plan edge has a `warnings` array, render as comments above the `Rel` line:
+```
+' WARNING: zone_crossing, no_authn
+Rel_R(api_tier, external_svc, "Calls API", "HTTP :80 ~/~/ NO TLS ~/~/ None [RESTRICTED]", $tags="unencrypted")
+```
+
+### Security Legend
+
+The security overlay legend MUST include TLS status entries. Add these to the standard legend section:
+```
+' Security legend is handled by SHOW_LEGEND() via the tag definitions above.
+' The tags "encrypted", "unencrypted", "tls_unknown" will appear automatically.
+' Trust zone tags "trusted", "semi_trusted", "untrusted" appear from Deployment_Node usage.
+```
+
+### Complete Security Overlay Example
+
+```plantuml
+@startuml
+' Payment Platform — Security Overlay (Deployment View)
+' Generated: 2026-03-31T12:00:00Z
+' Source: architecture/payment-platform/diagrams/layout-plan-security.yaml
+
+!include <C4/C4_Deployment>
+
+skinparam wrapWidth 250
+skinparam linetype polyline
+
+LAYOUT_LANDSCAPE()
+HIDE_STEREOTYPE()
+
+' --- Element tags ---
+AddElementTag("container", $bgColor="#438DD5", $fontColor="#ffffff", $borderColor="#2E6295")
+AddElementTag("external", $bgColor="#999999", $fontColor="#ffffff", $borderColor="#666666")
+AddElementTag("no_auth", $bgColor="#c62828", $fontColor="#ffffff", $borderColor="#b71c1c")
+AddElementTag("no_authz", $bgColor="#e65100", $fontColor="#ffffff", $borderColor="#bf360c")
+
+' --- Trust zone tags ---
+AddElementTag("trusted", $bgColor="#2e7d32", $fontColor="#ffffff", $borderColor="#1b5e20")
+AddElementTag("semi_trusted", $bgColor="#f9a825", $fontColor="#000000", $borderColor="#f57f17")
+AddElementTag("untrusted", $bgColor="#c62828", $fontColor="#ffffff", $borderColor="#b71c1c")
+
+' --- TLS edge tags ---
+AddRelTag("encrypted", $textColor="#2e7d32", $lineColor="#2e7d32")
+AddRelTag("unencrypted", $textColor="#c62828", $lineColor="#c62828", $lineStyle=BoldLine())
+AddRelTag("tls_unknown", $textColor="#9e9e9e", $lineColor="#9e9e9e", $lineStyle=DashedLine())
+
+' --- Trust boundaries (Deployment_Node as zone containers) ---
+Deployment_Node(dmz_zone, "DMZ", "network zone", "Internet-facing", $tags="semi_trusted") {
+    Container(api_tier, "API Tier", "Kong Gateway", "OAuth2 ~/~/ RBAC\\n[OAuth2][RBAC]", $tags="container")
+}
+
+Deployment_Node(app_zone, "Application Tier", "network zone", "Internal only", $tags="trusted") {
+    Container(app_core, "Application Core", "Java ~/~/ Spring Boot", "mTLS ~/~/ cert auth\\n[mTLS][RBAC]", $tags="container")
+    ContainerDb(data_tier, "Data Tier", "PostgreSQL 15", "mTLS ~/~/ AES-256 at rest\\n[cert][ACL]", $tags="container")
+}
+
+System_Ext(card_network, "Visa ~/~/ Mastercard", "External card network\\n[SEMI-TRUSTED]", $tags="external")
+
+' --- Security-annotated relationships (authn + authz in technology string) ---
+Rel_R(api_tier, app_core, "Routes requests", "HTTPS :8443 ~/~/ TLS 1.3 ~/~/ mTLS ~/~/ RBAC", $tags="encrypted")
+Rel_R(app_core, data_tier, "Reads~/~/writes", "JDBC :5432 ~/~/ TLS 1.2 ~/~/ cert ~/~/ ACL [RESTRICTED]", $tags="encrypted")
+' WARNING: zone_crossing
+Rel_R(app_core, card_network, "Authorizes", "ISO 8583 :443 ~/~/ TLS 1.2 ~/~/ mTLS ~/~/ RBAC [RESTRICTED]", $tags="encrypted")
+
+SHOW_LEGEND()
+@enduml
+```
+
+### Security Overlay Pitfalls (Common Agent Errors)
+
+| Error | Cause | Fix |
+|---|---|---|
+| `No such color` | Using `$lineColor="green"` or `$bgColor="red"` | Always use hex: `$lineColor="#2e7d32"` |
+| `No such color` | Using `$lineColor=red` without quotes | Always quote: `$lineColor="#c62828"` |
+| Garbled description text | Unescaped `//` in `"HTTPS://..."` | Use `~/~/`: `"HTTPS:~/~/..."` |
+| Bold/italic in labels | `**CRITICAL**` or `//note//` in text | Escape: `~*~*CRITICAL~*~*` |
+| `Syntax Error?` on boundary | Empty trust zone with no children | Omit empty zones with comment |
+| `Syntax Error?` on Rel | Connecting two Deployment_Node boundaries | Always connect leaf Container/Component nodes inside zones |
+| Missing legend colors | Tags defined but `SHOW_LEGEND()` missing | Always end with `SHOW_LEGEND()` before `@enduml` |
+| `$lineStyle` error | Using `$lineStyle="dashed"` (string) | Use macro: `$lineStyle=DashedLine()` or `$lineStyle=BoldLine()` |
+| Description too long | STRIDE + auth + warnings in description | Keep description under 60 chars; use `\\n` for line breaks |
+| `$technology not found` | Using `$technology` in Container macro | Use `$techn` (abbreviated parameter name) |
+| Trust zone not colored | Tag name mismatch (`semi-trusted` vs `semi_trusted`) | Always use underscore: `semi_trusted` |
 
 ---
 
@@ -648,3 +804,8 @@ SHOW_LEGEND()
 | Sequence boundary `{ }` fails | Use `Boundary_End()` for C4_Sequence diagrams |
 | Space in `$tags ="x"` | No space allowed: `$tags="x"` |
 | Comma in tag name | Don't use commas in tag names — breaks kwargs |
+| `No such color` in security overlay | Never use named colors (`green`, `red`); always use hex (`#2e7d32`, `#c62828`) |
+| `$lineStyle="dashed"` error | Use macro form: `$lineStyle=DashedLine()`, not a string |
+| Trust zone not colored | Tag name must use underscore: `semi_trusted` not `semi-trusted` |
+| Garbled security description | Escape `//` as `~/~/` in protocol strings like `HTTPS://` or `TLS 1.2 / mTLS` |
+| `BoldLine()` not found | Requires PlantUML >= 1.2021.1; fallback: omit `$lineStyle` |

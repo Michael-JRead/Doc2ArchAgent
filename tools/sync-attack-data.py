@@ -289,7 +289,7 @@ def main():
     print(f"ATT&CK version: {version}", file=sys.stderr)
 
     # Fetch and parse
-    bundle = fetch_attack_bundle(args.version)
+    bundle = fetch_attack_bundle(version)
     parsed = parse_stix_bundle(bundle)
 
     print(f"Parsed: {len(parsed['techniques'])} techniques, "

@@ -310,6 +310,11 @@
                   ]
                 },
                 "authz_required": { "type": "boolean" },
+                "authz_model": {
+                  "type": "string",
+                  "enum": ["none", "rbac", "abac", "acl", "pbac", "rebac", "custom"],
+                  "description": "Authorization model enforced on this listener. Required when authz_required is true."
+                },
                 "rate_limiting_enabled": {
                   "type": "boolean",
                   "description": "Whether rate limiting is active on this listener. OWASP API #4."

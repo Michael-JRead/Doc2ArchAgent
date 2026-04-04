@@ -32,7 +32,9 @@ def _parse_agent_frontmatter(agent_path: Path) -> dict:
     if not text.startswith("---"):
         return {}
 
-    end = text.index("---", 3)
+    end = text.find("---", 3)
+    if end == -1:
+        return {}
     frontmatter_text = text[3:end].strip()
 
     # Simple YAML parsing for the fields we need
@@ -239,6 +241,143 @@ def cmd_diagram(args):
     sys.exit(result.returncode)
 
 
+def cmd_ingest(args):
+    """Delegate to the appropriate ingest-*.py script."""
+    import subprocess
+
+    script_map = {
+        "openapi": "ingest-openapi.py",
+        "terraform": "ingest-terraform.py",
+        "kubernetes": "ingest-kubernetes.py",
+        "structurizr": "ingest-structurizr.py",
+    }
+    script = PROJECT_ROOT / "tools" / script_map[args.format]
+    if not script.exists():
+        print(f"Error: {script} not found", file=sys.stderr)
+        sys.exit(1)
+
+    cmd = [sys.executable, str(script), str(args.path)]
+    if args.output:
+        cmd.extend(["--output", str(args.output)])
+    cmd.extend(["--format", args.output_format])
+    result = subprocess.run(cmd, capture_output=False)
+    sys.exit(result.returncode)
+
+
+def cmd_validate_patterns(args):
+    """Delegate to validate-patterns.py."""
+    import subprocess
+
+    script = PROJECT_ROOT / "tools" / "validate-patterns.py"
+    if not script.exists():
+        print(f"Error: {script} not found", file=sys.stderr)
+        sys.exit(1)
+
+    cmd = [sys.executable, str(script), str(args.path)]
+    result = subprocess.run(cmd, capture_output=False)
+    sys.exit(result.returncode)
+
+
+def cmd_validate_provenance(args):
+    """Delegate to validate-provenance.py."""
+    import subprocess
+
+    script = PROJECT_ROOT / "tools" / "validate-provenance.py"
+    if not script.exists():
+        print(f"Error: {script} not found", file=sys.stderr)
+        sys.exit(1)
+
+    cmd = [sys.executable, str(script), str(args.provenance)]
+    if args.sources:
+        cmd.append(str(args.sources))
+    if args.system:
+        cmd.append(str(args.system))
+    result = subprocess.run(cmd, capture_output=False)
+    sys.exit(result.returncode)
+
+
+def cmd_verify_claims(args):
+    """Delegate to verify-claims.py."""
+    import subprocess
+
+    script = PROJECT_ROOT / "tools" / "verify-claims.py"
+    if not script.exists():
+        print(f"Error: {script} not found", file=sys.stderr)
+        sys.exit(1)
+
+    cmd = [sys.executable, str(script), str(args.system),
+           "--sources", str(args.sources)]
+    if args.provenance:
+        cmd.extend(["--provenance", str(args.provenance)])
+    cmd.extend(["--format", args.format])
+    result = subprocess.run(cmd, capture_output=False)
+    sys.exit(result.returncode)
+
+
+def cmd_sync_attack_data(args):
+    """Delegate to sync-attack-data.py."""
+    import subprocess
+
+    script = PROJECT_ROOT / "tools" / "sync-attack-data.py"
+    if not script.exists():
+        print(f"Error: {script} not found", file=sys.stderr)
+        sys.exit(1)
+
+    cmd = [sys.executable, str(script)]
+    if args.output:
+        cmd.extend(["--output", str(args.output)])
+    if args.version:
+        cmd.extend(["--version", args.version])
+    result = subprocess.run(cmd, capture_output=False)
+    sys.exit(result.returncode)
+
+
+def cmd_migrate_pattern(args):
+    """Delegate to migrate-pattern.py."""
+    import subprocess
+
+    script = PROJECT_ROOT / "tools" / "migrate-pattern.py"
+    if not script.exists():
+        print(f"Error: {script} not found", file=sys.stderr)
+        sys.exit(1)
+
+    cmd = [sys.executable, str(script), args.pattern_id,
+           "--bump", args.bump]
+    if args.description:
+        cmd.extend(["--description", args.description])
+    result = subprocess.run(cmd, capture_output=False)
+    sys.exit(result.returncode)
+
+
+def cmd_parse_diagram(args):
+    """Delegate to parse-diagram-file.py."""
+    import subprocess
+
+    script = PROJECT_ROOT / "tools" / "parse-diagram-file.py"
+    if not script.exists():
+        print(f"Error: {script} not found", file=sys.stderr)
+        sys.exit(1)
+
+    cmd = [sys.executable, str(script), str(args.file),
+           "--format", args.format]
+    result = subprocess.run(cmd, capture_output=False)
+    sys.exit(result.returncode)
+
+
+def cmd_detect_tools(args):
+    """Delegate to detect-tools.py."""
+    import subprocess
+
+    script = PROJECT_ROOT / "tools" / "detect-tools.py"
+    if not script.exists():
+        print(f"Error: {script} not found", file=sys.stderr)
+        sys.exit(1)
+
+    cmd = [sys.executable, str(script)]
+    result = subprocess.run(cmd, capture_output=False)
+    sys.exit(result.returncode)
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Unified bridge for Copilot agents to invoke deterministic tools.",
@@ -304,6 +443,68 @@ def main():
                             help="Diagram file or directory to validate")
     p_diag_val.add_argument("--format", choices=["text", "json"], default="text")
 
+    # ingest
+    p_ingest = subparsers.add_parser("ingest",
+                                      help="Ingest structured source files")
+    p_ingest.add_argument("format", choices=["openapi", "terraform", "kubernetes", "structurizr"],
+                          help="Source format to ingest")
+    p_ingest.add_argument("path", type=Path, help="File or directory to ingest")
+    p_ingest.add_argument("--output", type=Path, default=None,
+                          help="Output directory")
+    p_ingest.add_argument("--format-out", choices=["json", "yaml"], default="json",
+                          dest="output_format")
+
+    # validate-patterns
+    p_valp = subparsers.add_parser("validate-patterns",
+                                    help="Validate pattern files")
+    p_valp.add_argument("path", type=Path, help="Patterns directory")
+
+    # validate-provenance
+    p_prov = subparsers.add_parser("validate-provenance",
+                                    help="Validate provenance tracking")
+    p_prov.add_argument("provenance", type=Path, help="provenance.yaml path")
+    p_prov.add_argument("--sources", type=Path, default=None,
+                        help="Sources directory")
+    p_prov.add_argument("--system", type=Path, default=None,
+                        help="system.yaml path")
+
+    # verify-claims
+    p_verify = subparsers.add_parser("verify-claims",
+                                      help="Verify extracted claims against sources")
+    p_verify.add_argument("system", type=Path, help="system.yaml path")
+    p_verify.add_argument("--sources", type=Path, required=True,
+                          help="Sources directory")
+    p_verify.add_argument("--provenance", type=Path, default=None,
+                          help="provenance.yaml path")
+    p_verify.add_argument("--format", choices=["json", "text"], default="text")
+
+    # sync-attack-data
+    p_sync = subparsers.add_parser("sync-attack-data",
+                                    help="Sync MITRE ATT&CK technique data")
+    p_sync.add_argument("--output", type=Path, default=None,
+                        help="Output file path")
+    p_sync.add_argument("--version", default=None,
+                        help="ATT&CK version to sync")
+
+    # migrate-pattern
+    p_migrate = subparsers.add_parser("migrate-pattern",
+                                       help="Migrate pattern to new version")
+    p_migrate.add_argument("pattern_id", help="Pattern ID to migrate")
+    p_migrate.add_argument("--bump", choices=["patch", "minor", "major"],
+                           required=True)
+    p_migrate.add_argument("--description", default="",
+                           help="Change description")
+
+    # parse-diagram
+    p_parse = subparsers.add_parser("parse-diagram",
+                                     help="Parse diagram files to JSON")
+    p_parse.add_argument("file", type=Path, help="Diagram file to parse")
+    p_parse.add_argument("--format", choices=["json", "yaml"], default="json")
+
+    # detect-tools
+    p_detect = subparsers.add_parser("detect-tools",
+                                      help="Detect available conversion tools")
+
     args = parser.parse_args()
 
     commands = {
@@ -313,6 +514,14 @@ def main():
         "compose": cmd_compose,
         "check-handoff": cmd_check_handoff,
         "diagram": cmd_diagram,
+        "ingest": cmd_ingest,
+        "validate-patterns": cmd_validate_patterns,
+        "validate-provenance": cmd_validate_provenance,
+        "verify-claims": cmd_verify_claims,
+        "sync-attack-data": cmd_sync_attack_data,
+        "migrate-pattern": cmd_migrate_pattern,
+        "parse-diagram": cmd_parse_diagram,
+        "detect-tools": cmd_detect_tools,
     }
 
     commands[args.command](args)

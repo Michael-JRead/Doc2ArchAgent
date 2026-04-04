@@ -39,6 +39,7 @@ component_security:
         tls_termination_point: self
         authn_mechanism: oauth2
         authz_required: true
+        authz_model: rbac
         rate_limiting_enabled: true
         rate_limit_rps: 1000
         throttle_by: tenant
@@ -76,6 +77,7 @@ component_security:
         tls_termination_point: self
         authn_mechanism: certificate
         authz_required: true
+        authz_model: acl
         rate_limiting_enabled: false
         exposure: internal
         admin_interface: false

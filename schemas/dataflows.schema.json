@@ -90,6 +90,11 @@
             ],
             "description": "Authentication mechanism for this flow."
           },
+          "authz_model": {
+            "type": "string",
+            "enum": ["none", "rbac", "abac", "acl", "pbac", "rebac", "custom"],
+            "description": "Authorization model enforced on this flow."
+          },
           "direction": {
             "type": "string",
             "enum": ["ingress", "egress", "bidirectional"],

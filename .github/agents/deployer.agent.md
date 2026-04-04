@@ -289,3 +289,19 @@ Context:
 
 "Generate diagrams"
   -> Hand off to @diagram-generator with deployment context.
+
+"Compose deployment"
+  -> Run the deployment composition tool:
+  ```bash
+  python tools/compose.py <manifest.yaml> --validate
+  ```
+  Or via the agent bridge:
+  ```bash
+  python tools/agent-bridge.py compose <manifest.yaml> --validate
+  ```
+  The tool reads a `manifest.yaml` that declares which system.yaml, networks.yaml, and deployment.yaml files to compose into a single deployment. It validates cross-references and writes the composed output to `deployments/<id>/`.
+
+  To preview without writing files:
+  ```bash
+  python tools/compose.py <manifest.yaml> --validate --dry-run
+  ```

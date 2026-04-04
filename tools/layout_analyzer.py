@@ -166,8 +166,12 @@ def extract_text_region(page_image, region: DetectedRegion) -> str:
         page_image = Image.open(page_image)
 
     if len(region.bbox) >= 4:
-        x1, y1, x2, y2 = [int(v) for v in region.bbox]
-        cropped = page_image.crop((x1, y1, x2, y2))
+        try:
+            x1, y1, x2, y2 = [int(v) for v in region.bbox[:4]]
+        except (ValueError, TypeError):
+            cropped = page_image
+        else:
+            cropped = page_image.crop((x1, y1, x2, y2))
     else:
         cropped = page_image
 
@@ -192,8 +196,12 @@ def extract_table_region(page_image, region: DetectedRegion) -> dict:
         page_image = Image.open(page_image)
 
     if len(region.bbox) >= 4:
-        x1, y1, x2, y2 = [int(v) for v in region.bbox]
-        cropped = page_image.crop((x1, y1, x2, y2))
+        try:
+            x1, y1, x2, y2 = [int(v) for v in region.bbox[:4]]
+        except (ValueError, TypeError):
+            cropped = page_image
+        else:
+            cropped = page_image.crop((x1, y1, x2, y2))
     else:
         cropped = page_image
 
@@ -499,19 +507,22 @@ def _analyze_image(file_path: Path, use_layout: bool) -> tuple[list[PageAnalysis
         return [PageAnalysis(page_index=0, regions=[])], ""
 
     img = Image.open(str(file_path))
-    regions = []
-    if use_layout:
-        regions = detect_layout(img, page_index=0)
-
-    # OCR for text
-    text = ""
     try:
-        import pytesseract
-        text = pytesseract.image_to_string(img)
-    except Exception:
-        pass
+        regions = []
+        if use_layout:
+            regions = detect_layout(img, page_index=0)
 
-    page = PageAnalysis(page_index=0, regions=regions, full_text=text)
+        # OCR for text
+        text = ""
+        try:
+            import pytesseract
+            text = pytesseract.image_to_string(img)
+        except Exception:
+            pass
+
+        page = PageAnalysis(page_index=0, regions=regions, full_text=text)
+    finally:
+        img.close()
 
     for region in regions:
         if region.region_type == RegionType.TABLE:
