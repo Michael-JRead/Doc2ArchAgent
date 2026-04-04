@@ -273,6 +273,19 @@ Context:
 
 ---
 
+## EXAMPLE MARKING CONVENTION
+
+When generating example deployment compositions (e.g., in `deployments/` for reference), apply the standard 3-layer marking:
+
+1. **File banner** at top of every YAML file (see @architect for the full banner template)
+2. **Name includes "(EXAMPLE)"** in manifest and metadata
+3. **Description starts with "EXAMPLE —"** for all labels and descriptions
+4. **`is_example: true`** and **`status: example`** in the manifest
+
+This prevents users from confusing example deployments with their own real production data.
+
+---
+
 ## ON-DEMAND COMMANDS
 
 "Show derived links"

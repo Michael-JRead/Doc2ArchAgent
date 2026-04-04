@@ -33,8 +33,8 @@ import yaml
 
 KEBAB_CASE_RE = re.compile(r'^[a-z][a-z0-9]*(-[a-z0-9]+)*$')
 
-VALID_STATUSES = {'proposed', 'active', 'deprecated', 'decommissioned'}
-VALID_DEPLOYMENT_STATUSES = {'proposed', 'approved', 'active', 'deprecated'}
+VALID_STATUSES = {'proposed', 'active', 'deprecated', 'decommissioned', 'example'}
+VALID_DEPLOYMENT_STATUSES = {'proposed', 'approved', 'active', 'deprecated', 'example'}
 VALID_TRUST_LEVELS = {'trusted', 'semi_trusted', 'untrusted'}
 
 # SARIF rule definitions — each validation check maps to a rule ID
@@ -217,6 +217,25 @@ def validate(system_path: str, networks_path: str | None = None,
                 networks = yaml.safe_load(f) or {}
         except Exception as e:
             add_warning(f"Cannot load networks YAML: {e}", file=networks_path)
+
+    # --- Example data detection ---
+    metadata = system.get('metadata', {}) if isinstance(system, dict) else {}
+    meta_name = metadata.get('name', '') if isinstance(metadata, dict) else ''
+    meta_status = metadata.get('status', '') if isinstance(metadata, dict) else ''
+    is_example_name = '(EXAMPLE)' in meta_name or meta_name.startswith('EXAMPLE')
+    is_example_file = raw_content.lstrip().startswith('# =====') and 'EXAMPLE FILE' in raw_content[:300]
+
+    if is_example_name and meta_status == 'active':
+        add_warning(
+            f"Name contains '(EXAMPLE)' but status is 'active' — "
+            f"example files should use status: example",
+            rule_id="ARCH006")
+
+    if is_example_file and meta_status == 'active':
+        add_warning(
+            f"File has EXAMPLE banner but status is 'active' — "
+            f"example files should use status: example",
+            rule_id="ARCH006")
 
     # --- Build lookup tables ---
     contexts = {c['id']: c for c in system.get('contexts', []) if isinstance(c, dict) and 'id' in c}

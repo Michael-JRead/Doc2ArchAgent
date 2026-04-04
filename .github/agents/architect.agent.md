@@ -334,8 +334,39 @@ After finishing each type, ask: "Any more [type]? Or shall we move on?"
     authz_required: true
     authz_model: rbac
 - If a field is optional, say so. Never silently omit required fields.
-- status (container/system): proposed | active | deprecated | decommissioned
-- status (deployment): proposed | approved | active | deprecated
+- status (container/system): proposed | active | deprecated | decommissioned | example
+- status (deployment): proposed | approved | active | deprecated | example
+
+---
+
+## EXAMPLE MARKING CONVENTION
+
+When generating example or reference YAML files (e.g., in `examples/`, `patterns/`, or example deployments), always apply this 3-layer marking:
+
+**Layer 1 — File banner** (first lines of the file):
+```yaml
+# ===========================================================================
+# EXAMPLE FILE — Included as a reference implementation.
+# This is NOT a real production architecture. Modify or replace for your use.
+# ===========================================================================
+```
+
+**Layer 2 — Name includes "(EXAMPLE)":**
+```yaml
+metadata:
+  name: "My System Name (EXAMPLE)"
+```
+
+**Layer 3 — Description starts with "EXAMPLE —":**
+```yaml
+  description: "EXAMPLE — Description of what this system does..."
+```
+
+**For deployment manifests**, also add `is_example: true` and `status: example`.
+
+**For non-metadata files** (networks.yaml, dataflows), apply the banner and prefix any name/label/description fields with "EXAMPLE —".
+
+This ensures users never confuse reference implementations with their own real architecture data.
 
 ---
 

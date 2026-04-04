@@ -14,7 +14,7 @@
         "owner": { "type": "string", "minLength": 1 },
         "status": {
           "type": "string",
-          "enum": ["proposed", "active", "deprecated", "decommissioned"]
+          "enum": ["proposed", "active", "deprecated", "decommissioned", "example"]
         },
         "compliance_frameworks": {
           "type": "array",
@@ -118,7 +118,7 @@
           "description": { "type": "string" },
           "status": {
             "type": "string",
-            "enum": ["proposed", "active", "deprecated", "decommissioned"]
+            "enum": ["proposed", "active", "deprecated", "decommissioned", "example"]
           },
           "out_of_scope": { "type": "boolean", "default": false },
           "owner": {

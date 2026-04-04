@@ -1,4 +1,8 @@
-<!-- Payment Processing Platform — Container Diagram -->
+<!-- =========================================================================== -->
+<!-- EXAMPLE FILE — Included as a reference implementation.                      -->
+<!-- This is NOT a real production architecture. Modify or replace for your use. -->
+<!-- =========================================================================== -->
+<!-- Payment Processing Platform (EXAMPLE) — Container Diagram -->
 <!-- Generated: 2026-04-03T00:00:00Z -->
 <!-- Source: examples/payment-platform/diagrams/layout-plan.yaml -->
 

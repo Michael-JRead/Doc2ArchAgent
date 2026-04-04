@@ -4,4 +4,7 @@ catalog:
   tree:
     - name: Examples
       key: examples
-      deployments: []
+      deployments:
+        - id: mq-prod-us-east
+          name: MQ Production US East (EXAMPLE)
+          description: EXAMPLE — IBM MQ messaging on standard 3-tier network

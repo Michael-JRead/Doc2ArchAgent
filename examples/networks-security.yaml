@@ -1,3 +1,7 @@
+# ===========================================================================
+# EXAMPLE FILE — Included as a reference implementation.
+# This is NOT a real production architecture. Modify or replace for your use.
+# ===========================================================================
 # Security enrichment overlay for networks.yaml
 # Linked by zone_id to networks.yaml.
 # Consumed by: threat-rules.py, security-reviewer agent.

@@ -1,3 +1,7 @@
+# ===========================================================================
+# EXAMPLE FILE — Included as a reference implementation.
+# This is NOT a real production architecture. Modify or replace for your use.
+# ===========================================================================
 # Security enrichment overlay for system.yaml — Payment Processing Platform
 # Linked by component/listener/relationship IDs to system.yaml.
 # Consumed by: threat-rules.py, security-reviewer agent, doc-writer agent.

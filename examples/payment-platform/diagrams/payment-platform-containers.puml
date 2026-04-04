@@ -1,0 +1,34 @@
+' ===========================================================================
+' EXAMPLE FILE — Included as a reference implementation.
+' This is NOT a real production architecture. Modify or replace for your use.
+' ===========================================================================
+' Payment Processing Platform (EXAMPLE) — Container Diagram
+' Generated: 2026-04-03T00:00:00Z
+' Source: examples/payment-platform/diagrams/layout-plan.yaml
+
+@startuml
+!include <C4/C4_Container>
+
+skinparam wrapWidth 250
+skinparam linetype polyline
+
+LAYOUT_LANDSCAPE()
+HIDE_STEREOTYPE()
+
+Person(customer, "Customer", "Bank customer")
+
+System_Boundary(payment_platform, "Payment Platform") {
+    Container(api_tier, "API Tier", "Kong Gateway", "Public-facing API gateway")
+    Container(app_core, "Application Core", "Java ~/~/ Spring Boot", "Business logic and processing")
+    ContainerDb(data_tier, "Data Tier", "PostgreSQL 15", "Transaction storage")
+}
+
+System_Ext(card_network, "Visa ~/~/ Mastercard", "External card processing network")
+
+Rel_R(customer, api_tier, "Makes payments", "HTTPS")
+Rel_R(api_tier, app_core, "Routes requests", "JSON ~/~/ HTTPS")
+Rel_R(app_core, data_tier, "Reads~/~/writes", "JDBC")
+Rel_R(app_core, card_network, "Submits transactions", "ISO 8583")
+
+SHOW_LEGEND()
+@enduml

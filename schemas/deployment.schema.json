@@ -18,7 +18,7 @@
         },
         "status": {
           "type": "string",
-          "enum": ["proposed", "approved", "active", "deprecated"]
+          "enum": ["proposed", "approved", "active", "deprecated", "example"]
         },
         "description": { "type": "string" },
         "region": { "type": "string" },

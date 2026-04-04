@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ===========================================================================
+  EXAMPLE FILE — Included as a reference implementation.
+  This is NOT a real production architecture. Modify or replace for your use.
+  ===========================================================================
+  Payment Processing Platform (EXAMPLE) — Container Diagram
+  Generated: 2026-04-03T00:00:00Z
+  Source: examples/payment-platform/diagrams/layout-plan.yaml
+-->
+<mxfile host="Arch2DocAgent" modified="2026-04-03T00:00:00Z" version="1.0">
+  <diagram id="containers" name="Payment Platform — Container View (EXAMPLE)">
+    <mxGraphModel dx="1422" dy="794" grid="1" gridSize="10" page="1" pageScale="1" pageWidth="1600" pageHeight="900" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- Title -->
+        <mxCell id="title" value="&lt;b&gt;Payment Platform — Container View (EXAMPLE)&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px;color:#666666&quot;&gt;Generated: 2026-04-03T00:00:00Z | Source: layout-plan.yaml&lt;/font&gt;"
+                style="text;html=1;align=left;verticalAlign=top;fontFamily=Helvetica;fontSize=16;fontColor=#333333;spacingLeft=10;overflow=hidden;"
+                vertex="1" parent="1">
+          <mxGeometry x="60" y="10" width="600" height="45" as="geometry" />
+        </mxCell>
+
+        <!-- Customer (Person) -->
+        <mxCell id="customer" value="&lt;b&gt;Customer&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;[Person]&lt;/font&gt;&lt;br&gt;&lt;br&gt;&lt;font style=&quot;font-size:11px&quot;&gt;Bank customer&lt;/font&gt;"
+                style="rounded=1;whiteSpace=wrap;html=1;overflow=hidden;clip=1;fillColor=#08427b;strokeColor=#052e56;fontColor=#ffffff;fontFamily=Helvetica;fontSize=12;arcSize=10;strokeWidth=2;verticalAlign=middle;spacing=8;spacingTop=4;"
+                vertex="1" parent="1">
+          <mxGeometry x="60" y="120" width="160" height="120" as="geometry" />
+        </mxCell>
+
+        <!-- Payment Platform Boundary -->
+        <mxCell id="boundary-pp" value="&lt;b&gt;Payment Platform&lt;/b&gt;"
+                style="rounded=1;whiteSpace=wrap;html=1;container=1;collapsible=0;fillColor=#ffffff;strokeColor=#666666;fontColor=#333333;fontFamily=Helvetica;fontSize=14;fontStyle=1;verticalAlign=top;spacingTop=12;spacingLeft=10;strokeWidth=2;"
+                vertex="1" parent="1">
+          <mxGeometry x="310" y="60" width="710" height="240" as="geometry" />
+        </mxCell>
+
+        <!-- API Tier (Container) -->
+        <mxCell id="api-tier" value="&lt;b&gt;API Tier&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;[Container: Kong Gateway]&lt;/font&gt;&lt;br&gt;&lt;br&gt;&lt;font style=&quot;font-size:11px&quot;&gt;Public-facing API gateway&lt;/font&gt;"
+                style="rounded=1;whiteSpace=wrap;html=1;overflow=hidden;clip=1;fillColor=#438DD5;strokeColor=#2E6295;fontColor=#ffffff;fontFamily=Helvetica;fontSize=12;arcSize=10;strokeWidth=2;verticalAlign=middle;spacing=8;spacingTop=4;"
+                vertex="1" parent="boundary-pp">
+          <mxGeometry x="30" y="70" width="190" height="100" as="geometry" />
+        </mxCell>
+
+        <!-- App Core (Container) -->
+        <mxCell id="app-core" value="&lt;b&gt;Application Core&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;[Container: Java / Spring Boot]&lt;/font&gt;&lt;br&gt;&lt;br&gt;&lt;font style=&quot;font-size:11px&quot;&gt;Business logic and processing&lt;/font&gt;"
+                style="rounded=1;whiteSpace=wrap;html=1;overflow=hidden;clip=1;fillColor=#438DD5;strokeColor=#2E6295;fontColor=#ffffff;fontFamily=Helvetica;fontSize=12;arcSize=10;strokeWidth=2;verticalAlign=middle;spacing=8;spacingTop=4;"
+                vertex="1" parent="boundary-pp">
+          <mxGeometry x="260" y="70" width="190" height="100" as="geometry" />
+        </mxCell>
+
+        <!-- Data Tier (Database) -->
+        <mxCell id="data-tier" value="&lt;b&gt;Data Tier&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;[Database: PostgreSQL 15]&lt;/font&gt;&lt;br&gt;&lt;br&gt;&lt;font style=&quot;font-size:11px&quot;&gt;Transaction storage&lt;/font&gt;"
+                style="shape=cylinder3;whiteSpace=wrap;html=1;overflow=hidden;clip=1;fillColor=#438DD5;strokeColor=#2E6295;fontColor=#ffffff;fontFamily=Helvetica;fontSize=12;boundedLbl=1;size=15;strokeWidth=2;spacing=8;"
+                vertex="1" parent="boundary-pp">
+          <mxGeometry x="490" y="70" width="190" height="100" as="geometry" />
+        </mxCell>
+
+        <!-- Card Network (External) -->
+        <mxCell id="card-network" value="&lt;b&gt;Visa / Mastercard&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;[External System]&lt;/font&gt;&lt;br&gt;&lt;br&gt;&lt;font style=&quot;font-size:11px&quot;&gt;External card processing network&lt;/font&gt;"
+                style="rounded=1;whiteSpace=wrap;html=1;overflow=hidden;clip=1;fillColor=#999999;strokeColor=#666666;fontColor=#ffffff;fontFamily=Helvetica;fontSize=12;arcSize=10;strokeWidth=2;verticalAlign=middle;spacing=8;spacingTop=4;"
+                vertex="1" parent="1">
+          <mxGeometry x="1120" y="120" width="200" height="120" as="geometry" />
+        </mxCell>
+
+        <!-- Edges -->
+        <mxCell id="e1" value="&lt;b&gt;Makes payments&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;HTTPS&lt;/font&gt;"
+                style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;endSize=8;strokeColor=#333333;strokeWidth=2;fontFamily=Helvetica;fontSize=11;fontColor=#333333;labelBackgroundColor=#ffffff;"
+                edge="1" parent="1" source="customer" target="api-tier">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e1-label" value="Makes payments (HTTPS)"
+                style="text;html=1;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=10;fontColor=#333333;labelBackgroundColor=#ffffff;overflow=hidden;"
+                vertex="1" parent="1">
+          <mxGeometry x="205" y="155" width="140" height="30" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e2" value="&lt;b&gt;Routes requests&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;JSON/HTTPS&lt;/font&gt;"
+                style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;endSize=8;strokeColor=#333333;strokeWidth=2;fontFamily=Helvetica;fontSize=11;fontColor=#333333;labelBackgroundColor=#ffffff;"
+                edge="1" parent="boundary-pp" source="api-tier" target="app-core">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e2-label" value="Routes requests (JSON/HTTPS)"
+                style="text;html=1;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=10;fontColor=#333333;labelBackgroundColor=#ffffff;overflow=hidden;"
+                vertex="1" parent="boundary-pp">
+          <mxGeometry x="135" y="40" width="180" height="20" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e3" value="&lt;b&gt;Reads/writes&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;JDBC&lt;/font&gt;"
+                style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;endSize=8;strokeColor=#333333;strokeWidth=2;fontFamily=Helvetica;fontSize=11;fontColor=#333333;labelBackgroundColor=#ffffff;"
+                edge="1" parent="boundary-pp" source="app-core" target="data-tier">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e3-label" value="Reads/writes (JDBC)"
+                style="text;html=1;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=10;fontColor=#333333;labelBackgroundColor=#ffffff;overflow=hidden;"
+                vertex="1" parent="boundary-pp">
+          <mxGeometry x="375" y="40" width="130" height="20" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e4" value="&lt;b&gt;Submits transactions&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;ISO 8583&lt;/font&gt;"
+                style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;endSize=8;strokeColor=#333333;strokeWidth=2;fontFamily=Helvetica;fontSize=11;fontColor=#333333;labelBackgroundColor=#ffffff;"
+                edge="1" parent="1" source="app-core" target="card-network">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e4-label" value="Submits transactions (ISO 8583)"
+                style="text;html=1;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=10;fontColor=#333333;labelBackgroundColor=#ffffff;overflow=hidden;"
+                vertex="1" parent="1">
+          <mxGeometry x="1025" y="155" width="180" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- Legend -->
+        <mxCell id="legend-box" value="&lt;b&gt;Legend&lt;/b&gt;"
+                style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#333333;strokeWidth=2;verticalAlign=top;align=center;fontFamily=Helvetica;fontSize=14;spacingTop=5;"
+                vertex="1" parent="1">
+          <mxGeometry x="60" y="350" width="260" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="leg-container" value="Container"
+                style="rounded=1;whiteSpace=wrap;html=1;fillColor=#438DD5;fontColor=#ffffff;fontFamily=Helvetica;fontSize=10;arcSize=10;strokeColor=none;"
+                vertex="1" parent="1">
+          <mxGeometry x="70" y="385" width="110" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="leg-external" value="External System"
+                style="rounded=1;whiteSpace=wrap;html=1;fillColor=#999999;fontColor=#ffffff;fontFamily=Helvetica;fontSize=10;arcSize=10;strokeColor=none;"
+                vertex="1" parent="1">
+          <mxGeometry x="70" y="420" width="110" height="26" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

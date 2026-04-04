@@ -1,4 +1,8 @@
-<!-- Payment Processing Platform — System Context Diagram -->
+<!-- =========================================================================== -->
+<!-- EXAMPLE FILE — Included as a reference implementation.                      -->
+<!-- This is NOT a real production architecture. Modify or replace for your use. -->
+<!-- =========================================================================== -->
+<!-- Payment Processing Platform (EXAMPLE) — System Context Diagram -->
 <!-- Generated: 2026-04-03T00:00:00Z -->
 <!-- Source: examples/payment-platform/diagrams/layout-plan.yaml -->
 

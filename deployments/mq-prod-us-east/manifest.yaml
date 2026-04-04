@@ -1,12 +1,17 @@
+# ===========================================================================
+# EXAMPLE FILE — Included as a reference deployment composition.
+# This is NOT a real production architecture. Modify or replace for your use.
+# ===========================================================================
 manifest:
   id: mq-prod-us-east
-  name: MQ Production US East
+  name: MQ Production US East (EXAMPLE)
   description: >
-    IBM MQ messaging infrastructure deployed in the US East production
+    EXAMPLE — IBM MQ messaging infrastructure deployed in the US East production
     data center using the standard 3-tier network topology.
+  is_example: true
   environment: production
   region: us-east-1
-  status: active
+  status: example
   cloud_provider: on-prem
 
   network:

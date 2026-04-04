@@ -27,7 +27,7 @@
         "region": { "type": "string" },
         "status": {
           "type": "string",
-          "enum": ["proposed", "approved", "active", "deprecated"]
+          "enum": ["proposed", "approved", "active", "deprecated", "example"]
         },
         "cloud_provider": {
           "type": "string",

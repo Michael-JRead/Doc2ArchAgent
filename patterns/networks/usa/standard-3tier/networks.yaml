@@ -1,3 +1,7 @@
+# ===========================================================================
+# EXAMPLE FILE — Included as a reference implementation for unified patterns.
+# This is NOT a real production architecture. Modify or replace for your use.
+# ===========================================================================
 network_zones:
   - id: dmz
     name: DMZ

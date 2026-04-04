@@ -1,0 +1,26 @@
+' ===========================================================================
+' EXAMPLE FILE — Included as a reference implementation.
+' This is NOT a real production architecture. Modify or replace for your use.
+' ===========================================================================
+' Payment Processing Platform (EXAMPLE) — System Context Diagram
+' Generated: 2026-04-03T00:00:00Z
+' Source: examples/payment-platform/diagrams/layout-plan.yaml
+
+@startuml
+!include <C4/C4_Context>
+
+skinparam wrapWidth 250
+skinparam linetype polyline
+
+LAYOUT_LANDSCAPE()
+HIDE_STEREOTYPE()
+
+Person(customer, "Customer", "A bank customer making payments")
+System(payment_platform, "Payment Platform", "Core payment processing system")
+System_Ext(card_network, "Visa ~/~/ Mastercard", "External card processing network")
+
+Rel_R(customer, payment_platform, "Makes payments")
+Rel_R(payment_platform, card_network, "Submits transactions")
+
+SHOW_LEGEND()
+@enduml
