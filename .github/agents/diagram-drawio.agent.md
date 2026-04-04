@@ -85,26 +85,28 @@ Every `.drawio` file uses this structure:
 Convert layout plan `grid_col` and `grid_row` to pixel coordinates:
 
 ```
-x = grid_col * 280 + 60      (280px column spacing, 60px left margin)
-y = grid_row * 180 + 60      (180px row spacing, 60px top margin)
+x = grid_col * 300 + 60      (300px column spacing, 60px left margin)
+y = grid_row * 200 + 70      (200px row spacing, 70px top margin — accounts for title cell)
 ```
 
 ### Standard Sizes
-| Element | Width | Height |
-|---|---|---|
-| Person | 160 | 145 |
-| System / Container / Component | 160 | 80 |
-| Database (cylinder) | 160 | 80 |
-| Queue | 160 | 80 |
-| Infrastructure | 140 | 60 |
-| Legend box | 260 | variable |
+| Element | Width | Height | Notes |
+|---|---|---|---|
+| Person | 160 | 120 | Slightly taller for person icon space |
+| System | 200 | 120 | Wider for system-level labels |
+| Container | 190 | 100 | Standard container |
+| Component | 170 | 90 | Compact for component-level detail |
+| Database (cylinder) | 190 | 100 | Same as container |
+| Queue | 190 | 100 | Same as container |
+| Infrastructure | 160 | 70 | Compact for infra nodes |
+| Legend box | 260 | variable | Positioned right of all content |
 
 ### Boundary Bounding Box
 Compute from children:
 ```
-boundary_x = min(child_x) - 40          (40px left padding)
-boundary_y = min(child_y) - 50          (50px top padding for title)
-boundary_width = max(child_x + child_width) - boundary_x + 40   (40px right padding)
+boundary_x = min(child_x) - 50          (50px left padding)
+boundary_y = min(child_y) - 60          (60px top padding — room for bold title)
+boundary_width = max(child_x + child_width) - boundary_x + 50   (50px right padding)
 boundary_height = max(child_y + child_height) - boundary_y + 40 (40px bottom padding)
 ```
 
@@ -147,47 +149,77 @@ Use simple rounded rectangles with these C4 colors. Do NOT use `mxgraph.c4.*` st
 
 ---
 
+## TITLE CELL
+
+Every diagram starts with a title cell at the top:
+
+```xml
+<mxCell id="title" value="&lt;b&gt;<Diagram Title>&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px;color:#666666&quot;&gt;Generated: <ISO 8601> | Source: <layout-plan path>&lt;/font&gt;"
+        style="text;html=1;align=left;verticalAlign=top;fontFamily=Helvetica;fontSize=16;fontColor=#333333;spacingLeft=10;overflow=hidden;"
+        vertex="1" parent="1">
+  <mxGeometry x="60" y="10" width="600" height="45" as="geometry" />
+</mxCell>
+```
+
+---
+
+## GLOBAL STYLE RULES
+
+**CRITICAL:** Every content cell (nodes, boundaries, edges, text) MUST include `fontFamily=Helvetica;` in its style string. Without this, Draw.io uses platform-specific defaults and PNG exports render with mismatched fonts.
+
+**Standard style properties for all nodes:**
+- `fontFamily=Helvetica` — consistent font across platforms and exports
+- `overflow=hidden;clip=1` — prevents text bleeding outside shape bounds
+- `spacing=8` — 8px internal padding on all sides
+- `verticalAlign=middle` — centers content vertically in the shape
+- `whiteSpace=wrap;html=1` — enables word wrap and HTML formatting
+
+---
+
 ## NODE TEMPLATES
 
 ### Standard Node (System, Container, Component)
 ```xml
-<mxCell id="<node-id>" value="&lt;b&gt;<Label>&lt;/b&gt;&lt;br&gt;[<Type>: <Technology>]&lt;br&gt;&lt;br&gt;&lt;font style=&quot;font-size:11px&quot;&gt;<Description>&lt;/font&gt;"
-        style="rounded=1;whiteSpace=wrap;html=1;fillColor=<fill>;strokeColor=<stroke>;fontColor=<font>;fontSize=12;arcSize=10;strokeWidth=2;"
+<mxCell id="<node-id>" value="&lt;b&gt;<Label>&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;[<Type>: <Technology>]&lt;/font&gt;&lt;br&gt;&lt;br&gt;&lt;font style=&quot;font-size:11px&quot;&gt;<Description>&lt;/font&gt;"
+        style="rounded=1;whiteSpace=wrap;html=1;overflow=hidden;clip=1;fillColor=<fill>;strokeColor=<stroke>;fontColor=<font>;fontFamily=Helvetica;fontSize=12;arcSize=10;strokeWidth=2;verticalAlign=middle;spacing=8;spacingTop=4;"
         vertex="1" parent="<parent-id>">
-  <mxGeometry x="<x>" y="<y>" width="160" height="80" as="geometry" />
+  <mxGeometry x="<x>" y="<y>" width="190" height="100" as="geometry" />
 </mxCell>
 ```
+
+Use **width=200, height=120** for System-level nodes (more label space).
+Use **width=170, height=90** for Component-level nodes (compact).
 
 ### Person Node
 ```xml
-<mxCell id="<node-id>" value="&lt;b&gt;<Label>&lt;/b&gt;&lt;br&gt;[Person]&lt;br&gt;&lt;br&gt;&lt;font style=&quot;font-size:11px&quot;&gt;<Description>&lt;/font&gt;"
-        style="shape=mxgraph.flowchart.display;rounded=1;whiteSpace=wrap;html=1;fillColor=#08427b;strokeColor=#052e56;fontColor=#ffffff;fontSize=12;arcSize=10;strokeWidth=2;"
+<mxCell id="<node-id>" value="&lt;b&gt;<Label>&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;[Person]&lt;/font&gt;&lt;br&gt;&lt;br&gt;&lt;font style=&quot;font-size:11px&quot;&gt;<Description>&lt;/font&gt;"
+        style="rounded=1;whiteSpace=wrap;html=1;overflow=hidden;clip=1;fillColor=#08427b;strokeColor=#052e56;fontColor=#ffffff;fontFamily=Helvetica;fontSize=12;arcSize=10;strokeWidth=2;verticalAlign=middle;spacing=8;spacingTop=4;"
         vertex="1" parent="<parent-id>">
-  <mxGeometry x="<x>" y="<y>" width="160" height="145" as="geometry" />
+  <mxGeometry x="<x>" y="<y>" width="160" height="120" as="geometry" />
 </mxCell>
 ```
 
-Note: If `mxgraph.flowchart.display` doesn't render in Lucidchart, fall back to a standard rounded rectangle with the person label.
+Note: Uses a standard rounded rectangle (not `mxgraph.flowchart.display`) for maximum Lucidchart compatibility. The `[Person]` type annotation identifies it as a person.
 
 ### Database Node
 ```xml
-<mxCell id="<node-id>" value="&lt;b&gt;<Label>&lt;/b&gt;&lt;br&gt;[DB: <Technology>]&lt;br&gt;&lt;br&gt;&lt;font style=&quot;font-size:11px&quot;&gt;<Description>&lt;/font&gt;"
-        style="shape=cylinder3;whiteSpace=wrap;html=1;fillColor=#438DD5;strokeColor=#2E6295;fontColor=#ffffff;fontSize=12;boundedLbl=1;size=15;strokeWidth=2;"
+<mxCell id="<node-id>" value="&lt;b&gt;<Label>&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;[Database: <Technology>]&lt;/font&gt;&lt;br&gt;&lt;br&gt;&lt;font style=&quot;font-size:11px&quot;&gt;<Description>&lt;/font&gt;"
+        style="shape=cylinder3;whiteSpace=wrap;html=1;overflow=hidden;clip=1;fillColor=#438DD5;strokeColor=#2E6295;fontColor=#ffffff;fontFamily=Helvetica;fontSize=12;boundedLbl=1;size=15;strokeWidth=2;spacing=8;"
         vertex="1" parent="<parent-id>">
-  <mxGeometry x="<x>" y="<y>" width="160" height="80" as="geometry" />
+  <mxGeometry x="<x>" y="<y>" width="190" height="100" as="geometry" />
 </mxCell>
 ```
 
 ### Queue Node
 ```xml
-<mxCell id="<node-id>" value="&lt;b&gt;<Label>&lt;/b&gt;&lt;br&gt;[Queue: <Technology>]"
-        style="shape=mxgraph.lean_mapping.fifo_sequence_lane;whiteSpace=wrap;html=1;fillColor=#438DD5;strokeColor=#2E6295;fontColor=#ffffff;fontSize=12;strokeWidth=2;"
+<mxCell id="<node-id>" value="&lt;b&gt;<Label>&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;[Queue: <Technology>]&lt;/font&gt;"
+        style="rounded=1;whiteSpace=wrap;html=1;overflow=hidden;clip=1;fillColor=#438DD5;strokeColor=#2E6295;fontColor=#ffffff;fontFamily=Helvetica;fontSize=12;arcSize=10;strokeWidth=2;verticalAlign=middle;spacing=8;"
         vertex="1" parent="<parent-id>">
-  <mxGeometry x="<x>" y="<y>" width="160" height="80" as="geometry" />
+  <mxGeometry x="<x>" y="<y>" width="190" height="100" as="geometry" />
 </mxCell>
 ```
 
-Note: If the queue shape doesn't render in Lucidchart, fall back to a standard rounded rectangle with `[Queue]` in the label.
+Note: Uses a rounded rectangle with `[Queue]` annotation for Lucidchart compatibility. The `mxgraph.lean_mapping.fifo_sequence_lane` shape is not reliably imported.
 
 ---
 
@@ -195,13 +227,17 @@ Note: If the queue shape doesn't render in Lucidchart, fall back to a standard r
 
 ```xml
 <mxCell id="<boundary-id>" value="&lt;b&gt;<Boundary Label>&lt;/b&gt;"
-        style="rounded=1;whiteSpace=wrap;html=1;container=1;collapsible=0;fillColor=<fill>;strokeColor=<stroke>;fontColor=<font>;fontSize=14;verticalAlign=top;spacingTop=10;strokeWidth=2;dashed=<1 if zone else 0>;"
+        style="rounded=1;whiteSpace=wrap;html=1;container=1;collapsible=0;fillColor=<fill>;strokeColor=<stroke>;fontColor=<font>;fontFamily=Helvetica;fontSize=14;fontStyle=1;verticalAlign=top;spacingTop=12;spacingLeft=10;strokeWidth=2;dashed=<1 if zone else 0>;dashPattern=<8 4 if zone else omit>;"
         vertex="1" parent="<parent-id>">
   <mxGeometry x="<x>" y="<y>" width="<computed>" height="<computed>" as="geometry" />
 </mxCell>
 ```
 
-Children inside use `parent="<boundary-id>"` and relative coordinates.
+- `container=1;collapsible=0` — marks as group, prevents collapse in Draw.io
+- `fontStyle=1` — bold boundary title
+- `dashed=1;dashPattern=8 4` — for trust zone boundaries (8px dash, 4px gap)
+- `dashed=0` (or omit) — for system/enterprise/container boundaries (solid)
+- Children inside use `parent="<boundary-id>"` and relative coordinates
 
 ---
 
@@ -209,8 +245,8 @@ Children inside use `parent="<boundary-id>"` and relative coordinates.
 
 ### Synchronous (solid line)
 ```xml
-<mxCell id="<edge-id>" value="&lt;b&gt;<Label>&lt;/b&gt;&lt;br&gt;<Protocol>"
-        style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=classic;strokeColor=#333333;strokeWidth=2;fontSize=11;fontColor=#333333;labelBackgroundColor=#ffffff;"
+<mxCell id="<edge-id>" value="&lt;b&gt;<Label>&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;<Protocol>&lt;/font&gt;"
+        style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;endSize=8;strokeColor=#333333;strokeWidth=2;fontFamily=Helvetica;fontSize=11;fontColor=#333333;labelBackgroundColor=#ffffff;"
         edge="1" parent="1" source="<source-id>" target="<target-id>">
   <mxGeometry relative="1" as="geometry" />
 </mxCell>
@@ -218,24 +254,50 @@ Children inside use `parent="<boundary-id>"` and relative coordinates.
 
 ### Asynchronous (dashed line)
 ```xml
-<mxCell id="<edge-id>" value="&lt;b&gt;<Label>&lt;/b&gt;&lt;br&gt;<Protocol>"
-        style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=classic;strokeColor=#666666;strokeWidth=2;dashed=1;fontSize=11;fontColor=#666666;labelBackgroundColor=#ffffff;"
+<mxCell id="<edge-id>" value="&lt;b&gt;<Label>&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;<Protocol>&lt;/font&gt;"
+        style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;endSize=8;strokeColor=#666666;strokeWidth=2;dashed=1;dashPattern=8 4;fontFamily=Helvetica;fontSize=11;fontColor=#666666;labelBackgroundColor=#ffffff;"
         edge="1" parent="1" source="<source-id>" target="<target-id>">
   <mxGeometry relative="1" as="geometry" />
 </mxCell>
 ```
 
-- `orthogonalEdgeStyle` produces right-angle routing (clean, no diagonal lines)
-- `labelBackgroundColor=#ffffff` prevents label/edge overlap
+**Edge style attributes explained:**
+- `edgeStyle=orthogonalEdgeStyle` — right-angle routing (clean, no diagonal lines)
+- `rounded=0` — sharp corners at route bends (set to 1 for rounded bends)
+- `orthogonalLoop=1` — self-referencing edges loop cleanly
+- `jettySize=auto` — automatic spacing from connection points
+- `endArrow=classic;endSize=8` — standard arrowhead, 8px size (visible but not oversized)
+- `dashed=1;dashPattern=8 4` — 8px dash, 4px gap (async only)
+- `labelBackgroundColor=#ffffff` — white background prevents label/line overlap
 - Context level: omit protocol from value
 - Container/Component level: include protocol
 
-**IMPORTANT: Lucidchart drops edge labels on import.** For each edge, also generate a backup text cell positioned at the edge midpoint (see Lucidchart Compatibility Notes below).
+### Edge Label Backup Cells
+
+**IMPORTANT: Lucidchart drops edge labels on import.** For every edge, generate a backup text cell at the edge midpoint:
+
+```
+label_x = (source_x + source_width/2 + target_x + target_width/2) / 2 - label_width/2
+label_y = min(source_y, target_y) + abs(source_y - target_y) / 2 - 10
+label_width = max(100, len(label_text) * 7)
+label_height = 30
+```
+
+```xml
+<mxCell id="<edge-id>-label" value="<Label> (<Protocol>)"
+        style="text;html=1;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=10;fontColor=#333333;labelBackgroundColor=#ffffff;overflow=hidden;"
+        vertex="1" parent="1">
+  <mxGeometry x="<label_x>" y="<label_y>" width="<label_width>" height="<label_height>" as="geometry" />
+</mxCell>
+```
 
 ### Security Overlay Edges
-- Encrypted: `strokeColor=#2e7d32` (green)
-- Unencrypted: `strokeColor=#c62828` (red)
-- Unknown TLS: `strokeColor=#9e9e9e` (grey)
+When rendering from `layout-plan-security.yaml`, use security-specific edge colors:
+- Encrypted: `strokeColor=#2e7d32;strokeWidth=2;` (green — TLS enabled)
+- Unencrypted: `strokeColor=#c62828;strokeWidth=3;` (red, thicker — TLS disabled, draws attention)
+- Unknown TLS: `strokeColor=#9e9e9e;strokeWidth=2;dashed=1;dashPattern=8 4;` (grey dashed — status unknown)
+
+Include authn/authz in the edge label: `"<Protocol> / <authn> / <authz>"` (e.g., `"HTTPS :443 / OAuth2 / RBAC"`)
 
 ---
 
@@ -251,43 +313,43 @@ legend_y = 60
 ```xml
 <!-- Legend container -->
 <mxCell id="legend-box" value="&lt;b&gt;Legend&lt;/b&gt;"
-        style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#333333;strokeWidth=2;verticalAlign=top;align=center;fontSize=14;spacingTop=5;"
+        style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#333333;strokeWidth=2;verticalAlign=top;align=center;fontFamily=Helvetica;fontSize=14;spacingTop=5;"
         vertex="1" parent="1">
   <mxGeometry x="<legend_x>" y="<legend_y>" width="260" height="<computed>" as="geometry" />
 </mxCell>
 
 <!-- Element color swatches (one per type used) -->
 <mxCell id="leg-<type>" value="<Type Name>"
-        style="rounded=1;whiteSpace=wrap;html=1;fillColor=<color>;fontColor=<font>;fontSize=10;arcSize=10;strokeColor=none;"
+        style="rounded=1;whiteSpace=wrap;html=1;fillColor=<color>;fontColor=<font>;fontFamily=Helvetica;fontSize=10;arcSize=10;strokeColor=none;"
         vertex="1" parent="1">
   <mxGeometry x="<legend_x + 10>" y="<legend_y + 35 + index*35>" width="110" height="26" as="geometry" />
 </mxCell>
 
 <!-- Flow line samples -->
 <mxCell id="leg-sync-line" value=""
-        style="endArrow=classic;html=1;strokeColor=#333333;strokeWidth=2;"
+        style="endArrow=classic;endSize=8;html=1;strokeColor=#333333;strokeWidth=2;"
         edge="1" parent="1">
   <mxGeometry relative="1" as="geometry">
     <mxPoint x="<legend_x + 10>" y="<sync_y>" as="sourcePoint" />
     <mxPoint x="<legend_x + 80>" y="<sync_y>" as="targetPoint" />
   </mxGeometry>
 </mxCell>
-<mxCell id="leg-sync-text" value="Sync request"
-        style="text;html=1;align=left;verticalAlign=middle;fontSize=11;fontColor=#333333;"
+<mxCell id="leg-sync-text" value="Synchronous request"
+        style="text;html=1;align=left;verticalAlign=middle;fontFamily=Helvetica;fontSize=11;fontColor=#333333;"
         vertex="1" parent="1">
   <mxGeometry x="<legend_x + 90>" y="<sync_y - 10>" width="150" height="20" as="geometry" />
 </mxCell>
 
 <mxCell id="leg-async-line" value=""
-        style="endArrow=classic;html=1;strokeColor=#666666;strokeWidth=2;dashed=1;"
+        style="endArrow=classic;endSize=8;html=1;strokeColor=#666666;strokeWidth=2;dashed=1;dashPattern=8 4;"
         edge="1" parent="1">
   <mxGeometry relative="1" as="geometry">
     <mxPoint x="<legend_x + 10>" y="<async_y>" as="sourcePoint" />
     <mxPoint x="<legend_x + 80>" y="<async_y>" as="targetPoint" />
   </mxGeometry>
 </mxCell>
-<mxCell id="leg-async-text" value="Async event"
-        style="text;html=1;align=left;verticalAlign=middle;fontSize=11;fontColor=#333333;"
+<mxCell id="leg-async-text" value="Asynchronous event"
+        style="text;html=1;align=left;verticalAlign=middle;fontFamily=Helvetica;fontSize=11;fontColor=#333333;"
         vertex="1" parent="1">
   <mxGeometry x="<legend_x + 90>" y="<async_y - 10>" width="150" height="20" as="geometry" />
 </mxCell>
@@ -313,12 +375,155 @@ Add confidence entries to the legend.
 
 ---
 
+## SECURITY OVERLAY
+
+When rendering from `layout-plan-security.yaml`, apply security-specific styling to nodes, edges, and boundaries.
+
+### Security Node Labels
+
+Append authn/authz info to the node HTML label:
+
+```xml
+value="&lt;b&gt;<Label>&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;[<Type>: <Technology>]&lt;/font&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;color:#cccccc&quot;&gt;<authn_mechanism> / <authz_model>&lt;/font&gt;&lt;br&gt;&lt;br&gt;&lt;font style=&quot;font-size:11px&quot;&gt;<Description>&lt;/font&gt;"
+```
+
+- If `authn_mechanism` is `none` or missing: append `&lt;br&gt;&lt;font style=&quot;font-size:9px;color:#ff6666&quot;&gt;[NO AUTHN]&lt;/font&gt;`
+- If `authz_model` is `none` or missing: append `&lt;br&gt;&lt;font style=&quot;font-size:9px;color:#ff6666&quot;&gt;[NO AUTHZ]&lt;/font&gt;`
+- If both present: append `&lt;br&gt;&lt;font style=&quot;font-size:9px;color:#aaffaa&quot;&gt;[<AUTHN> / <AUTHZ>]&lt;/font&gt;` (e.g., `[OAuth2 / RBAC]`)
+
+### Security Edge Colors
+
+| TLS Status | strokeColor | strokeWidth | Extra Style |
+|---|---|---|---|
+| Encrypted | `#2e7d32` | 2 | — |
+| Unencrypted | `#c62828` | 3 | — (thicker draws attention) |
+| Unknown | `#9e9e9e` | 2 | `dashed=1;dashPattern=8 4;` |
+
+### Security Edge Labels
+
+Format: `"<Protocol> :<Port> / TLS <version> / <authn> / <authz>"`
+
+Example: `"HTTPS :443 / TLS 1.3 / OAuth2 / RBAC"`
+
+If data classification present, append: `" [<classification>]"` (e.g., `" [RESTRICTED]"`)
+
+```xml
+<mxCell id="<edge-id>" value="&lt;b&gt;<Label>&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px&quot;&gt;<Protocol> :<Port> / TLS <ver> / <authn> / <authz>&lt;/font&gt;"
+        style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;endSize=8;strokeColor=<tls_color>;strokeWidth=<tls_width>;fontFamily=Helvetica;fontSize=10;fontColor=#333333;labelBackgroundColor=#ffffff;"
+        edge="1" parent="1" source="<source-id>" target="<target-id>">
+  <mxGeometry relative="1" as="geometry" />
+</mxCell>
+```
+
+### Trust Zone Boundaries
+
+Use trust zone colors from the C4 Color Scheme table above with dashed borders:
+
+```xml
+<mxCell id="<zone-id>" value="&lt;b&gt;<Zone Name>&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px;color:<trust_fontColor>&quot;&gt;[<trust_level>]&lt;/font&gt;"
+        style="rounded=1;whiteSpace=wrap;html=1;container=1;collapsible=0;fillColor=<trust_fill>;strokeColor=<trust_stroke>;fontColor=<trust_font>;fontFamily=Helvetica;fontSize=14;fontStyle=1;verticalAlign=top;spacingTop=12;spacingLeft=10;strokeWidth=2;dashed=1;dashPattern=8 4;"
+        vertex="1" parent="<parent-id>">
+  <mxGeometry x="<x>" y="<y>" width="<computed>" height="<computed>" as="geometry" />
+</mxCell>
+```
+
+### Security Legend Entries
+
+Add these to the legend when rendering security overlays:
+
+```xml
+<!-- TLS Status -->
+<mxCell id="leg-encrypted-line" value=""
+        style="endArrow=classic;endSize=8;html=1;strokeColor=#2e7d32;strokeWidth=2;"
+        edge="1" parent="1">
+  <mxGeometry relative="1" as="geometry">
+    <mxPoint x="<legend_x + 10>" y="<enc_y>" as="sourcePoint" />
+    <mxPoint x="<legend_x + 80>" y="<enc_y>" as="targetPoint" />
+  </mxGeometry>
+</mxCell>
+<mxCell id="leg-encrypted-text" value="TLS Encrypted"
+        style="text;html=1;align=left;verticalAlign=middle;fontFamily=Helvetica;fontSize=11;fontColor=#2e7d32;"
+        vertex="1" parent="1">
+  <mxGeometry x="<legend_x + 90>" y="<enc_y - 10>" width="150" height="20" as="geometry" />
+</mxCell>
+
+<mxCell id="leg-unencrypted-line" value=""
+        style="endArrow=classic;endSize=8;html=1;strokeColor=#c62828;strokeWidth=3;"
+        edge="1" parent="1">
+  <mxGeometry relative="1" as="geometry">
+    <mxPoint x="<legend_x + 10>" y="<unenc_y>" as="sourcePoint" />
+    <mxPoint x="<legend_x + 80>" y="<unenc_y>" as="targetPoint" />
+  </mxGeometry>
+</mxCell>
+<mxCell id="leg-unencrypted-text" value="Unencrypted"
+        style="text;html=1;align=left;verticalAlign=middle;fontFamily=Helvetica;fontSize=11;fontColor=#c62828;"
+        vertex="1" parent="1">
+  <mxGeometry x="<legend_x + 90>" y="<unenc_y - 10>" width="150" height="20" as="geometry" />
+</mxCell>
+
+<mxCell id="leg-tls-unknown-line" value=""
+        style="endArrow=classic;endSize=8;html=1;strokeColor=#9e9e9e;strokeWidth=2;dashed=1;dashPattern=8 4;"
+        edge="1" parent="1">
+  <mxGeometry relative="1" as="geometry">
+    <mxPoint x="<legend_x + 10>" y="<unk_y>" as="sourcePoint" />
+    <mxPoint x="<legend_x + 80>" y="<unk_y>" as="targetPoint" />
+  </mxGeometry>
+</mxCell>
+<mxCell id="leg-tls-unknown-text" value="TLS Unknown"
+        style="text;html=1;align=left;verticalAlign=middle;fontFamily=Helvetica;fontSize=11;fontColor=#9e9e9e;"
+        vertex="1" parent="1">
+  <mxGeometry x="<legend_x + 90>" y="<unk_y - 10>" width="150" height="20" as="geometry" />
+</mxCell>
+
+<!-- Trust Zones -->
+<mxCell id="leg-trusted" value="Trusted Zone"
+        style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f1f8e9;strokeColor=#2e7d32;fontColor=#1b5e20;fontFamily=Helvetica;fontSize=10;dashed=1;dashPattern=8 4;"
+        vertex="1" parent="1">
+  <mxGeometry x="<legend_x + 10>" y="<tz_y>" width="110" height="26" as="geometry" />
+</mxCell>
+<mxCell id="leg-semi-trusted" value="Semi-Trusted"
+        style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fffde7;strokeColor=#f9a825;fontColor=#f57f17;fontFamily=Helvetica;fontSize=10;dashed=1;dashPattern=8 4;"
+        vertex="1" parent="1">
+  <mxGeometry x="<legend_x + 130>" y="<tz_y>" width="110" height="26" as="geometry" />
+</mxCell>
+<mxCell id="leg-untrusted" value="Untrusted"
+        style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fce4ec;strokeColor=#c62828;fontColor=#b71c1c;fontFamily=Helvetica;fontSize=10;dashed=1;dashPattern=8 4;"
+        vertex="1" parent="1">
+  <mxGeometry x="<legend_x + 10>" y="<tz_y + 32>" width="110" height="26" as="geometry" />
+</mxCell>
+```
+
+---
+
 ## DEPLOYMENT DIAGRAMS
 
-- Zone boundaries use trust zone colors and `dashed=1` stroke
-- Infrastructure resources nested inside zones
-- Containers/components placed inside zones per layout plan
-- Derived links include protocol detail and warning annotations
+Deployment diagrams place containers and components into network zones with infrastructure resources.
+
+### Zone Boundaries
+- Use trust zone colors from the Trust Zone Colors table
+- All zone boundaries: `dashed=1;dashPattern=8 4;` (dashed border)
+- Zone title includes trust level: `"<Zone Name> [<trust_level>]"`
+- Nest infrastructure resources (WAF, load balancer, IDS) inside their zone
+
+### Infrastructure Resource Nodes
+```xml
+<mxCell id="<infra-id>" value="&lt;b&gt;<Name>&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;[<resource_type>: <Technology>]&lt;/font&gt;"
+        style="rounded=1;whiteSpace=wrap;html=1;overflow=hidden;clip=1;fillColor=#ff8f00;strokeColor=#e65100;fontColor=#ffffff;fontFamily=Helvetica;fontSize=12;arcSize=10;strokeWidth=2;verticalAlign=middle;spacing=8;"
+        vertex="1" parent="<zone-id>">
+  <mxGeometry x="<x>" y="<y>" width="160" height="70" as="geometry" />
+</mxCell>
+```
+
+### Container/Component Placement
+- Place inside their assigned zone boundary using `parent="<zone-id>"`
+- Use relative coordinates within the zone
+- Apply same node templates as non-deployment diagrams
+
+### Derived Links
+- Include full protocol detail: `"<Protocol> :<Port>"`
+- Add warning annotations from the layout plan (e.g., zone crossing warnings)
+- Warning edges use `strokeColor=#ff8f00;` (orange) with a warning icon in the label:
+  `"&lt;font color=&quot;#ff8f00&quot;&gt;&#9888;&lt;/font&gt; <warning text>"`
 
 ---
 
@@ -403,6 +608,10 @@ Before finishing each diagram, verify:
 4. All children of containers have coordinates within the container bounds
 5. Legend is present and positioned to the right of all content
 6. XML is well-formed (proper nesting, all tags closed)
+7. All content cells include `fontFamily=Helvetica` in their style string
+8. No node has width < 120 or height < 60 (text would clip)
+9. Every edge with a `value` attribute has a corresponding `-label` backup text cell
+10. Security overlay edges use correct TLS status colors (green/red/grey)
 
 Report warnings:
 ```

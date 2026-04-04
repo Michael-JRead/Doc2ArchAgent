@@ -807,6 +807,84 @@ def validate_drawio(filepath: Path) -> dict:
                     # Only check for bare < > that aren't part of HTML tags
                     pass  # HTML entity validation is complex, skip for now
 
+        # Check 15: fontFamily on all content cells
+        for cell in cells:
+            cell_id = cell.get("id")
+            if cell_id in ("0", "1"):
+                continue
+            style = cell.get("style", "")
+            value = cell.get("value", "")
+            # Only check cells that have visible content (value or are edges with labels)
+            if value and style and "fontFamily" not in style:
+                warnings.append(
+                    f"Cell id='{cell_id}': missing 'fontFamily' in style — "
+                    f"rendering may vary across platforms. Add fontFamily=Helvetica."
+                )
+
+        # Check 16: Minimum element dimensions
+        for cell_id, cell in vertices.items():
+            if cell_id in ("0", "1"):
+                continue
+            geo = cell.find("mxGeometry")
+            if geo is not None and geo.get("relative") != "1":
+                try:
+                    w = float(geo.get("width", 0))
+                    h = float(geo.get("height", 0))
+                    if 0 < w < 120 or 0 < h < 60:
+                        warnings.append(
+                            f"Vertex id='{cell_id}': dimensions {w}x{h} below "
+                            f"minimum 120x60 — text may clip"
+                        )
+                except (ValueError, TypeError):
+                    pass
+
+        # Check 17: Boundary children within bounds
+        for cell in cells:
+            parent_id = cell.get("parent")
+            if not parent_id or parent_id in ("0", "1"):
+                continue
+            if parent_id not in vertices:
+                continue
+            parent_cell = vertices[parent_id]
+            parent_geo = parent_cell.find("mxGeometry")
+            child_geo = cell.find("mxGeometry")
+            if parent_geo is None or child_geo is None:
+                continue
+            if child_geo.get("relative") == "1":
+                continue
+            try:
+                pw = float(parent_geo.get("width", 0))
+                ph = float(parent_geo.get("height", 0))
+                cx = float(child_geo.get("x", 0))
+                cy = float(child_geo.get("y", 0))
+                cw = float(child_geo.get("width", 0))
+                ch = float(child_geo.get("height", 0))
+                if pw > 0 and ph > 0 and cw > 0 and ch > 0:
+                    if cx + cw > pw or cy + ch > ph or cx < 0 or cy < 0:
+                        warnings.append(
+                            f"Cell id='{cell.get('id')}': extends outside "
+                            f"parent '{parent_id}' bounds "
+                            f"(child: {cx},{cy} {cw}x{ch}, parent: {pw}x{ph})"
+                        )
+            except (ValueError, TypeError):
+                pass
+
+        # Check 18: Edge backup label existence
+        edge_ids_with_value = set()
+        for edge in edges:
+            edge_id = edge.get("id", "")
+            value = edge.get("value", "")
+            if value and edge_id:
+                edge_ids_with_value.add(edge_id)
+
+        for edge_id in edge_ids_with_value:
+            label_id = f"{edge_id}-label"
+            if label_id not in all_ids:
+                warnings.append(
+                    f"Edge id='{edge_id}': has label text but no backup "
+                    f"text cell '{label_id}' — label will be lost in Lucidchart import"
+                )
+
     return {
         "valid": len(errors) == 0,
         "errors": errors,

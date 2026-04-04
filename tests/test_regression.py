@@ -3746,3 +3746,124 @@ SHOW_LEGEND()
         assert "tls_status" in content
         assert "authn_status" in content
         assert "semi_trusted" in content
+
+
+class TestDrawioProfessionalPolish:
+    """Tests for Draw.io diagram professional quality standards."""
+
+    def _validate_drawio(self, xml_text: str) -> dict:
+        """Helper to validate a Draw.io XML string via temp file."""
+        import tempfile
+        sys.path.insert(0, str(TOOLS_DIR))
+        mod = importlib.import_module("validate-diagram")
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".drawio", delete=False) as f:
+            f.write(xml_text)
+            f.flush()
+            result = mod.validate_drawio(Path(f.name))
+        Path(f.name).unlink(missing_ok=True)
+        return result
+
+    def test_drawio_agent_has_font_family(self):
+        """The Draw.io agent doc must mandate fontFamily=Helvetica."""
+        content = (PROJECT_ROOT / ".github" / "agents" / "diagram-drawio.agent.md").read_text()
+        assert "fontFamily=Helvetica" in content
+        assert "CRITICAL" in content and "fontFamily" in content
+
+    def test_drawio_agent_has_professional_sizes(self):
+        """The Draw.io agent doc must have updated element sizes."""
+        content = (PROJECT_ROOT / ".github" / "agents" / "diagram-drawio.agent.md").read_text()
+        # System: 200x120
+        assert "200" in content and "120" in content
+        # Container: 190x100
+        assert "190" in content and "100" in content
+        # Component: 170x90
+        assert "170" in content and "90" in content
+        # Grid spacing: 300px columns, 200px rows
+        assert "300" in content and "200" in content
+
+    def test_drawio_agent_has_security_overlay(self):
+        """The Draw.io agent doc must have a security overlay section."""
+        content = (PROJECT_ROOT / ".github" / "agents" / "diagram-drawio.agent.md").read_text()
+        assert "## SECURITY OVERLAY" in content
+        assert "#2e7d32" in content  # encrypted green
+        assert "#c62828" in content  # unencrypted red
+        assert "#9e9e9e" in content  # unknown grey
+        assert "NO AUTHN" in content
+        assert "NO AUTHZ" in content
+        assert "authz_model" in content
+
+    def test_drawio_agent_has_title_cell(self):
+        """The Draw.io agent doc must have a title cell template."""
+        content = (PROJECT_ROOT / ".github" / "agents" / "diagram-drawio.agent.md").read_text()
+        assert "## TITLE CELL" in content
+        assert "id=\"title\"" in content
+
+    def test_validator_catches_missing_font_family(self):
+        """Validator should warn when fontFamily is missing from content cells."""
+        xml = """<?xml version="1.0" encoding="UTF-8"?>
+<mxfile><diagram name="test"><mxGraphModel><root>
+<mxCell id="0"/><mxCell id="1" parent="0"/>
+<mxCell id="n1" value="No Font" style="rounded=1;fillColor=#438DD5;" vertex="1" parent="1">
+  <mxGeometry x="100" y="100" width="190" height="100" as="geometry"/>
+</mxCell>
+</root></mxGraphModel></diagram></mxfile>"""
+        result = self._validate_drawio(xml)
+        font_warnings = [w for w in result["warnings"] if "fontFamily" in w]
+        assert len(font_warnings) >= 1, f"Expected fontFamily warning, got: {result['warnings']}"
+
+    def test_validator_catches_undersized_elements(self):
+        """Validator should warn when elements are below minimum 120x60."""
+        xml = """<?xml version="1.0" encoding="UTF-8"?>
+<mxfile><diagram name="test"><mxGraphModel><root>
+<mxCell id="0"/><mxCell id="1" parent="0"/>
+<mxCell id="tiny" value="Tiny" style="rounded=1;fontFamily=Helvetica;" vertex="1" parent="1">
+  <mxGeometry x="100" y="100" width="80" height="40" as="geometry"/>
+</mxCell>
+</root></mxGraphModel></diagram></mxfile>"""
+        result = self._validate_drawio(xml)
+        size_warnings = [w for w in result["warnings"] if "minimum" in w or "clip" in w]
+        assert len(size_warnings) >= 1, f"Expected size warning, got: {result['warnings']}"
+
+    def test_validator_catches_missing_backup_label(self):
+        """Validator should warn when edge has label but no backup text cell."""
+        xml = """<?xml version="1.0" encoding="UTF-8"?>
+<mxfile><diagram name="test"><mxGraphModel><root>
+<mxCell id="0"/><mxCell id="1" parent="0"/>
+<mxCell id="s" value="Src" style="rounded=1;fontFamily=Helvetica;" vertex="1" parent="1">
+  <mxGeometry x="100" y="100" width="190" height="100" as="geometry"/>
+</mxCell>
+<mxCell id="t" value="Tgt" style="rounded=1;fontFamily=Helvetica;" vertex="1" parent="1">
+  <mxGeometry x="400" y="100" width="190" height="100" as="geometry"/>
+</mxCell>
+<mxCell id="e1" value="Missing backup" style="edgeStyle=orthogonalEdgeStyle;fontFamily=Helvetica;" edge="1" source="s" target="t" parent="1">
+  <mxGeometry relative="1" as="geometry"/>
+</mxCell>
+</root></mxGraphModel></diagram></mxfile>"""
+        result = self._validate_drawio(xml)
+        label_warnings = [w for w in result["warnings"] if "backup" in w.lower() or "label" in w.lower()]
+        assert len(label_warnings) >= 1, f"Expected backup label warning, got: {result['warnings']}"
+
+    def test_validator_catches_child_outside_bounds(self):
+        """Validator should warn when child extends outside parent bounds."""
+        xml = """<?xml version="1.0" encoding="UTF-8"?>
+<mxfile><diagram name="test"><mxGraphModel><root>
+<mxCell id="0"/><mxCell id="1" parent="0"/>
+<mxCell id="box" value="Box" style="rounded=1;container=1;fontFamily=Helvetica;" vertex="1" parent="1">
+  <mxGeometry x="50" y="50" width="200" height="150" as="geometry"/>
+</mxCell>
+<mxCell id="child" value="Overflows" style="rounded=1;fontFamily=Helvetica;" vertex="1" parent="box">
+  <mxGeometry x="10" y="10" width="250" height="100" as="geometry"/>
+</mxCell>
+</root></mxGraphModel></diagram></mxfile>"""
+        result = self._validate_drawio(xml)
+        bounds_warnings = [w for w in result["warnings"] if "outside" in w.lower() or "bounds" in w.lower()]
+        assert len(bounds_warnings) >= 1, f"Expected bounds warning, got: {result['warnings']}"
+
+    def test_minimal_fixture_passes_validation(self):
+        """The updated minimal-drawio.drawio fixture should pass validation."""
+        sys.path.insert(0, str(TOOLS_DIR))
+        mod = importlib.import_module("validate-diagram")
+        fixture = REGRESSION_DIR / "minimal-drawio.drawio"
+        if fixture.exists():
+            result = mod.validate_drawio(fixture)
+            assert result["valid"], f"Fixture should pass, errors: {result['errors']}"
