@@ -5,179 +5,684 @@
 # Decoupled mapping from threat rule IDs to compliance framework controls.
 # Keeps rule definitions clean while enabling multi-framework reporting.
 # Referenced by threat-rules.py for compliance-aware SARIF output.
+#
+# Frameworks: PCI DSS v4.0, SOC 2, SOC 1, NIST 800-53 Rev 5, NIST CSF 2.0,
+# NIST 800-171, CMMC 2.0, FedRAMP, FISMA, DISA STIGs, ISO 27001:2022,
+# ISO 27017, ISO 27018, HIPAA, GDPR, GLBA, SWIFT CSCF, UK Cyber Essentials,
+# Australian Essential Eight, OWASP ASVS 4.0
 
 rule_mappings:
 
+  # ============================================================
+  # AUTHENTICATION RULES
+  # ============================================================
+
   unauthenticated-listener:
     cwe: ["CWE-306"]
-    pci_dss: ["pci-7.1", "pci-8.3"]
-    soc2: ["CC6.1"]
-    nist_800_53: ["IA-2", "AC-14"]
-    iso27001: ["A.9.4.1"]
-    owasp_asvs: ["V2.1.1"]
+    pci_dss: ["8.3.1", "7.2.1"]
+    soc2: ["CC6.1", "CC6.3"]
+    soc1: ["ITGC-3"]
+    nist_800_53: ["IA-2", "AC-14", "AC-3"]
+    nist_csf: ["PR.AA-01", "PR.AA-02"]
+    nist_800_171: ["3.1.1", "3.5.1"]
+    cmmc: ["AC.L1-b.1.i", "IA.L1-b.1.vi"]
+    fedramp: ["IA-2", "AC-14"]
+    fisma: ["IA-2"]
+    disa_stig: ["SRG-APP-000148", "SRG-APP-000153"]
+    iso27001: ["A.5.15", "A.8.5"]
+    iso27017: ["CLD.9.5"]
+    hipaa: ["164.312(d)", "164.312(a)(2)(i)"]
+    gdpr: ["Art.32"]
+    glba: ["314.4(c)(1)"]
+    swift_cscf: ["4.1", "5.1"]
+    uk_ce: ["CE-3"]
+    au_e8: ["E8-7"]
+    owasp_asvs: ["V1.2.1", "V2.1.1"]
 
   weak-authentication:
     cwe: ["CWE-287"]
-    pci_dss: ["pci-8.3"]
-    soc2: ["CC6.1"]
-    nist_800_53: ["IA-2", "IA-5"]
-    iso27001: ["A.9.4.2"]
-    owasp_asvs: ["V2.2.1"]
+    pci_dss: ["8.3.1", "8.3.2", "8.6.1"]
+    soc2: ["CC6.1", "CC6.3"]
+    soc1: ["ITGC-3"]
+    nist_800_53: ["IA-2", "IA-5", "IA-8"]
+    nist_csf: ["PR.AA-01", "PR.AA-02"]
+    nist_800_171: ["3.5.1", "3.5.3"]
+    cmmc: ["IA.L1-b.1.vi", "IA.L2-3.5.3"]
+    fedramp: ["IA-2", "IA-5"]
+    fisma: ["IA-2", "IA-5"]
+    disa_stig: ["SRG-APP-000149", "SRG-APP-000151"]
+    iso27001: ["A.5.17", "A.8.5"]
+    iso27017: ["CLD.9.5"]
+    hipaa: ["164.312(d)"]
+    gdpr: ["Art.32"]
+    glba: ["314.4(c)(1)"]
+    swift_cscf: ["4.1", "4.2"]
+    uk_ce: ["CE-3"]
+    au_e8: ["E8-7"]
+    owasp_asvs: ["V2.2.1", "V2.1.1"]
 
   missing-authorization:
     cwe: ["CWE-862"]
-    pci_dss: ["pci-7.1"]
+    pci_dss: ["7.1.1", "7.2.1", "7.2.2"]
     soc2: ["CC6.1", "CC6.3"]
+    soc1: ["ITGC-3", "ITGC-4"]
     nist_800_53: ["AC-3", "AC-6"]
-    iso27001: ["A.9.4.1"]
-    owasp_asvs: ["V4.1.1"]
+    nist_csf: ["PR.AA-05"]
+    nist_800_171: ["3.1.2", "3.1.5"]
+    cmmc: ["AC.L1-b.1.i", "AC.L2-3.1.2"]
+    fedramp: ["AC-3", "AC-6"]
+    fisma: ["AC-3"]
+    disa_stig: ["SRG-APP-000033", "SRG-APP-000340"]
+    iso27001: ["A.5.15", "A.8.3"]
+    iso27017: ["CLD.9.5"]
+    hipaa: ["164.312(a)(1)"]
+    gdpr: ["Art.25", "Art.32"]
+    glba: ["314.4(c)(1)"]
+    swift_cscf: ["5.1"]
+    uk_ce: ["CE-3"]
+    au_e8: ["E8-5"]
+    owasp_asvs: ["V1.4.1", "V4.1.1"]
+
+  missing-authz-model:
+    cwe: ["CWE-863"]
+    pci_dss: ["7.2.2"]
+    soc2: ["CC6.1"]
+    nist_800_53: ["AC-3", "AC-6"]
+    nist_csf: ["PR.AA-05"]
+    nist_800_171: ["3.1.2"]
+    cmmc: ["AC.L2-3.1.2"]
+    fedramp: ["AC-3"]
+    disa_stig: ["SRG-APP-000033"]
+    iso27001: ["A.5.15", "A.8.3"]
+    owasp_asvs: ["V1.4.1"]
+
+  # ============================================================
+  # ENCRYPTION RULES
+  # ============================================================
 
   unencrypted-listener:
     cwe: ["CWE-319"]
-    pci_dss: ["pci-4.1"]
-    soc2: ["CC6.7"]
+    pci_dss: ["4.2.1", "4.2.2"]
+    soc2: ["CC6.1", "CC6.7"]
+    soc1: ["ITGC-5"]
     nist_800_53: ["SC-8", "SC-13"]
-    iso27001: ["A.10.1.1"]
-    owasp_asvs: ["V9.1.1"]
+    nist_csf: ["PR.DS-02"]
+    nist_800_171: ["3.1.13", "3.13.8"]
+    cmmc: ["SC.L2-3.13.8"]
+    fedramp: ["SC-8", "SC-13"]
+    fisma: ["SC-8"]
+    disa_stig: ["SRG-APP-000014", "SRG-APP-000439"]
+    iso27001: ["A.8.24"]
+    iso27017: ["CLD.13.1"]
+    hipaa: ["164.312(e)(1)", "164.312(e)(2)(ii)"]
+    gdpr: ["Art.32", "Art.5.1(f)"]
+    glba: ["314.4(c)(3)"]
+    swift_cscf: ["2.1"]
+    uk_ce: ["CE-1"]
+    au_e8: ["E8-7"]
+    owasp_asvs: ["V1.6.1", "V9.1.1"]
 
   weak-tls-version:
     cwe: ["CWE-326"]
-    pci_dss: ["pci-4.1"]
+    pci_dss: ["4.2.1"]
     soc2: ["CC6.7"]
-    nist_800_53: ["SC-8"]
-    iso27001: ["A.10.1.1"]
+    nist_800_53: ["SC-8", "SC-13"]
+    nist_csf: ["PR.DS-02"]
+    nist_800_171: ["3.13.8", "3.13.11"]
+    cmmc: ["SC.L2-3.13.8", "SC.L2-3.13.11"]
+    fedramp: ["SC-8"]
+    disa_stig: ["SRG-APP-000014", "SRG-APP-000560"]
+    iso27001: ["A.8.24"]
+    hipaa: ["164.312(e)(2)(ii)"]
+    gdpr: ["Art.32"]
+    swift_cscf: ["2.1"]
+    owasp_asvs: ["V9.1.1", "V9.1.2"]
 
   missing-encryption-at-rest:
     cwe: ["CWE-311"]
-    pci_dss: ["pci-3.4"]
-    soc2: ["CC6.7"]
+    pci_dss: ["3.5.1", "3.5.2"]
+    soc2: ["CC6.1", "CC6.7"]
+    soc1: ["ITGC-5"]
     nist_800_53: ["SC-28"]
-    iso27001: ["A.10.1.1"]
+    nist_csf: ["PR.DS-01"]
+    nist_800_171: ["3.8.1", "3.13.16"]
+    cmmc: ["SC.L2-3.13.16", "MP.L2-3.8.1"]
+    fedramp: ["SC-28"]
+    fisma: ["SC-28"]
+    disa_stig: ["SRG-APP-000231", "SRG-DB-000273"]
+    iso27001: ["A.8.24"]
+    iso27017: ["CLD.8.1"]
     hipaa: ["164.312(a)(2)(iv)"]
-
-  internet-exposed-no-waf:
-    cwe: ["CWE-693"]
-    pci_dss: ["pci-6.4"]
-    soc2: ["CC6.6"]
-    nist_800_53: ["SC-7", "SI-3"]
-    iso27001: ["A.13.1.1"]
-
-  internet-exposed-listener:
-    cwe: ["CWE-668"]
-    pci_dss: ["pci-1.3"]
-    soc2: ["CC6.6"]
-    nist_800_53: ["SC-7"]
-    iso27001: ["A.13.1.1"]
-
-  unguarded-datastore-access:
-    cwe: ["CWE-284"]
-    pci_dss: ["pci-7.1"]
-    soc2: ["CC6.1"]
-    nist_800_53: ["AC-3"]
-    iso27001: ["A.9.4.1"]
-
-  dos-risk-cross-boundary:
-    cwe: ["CWE-400"]
-    soc2: ["CC7.1"]
-    nist_800_53: ["SC-5"]
-    iso27001: ["A.12.1.3"]
-
-  sensitive-data-unencrypted-flow:
-    cwe: ["CWE-319"]
-    pci_dss: ["pci-4.1"]
-    soc2: ["CC6.7"]
-    nist_800_53: ["SC-8"]
-    hipaa: ["164.312(e)(1)"]
-
-  sensitive-data-no-auth-flow:
-    cwe: ["CWE-306"]
-    pci_dss: ["pci-7.1"]
-    soc2: ["CC6.1"]
-    nist_800_53: ["AC-3"]
-    hipaa: ["164.312(d)"]
-
-  cross-boundary-no-encryption:
-    cwe: ["CWE-319"]
-    pci_dss: ["pci-4.1"]
-    nist_800_53: ["SC-8"]
-    iso27001: ["A.10.1.1"]
-
-  high-integrity-no-auth:
-    cwe: ["CWE-345"]
-    soc2: ["CC6.1"]
-    nist_800_53: ["SI-7"]
-    iso27001: ["A.14.1.3"]
-
-  missing-data-classification:
-    cwe: ["CWE-200"]
-    pci_dss: ["pci-9.6"]
-    soc2: ["CC6.5"]
-    nist_800_53: ["RA-2"]
-    iso27001: ["A.8.2.1"]
-
-  missing-logging-zone:
-    cwe: ["CWE-778"]
-    pci_dss: ["pci-10.1"]
-    soc2: ["CC7.2"]
-    nist_800_53: ["AU-2", "AU-3"]
-    iso27001: ["A.12.4.1"]
-    hipaa: ["164.312(b)"]
-
-  missing-monitoring-zone:
-    cwe: ["CWE-223"]
-    soc2: ["CC7.1", "CC7.2"]
-    nist_800_53: ["SI-4"]
-    iso27001: ["A.12.4.1"]
-
-  no-rate-limiting:
-    cwe: ["CWE-770"]
-    owasp_asvs: ["V13.4.1"]
-    nist_800_53: ["SC-5"]
-
-  no-supply-chain-attestation:
-    cwe: ["CWE-494"]
-    nist_800_53: ["SA-12", "SI-7"]
-    iso27001: ["A.14.2.7"]
+    gdpr: ["Art.32", "Art.5.1(f)"]
+    glba: ["314.4(c)(3)"]
+    swift_cscf: ["2.1"]
+    owasp_asvs: ["V1.6.1"]
 
   high-confidentiality-no-encryption:
     cwe: ["CWE-311"]
-    pci_dss: ["pci-4.1", "pci-3.4"]
-    soc2: ["CC6.7"]
+    pci_dss: ["3.5.1", "4.2.1"]
+    soc2: ["CC6.1", "CC6.7", "C1.1"]
     nist_800_53: ["SC-8", "SC-28"]
+    nist_csf: ["PR.DS-01", "PR.DS-02"]
+    nist_800_171: ["3.8.1", "3.13.8", "3.13.16"]
+    cmmc: ["SC.L2-3.13.8", "SC.L2-3.13.16"]
+    fedramp: ["SC-8", "SC-28"]
+    disa_stig: ["SRG-APP-000231"]
+    iso27001: ["A.8.24"]
     hipaa: ["164.312(a)(2)(iv)", "164.312(e)(1)"]
+    gdpr: ["Art.32"]
+    glba: ["314.4(c)(3)"]
+    swift_cscf: ["2.1"]
+    owasp_asvs: ["V1.6.1"]
 
-  no-input-validation:
-    cwe: ["CWE-20"]
-    pci_dss: ["pci-6.5"]
-    owasp_asvs: ["V5.1.1"]
-    nist_800_53: ["SI-10"]
+  # ============================================================
+  # NETWORK EXPOSURE RULES
+  # ============================================================
+
+  internet-exposed-no-waf:
+    cwe: ["CWE-693"]
+    pci_dss: ["6.4.1", "6.4.2"]
+    soc2: ["CC6.6"]
+    nist_800_53: ["SC-7", "SI-3"]
+    nist_csf: ["PR.PS-01", "DE.CM-01"]
+    nist_800_171: ["3.13.1"]
+    cmmc: ["SC.L2-3.13.1"]
+    fedramp: ["SC-7"]
+    disa_stig: ["SRG-NET-000019", "SRG-APP-000141"]
+    iso27001: ["A.8.20", "A.8.22"]
+    hipaa: ["164.312(e)(1)"]
+    swift_cscf: ["1.1"]
+    uk_ce: ["CE-4"]
+    owasp_asvs: ["V1.9.1"]
+
+  internet-exposed-listener:
+    cwe: ["CWE-668"]
+    pci_dss: ["1.3.1", "1.3.2", "1.4.1"]
+    soc2: ["CC6.6"]
+    nist_800_53: ["SC-7", "AC-17"]
+    nist_csf: ["PR.AA-03", "PR.DS-02"]
+    nist_800_171: ["3.1.12", "3.13.1"]
+    cmmc: ["SC.L2-3.13.1", "AC.L2-3.1.12"]
+    fedramp: ["SC-7", "AC-17"]
+    disa_stig: ["SRG-NET-000019"]
+    iso27001: ["A.8.20", "A.8.22"]
+    swift_cscf: ["1.1"]
+    uk_ce: ["CE-1"]
+    owasp_asvs: ["V1.9.1"]
+
+  unguarded-datastore-access:
+    cwe: ["CWE-284"]
+    pci_dss: ["1.3.1", "7.2.1"]
+    soc2: ["CC6.1", "CC6.3"]
+    soc1: ["ITGC-3"]
+    nist_800_53: ["AC-3", "SC-7"]
+    nist_csf: ["PR.AA-05", "PR.DS-01"]
+    nist_800_171: ["3.1.2", "3.13.1"]
+    cmmc: ["AC.L2-3.1.2", "SC.L2-3.13.1"]
+    fedramp: ["AC-3", "SC-7"]
+    disa_stig: ["SRG-DB-000004", "SRG-DB-000171"]
+    iso27001: ["A.5.15", "A.8.3"]
+    hipaa: ["164.312(a)(1)"]
+    gdpr: ["Art.25", "Art.32"]
+    glba: ["314.4(c)(1)"]
+    swift_cscf: ["1.1", "5.1"]
+    owasp_asvs: ["V1.4.1"]
+
+  unenforced-trust-boundary:
+    cwe: ["CWE-284"]
+    pci_dss: ["1.2.1", "1.3.1"]
+    soc2: ["CC6.6"]
+    nist_800_53: ["SC-7", "AC-4"]
+    nist_csf: ["PR.AA-05"]
+    nist_800_171: ["3.1.3", "3.13.1"]
+    cmmc: ["SC.L2-3.13.1"]
+    fedramp: ["SC-7"]
+    disa_stig: ["SRG-NET-000019", "SRG-NET-000364"]
+    iso27001: ["A.8.20", "A.8.22"]
+    swift_cscf: ["1.1"]
+    uk_ce: ["CE-1"]
+
+  # ============================================================
+  # DATA FLOW RULES
+  # ============================================================
+
+  sensitive-data-unencrypted-flow:
+    cwe: ["CWE-319"]
+    pci_dss: ["4.2.1"]
+    soc2: ["CC6.7", "C1.1"]
+    nist_800_53: ["SC-8"]
+    nist_csf: ["PR.DS-02"]
+    nist_800_171: ["3.13.8"]
+    cmmc: ["SC.L2-3.13.8"]
+    fedramp: ["SC-8"]
+    fisma: ["SC-8"]
+    disa_stig: ["SRG-APP-000014"]
+    iso27001: ["A.8.24"]
+    hipaa: ["164.312(e)(1)"]
+    gdpr: ["Art.32", "Art.5.1(f)"]
+    glba: ["314.4(c)(3)"]
+    swift_cscf: ["2.1"]
+    owasp_asvs: ["V9.1.1"]
+
+  sensitive-data-no-auth-flow:
+    cwe: ["CWE-306"]
+    pci_dss: ["7.2.1", "7.2.2"]
+    soc2: ["CC6.1", "CC6.3"]
+    nist_800_53: ["AC-3", "IA-2"]
+    nist_csf: ["PR.AA-01", "PR.AA-05"]
+    nist_800_171: ["3.1.1", "3.1.2"]
+    cmmc: ["AC.L1-b.1.i"]
+    fedramp: ["AC-3"]
+    disa_stig: ["SRG-APP-000148"]
+    iso27001: ["A.5.15", "A.8.3"]
+    hipaa: ["164.312(d)", "164.312(a)(1)"]
+    gdpr: ["Art.25", "Art.32"]
+    glba: ["314.4(c)(1)"]
+    swift_cscf: ["5.1"]
+    owasp_asvs: ["V1.4.1"]
+
+  cross-boundary-no-encryption:
+    cwe: ["CWE-319"]
+    pci_dss: ["1.3.1", "4.2.1"]
+    soc2: ["CC6.7"]
+    nist_800_53: ["SC-8", "AC-4"]
+    nist_csf: ["PR.DS-02"]
+    nist_800_171: ["3.1.3", "3.13.8"]
+    cmmc: ["SC.L2-3.13.8"]
+    fedramp: ["SC-8"]
+    disa_stig: ["SRG-APP-000014", "SRG-NET-000019"]
+    iso27001: ["A.8.24", "A.8.22"]
+    hipaa: ["164.312(e)(1)"]
+    gdpr: ["Art.32"]
+    swift_cscf: ["2.1"]
+    uk_ce: ["CE-1"]
+    owasp_asvs: ["V9.1.1"]
 
   pii-no-encryption-in-transit:
     cwe: ["CWE-319"]
-    hipaa: ["164.312(e)(1)"]
-    gdpr: ["Article 32"]
+    pci_dss: ["4.2.1"]
+    soc2: ["CC6.7", "P1.1"]
     nist_800_53: ["SC-8"]
+    nist_csf: ["PR.DS-02"]
+    nist_800_171: ["3.13.8"]
+    cmmc: ["SC.L2-3.13.8"]
+    fedramp: ["SC-8"]
+    iso27001: ["A.8.24"]
+    iso27018: ["A.10.1", "A.11.1"]
+    hipaa: ["164.312(e)(1)", "164.312(e)(2)(ii)"]
+    gdpr: ["Art.32", "Art.5.1(f)", "Art.25"]
+    glba: ["314.4(c)(3)"]
+    owasp_asvs: ["V9.1.1"]
 
   pci-data-no-masking:
     cwe: ["CWE-200"]
-    pci_dss: ["pci-3.3", "pci-3.4"]
-    soc2: ["CC6.5"]
+    pci_dss: ["3.3.1", "3.4.1", "3.5.1"]
+    soc2: ["CC6.5", "C1.1"]
+    nist_800_53: ["SC-28", "MP-4"]
+    nist_csf: ["PR.DS-01"]
+    iso27001: ["A.8.11"]
+    swift_cscf: ["2.1"]
+    glba: ["314.4(c)(3)"]
+    owasp_asvs: ["V1.8.1"]
 
-  admin-interface-no-mfa:
-    cwe: ["CWE-308"]
-    pci_dss: ["pci-8.3"]
-    soc2: ["CC6.1"]
-    nist_800_53: ["IA-2"]
-    iso27001: ["A.9.4.2"]
+  # ============================================================
+  # AVAILABILITY RULES
+  # ============================================================
+
+  dos-risk-cross-boundary:
+    cwe: ["CWE-400"]
+    pci_dss: ["6.4.1"]
+    soc2: ["CC7.1", "A1.2"]
+    nist_800_53: ["SC-5", "CP-7"]
+    nist_csf: ["PR.IR-04", "DE.CM-01"]
+    nist_800_171: ["3.13.1"]
+    cmmc: ["SC.L2-3.13.1"]
+    fedramp: ["SC-5"]
+    disa_stig: ["SRG-NET-000362"]
+    iso27001: ["A.8.6", "A.8.14"]
+    swift_cscf: ["6.1"]
+    owasp_asvs: ["V1.11.1"]
+
+  # ============================================================
+  # INTEGRITY RULES
+  # ============================================================
+
+  high-integrity-no-auth:
+    cwe: ["CWE-345"]
+    pci_dss: ["7.2.1"]
+    soc2: ["CC6.1", "PI1.1"]
+    nist_800_53: ["SI-7", "AC-3"]
+    nist_csf: ["PR.DS-10"]
+    nist_800_171: ["3.14.1"]
+    cmmc: ["SI.L2-3.14.1"]
+    fedramp: ["SI-7"]
+    disa_stig: ["SRG-APP-000148"]
+    iso27001: ["A.5.15", "A.8.3"]
+    hipaa: ["164.312(c)(1)", "164.312(c)(2)"]
+    gdpr: ["Art.5.1(f)"]
+    swift_cscf: ["6.2"]
+    owasp_asvs: ["V1.4.1"]
+
+  # ============================================================
+  # LOGGING & MONITORING RULES
+  # ============================================================
+
+  missing-logging-zone:
+    cwe: ["CWE-778"]
+    pci_dss: ["10.2.1", "10.3.1", "10.4.1"]
+    soc2: ["CC7.2", "CC7.3"]
+    soc1: ["ITGC-6"]
+    nist_800_53: ["AU-2", "AU-3", "AU-12"]
+    nist_csf: ["DE.CM-09", "PR.PS-04"]
+    nist_800_171: ["3.3.1"]
+    cmmc: ["AU.L2-3.3.1"]
+    fedramp: ["AU-2", "AU-12"]
+    fisma: ["AU-2"]
+    disa_stig: ["SRG-APP-000089", "SRG-APP-000092"]
+    iso27001: ["A.8.15", "A.8.16"]
+    iso27017: ["CLD.12.1", "CLD.12.4"]
+    hipaa: ["164.312(b)"]
+    gdpr: ["Art.33"]
+    glba: ["314.4(c)(6)"]
+    swift_cscf: ["6.4"]
+    owasp_asvs: ["V1.7.1"]
+
+  missing-monitoring-zone:
+    cwe: ["CWE-778"]
+    soc2: ["CC7.1", "CC7.2"]
+    nist_800_53: ["SI-4", "CA-7"]
+    nist_csf: ["DE.CM-01", "DE.CM-09"]
+    nist_800_171: ["3.14.6", "3.14.7"]
+    cmmc: ["SI.L2-3.14.6"]
+    fedramp: ["SI-4"]
+    disa_stig: ["SRG-APP-000089"]
+    iso27001: ["A.8.16"]
+    iso27017: ["CLD.12.4"]
+    swift_cscf: ["6.4"]
 
   no-audit-logging:
     cwe: ["CWE-778"]
-    pci_dss: ["pci-10.1"]
+    pci_dss: ["10.2.1", "10.2.2"]
     soc2: ["CC7.2"]
-    nist_800_53: ["AU-2"]
+    soc1: ["ITGC-6"]
+    nist_800_53: ["AU-2", "AU-12"]
+    nist_csf: ["PR.PS-04", "DE.CM-03"]
+    nist_800_171: ["3.3.1", "3.3.2"]
+    cmmc: ["AU.L2-3.3.1", "AU.L2-3.3.2"]
+    fedramp: ["AU-2"]
+    fisma: ["AU-2"]
+    disa_stig: ["SRG-APP-000089", "SRG-APP-000091"]
+    iso27001: ["A.8.15"]
+    iso27017: ["CLD.12.1"]
     hipaa: ["164.312(b)"]
+    gdpr: ["Art.33"]
+    glba: ["314.4(c)(6)"]
+    swift_cscf: ["6.4"]
+    owasp_asvs: ["V1.7.1", "V1.7.2"]
+
+  # ============================================================
+  # MODEL QUALITY RULES
+  # ============================================================
+
+  orphaned-component:
+    nist_800_53: ["CM-8"]
+    nist_csf: ["ID.AM-01", "ID.AM-02"]
+    iso27001: ["A.8.9"]
+
+  missing-data-classification:
+    cwe: ["CWE-200"]
+    pci_dss: ["9.6.1"]
+    soc2: ["CC6.5"]
+    nist_800_53: ["RA-2"]
+    nist_csf: ["ID.AM-07", "GV.RM-01"]
+    nist_800_171: ["3.11.1"]
+    cmmc: ["RA.L2-3.11.1"]
+    iso27001: ["A.5.12", "A.5.13"]
+    hipaa: ["164.308(a)(1)(ii)(A)"]
+    gdpr: ["Art.5.1(c)"]
+
+  # ============================================================
+  # RATE LIMITING & DoS RULES
+  # ============================================================
+
+  no-rate-limiting:
+    cwe: ["CWE-770"]
+    pci_dss: ["6.4.1"]
+    soc2: ["CC7.1", "A1.2"]
+    nist_800_53: ["SC-5"]
+    nist_csf: ["PR.IR-04"]
+    nist_800_171: ["3.13.1"]
+    cmmc: ["SC.L2-3.13.1"]
+    fedramp: ["SC-5"]
+    disa_stig: ["SRG-NET-000362"]
+    iso27001: ["A.8.6"]
+    swift_cscf: ["6.1"]
+    owasp_asvs: ["V13.4.1", "V1.11.1"]
+
+  # ============================================================
+  # SUPPLY CHAIN RULES
+  # ============================================================
+
+  no-supply-chain-attestation:
+    cwe: ["CWE-1104"]
+    pci_dss: ["6.3.1", "6.3.2"]
+    soc2: ["CC6.8"]
+    nist_800_53: ["SA-12", "SR-3", "SR-4", "SR-11", "SI-7"]
+    nist_csf: ["GV.SC-01", "GV.SC-05", "PR.PS-06"]
+    nist_800_171: ["3.14.1"]
+    cmmc: ["SI.L2-3.14.1"]
+    fedramp: ["SA-12", "SR-3"]
+    disa_stig: ["SRG-APP-000131"]
+    iso27001: ["A.8.25", "A.8.26"]
+    swift_cscf: ["6.2"]
+    uk_ce: ["CE-5"]
+    au_e8: ["E8-2"]
+    owasp_asvs: ["V1.1.1", "V1.1.5"]
+
+  # ============================================================
+  # INPUT VALIDATION RULES
+  # ============================================================
+
+  no-input-validation:
+    cwe: ["CWE-20"]
+    pci_dss: ["6.2.4", "6.5.1"]
+    soc2: ["PI1.1"]
+    nist_800_53: ["SI-10"]
+    nist_csf: ["PR.DS-10"]
+    nist_800_171: ["3.14.1"]
+    cmmc: ["SI.L2-3.14.1"]
+    fedramp: ["SI-10"]
+    disa_stig: ["SRG-APP-000251", "SRG-APP-000252"]
+    iso27001: ["A.8.26", "A.8.28"]
+    hipaa: ["164.312(c)(1)"]
+    swift_cscf: ["6.1"]
+    owasp_asvs: ["V1.5.1", "V5.1.1"]
+
+  # ============================================================
+  # EXTERNAL SYSTEM RULES
+  # ============================================================
+
+  untrusted-external-no-tls:
+    cwe: ["CWE-319"]
+    pci_dss: ["4.2.1"]
+    soc2: ["CC6.7", "CC9.2"]
+    nist_800_53: ["SC-8", "SA-9"]
+    nist_csf: ["PR.DS-02", "GV.SC-05"]
+    nist_800_171: ["3.13.8"]
+    cmmc: ["SC.L2-3.13.8"]
+    fedramp: ["SA-9", "SC-8"]
+    iso27001: ["A.5.23", "A.8.24"]
+    iso27017: ["CLD.13.1"]
+    gdpr: ["Art.32", "Art.46"]
+    glba: ["314.4(f)(3)"]
+    swift_cscf: ["2.1"]
+    owasp_asvs: ["V9.1.1"]
+
+  external-vendor-no-assessment:
+    cwe: ["CWE-829"]
+    pci_dss: ["12.8.1", "12.8.2"]
+    soc2: ["CC9.2"]
+    soc1: ["ITGC-8"]
+    nist_800_53: ["SA-4", "SA-9", "SR-3"]
+    nist_csf: ["GV.SC-05", "ID.AM-08"]
+    nist_800_171: ["3.12.1"]
+    cmmc: ["CA.L2-3.12.1"]
+    fedramp: ["SA-9"]
+    iso27001: ["A.5.19", "A.5.20", "A.5.23"]
+    iso27017: ["CLD.6.3"]
+    gdpr: ["Art.28"]
+    glba: ["314.4(f)(3)"]
+    swift_cscf: ["2.3"]
+
+  # ============================================================
+  # SESSION & ADMIN RULES
+  # ============================================================
+
+  excessive-session-timeout:
+    cwe: ["CWE-613"]
+    pci_dss: ["8.2.8"]
+    soc2: ["CC6.1"]
+    nist_800_53: ["AC-11", "AC-12", "SC-10"]
+    nist_csf: ["PR.AA-03"]
+    nist_800_171: ["3.1.12"]
+    cmmc: ["AC.L2-3.1.12"]
+    fedramp: ["AC-11", "AC-12"]
+    disa_stig: ["SRG-APP-000295", "SRG-APP-000389"]
+    iso27001: ["A.8.5"]
+    hipaa: ["164.312(a)(2)(iii)"]
+    swift_cscf: ["5.2"]
+    owasp_asvs: ["V3.3.1", "V3.3.2"]
+
+  admin-interface-no-mfa:
+    cwe: ["CWE-308"]
+    pci_dss: ["8.4.1", "8.4.2", "8.4.3"]
+    soc2: ["CC6.1", "CC6.3"]
+    soc1: ["ITGC-3"]
+    nist_800_53: ["IA-2", "IA-2(1)"]
+    nist_csf: ["PR.AA-01", "PR.AA-02"]
+    nist_800_171: ["3.5.3", "3.1.7"]
+    cmmc: ["IA.L2-3.5.3"]
+    fedramp: ["IA-2(1)"]
+    fisma: ["IA-2"]
+    disa_stig: ["SRG-APP-000149", "SRG-APP-000150"]
+    iso27001: ["A.5.17", "A.8.2"]
+    iso27017: ["CLD.9.5"]
+    hipaa: ["164.312(d)"]
+    gdpr: ["Art.32"]
+    glba: ["314.4(c)(1)"]
+    swift_cscf: ["4.2"]
+    uk_ce: ["CE-3"]
+    au_e8: ["E8-5", "E8-7"]
+    owasp_asvs: ["V2.2.1", "V2.8.1"]
+
+  # ============================================================
+  # ERROR EXPOSURE RULES
+  # ============================================================
+
+  verbose-error-exposure:
+    cwe: ["CWE-209"]
+    pci_dss: ["6.2.4"]
+    soc2: ["CC6.1"]
+    nist_800_53: ["SI-11"]
+    nist_csf: ["PR.PS-01"]
+    disa_stig: ["SRG-APP-000266", "SRG-APP-000267"]
+    iso27001: ["A.8.26"]
+    owasp_asvs: ["V1.7.1", "V14.5.1"]
+    au_e8: ["E8-4"]
+
+  # ============================================================
+  # CORS RULES
+  # ============================================================
 
   wildcard-cors-authenticated:
-    cwe: ["CWE-942"]
-    owasp_asvs: ["V14.5.3"]
+    cwe: ["CWE-346"]
+    pci_dss: ["6.2.4"]
+    soc2: ["CC6.1"]
     nist_800_53: ["AC-4"]
+    nist_csf: ["PR.AA-05"]
+    disa_stig: ["SRG-APP-000033"]
+    iso27001: ["A.8.26"]
+    owasp_asvs: ["V14.5.3"]
+
+  # ============================================================
+  # CONTAINER / KUBERNETES SECURITY RULES
+  # ============================================================
+
+  container-no-resource-limits:
+    cwe: ["CWE-770"]
+    soc2: ["A1.2"]
+    nist_800_53: ["SC-5", "SC-6"]
+    nist_csf: ["PR.IR-04"]
+    cmmc: ["SC.L2-3.13.1"]
+    fedramp: ["SC-5"]
+    disa_stig: ["SRG-APP-000246"]
+    iso27001: ["A.8.6"]
+    iso27017: ["CLD.8.1"]
+    owasp_asvs: ["V1.11.1"]
+
+  container-privileged-execution:
+    cwe: ["CWE-250"]
+    pci_dss: ["7.2.1", "2.2.1"]
+    soc2: ["CC6.1", "CC6.3"]
+    nist_800_53: ["AC-6", "AC-6(9)", "CM-7"]
+    nist_csf: ["PR.AA-05", "PR.PS-01"]
+    nist_800_171: ["3.1.5"]
+    cmmc: ["AC.L2-3.1.5"]
+    fedramp: ["AC-6", "CM-7"]
+    disa_stig: ["SRG-APP-000340", "SRG-APP-000342"]
+    iso27001: ["A.8.2", "A.8.9"]
+    iso27017: ["CLD.8.1"]
+    owasp_asvs: ["V1.14.1"]
+
+  container-no-network-policy:
+    cwe: ["CWE-668"]
+    pci_dss: ["1.2.1", "1.3.1"]
+    soc2: ["CC6.6"]
+    nist_800_53: ["SC-7", "AC-4"]
+    nist_csf: ["PR.DS-02", "PR.AA-05"]
+    nist_800_171: ["3.13.1", "3.13.6"]
+    cmmc: ["SC.L2-3.13.1", "SC.L2-3.13.6"]
+    fedramp: ["SC-7"]
+    disa_stig: ["SRG-NET-000019", "SRG-APP-000033"]
+    iso27001: ["A.8.20", "A.8.22"]
+    iso27017: ["CLD.13.1"]
+    owasp_asvs: ["V1.14.1"]
+
+  # ============================================================
+  # SECRETS MANAGEMENT RULES
+  # ============================================================
+
+  missing-secrets-manager:
+    cwe: ["CWE-798"]
+    pci_dss: ["2.2.7", "8.3.2"]
+    soc2: ["CC6.1", "CC6.7"]
+    nist_800_53: ["IA-5", "SC-12"]
+    nist_csf: ["PR.AA-01"]
+    nist_800_171: ["3.5.1"]
+    cmmc: ["IA.L2-3.5.1"]
+    fedramp: ["IA-5", "SC-12"]
+    disa_stig: ["SRG-APP-000171", "SRG-APP-000172"]
+    iso27001: ["A.5.17", "A.8.24"]
+    hipaa: ["164.312(a)(2)(iv)"]
+    gdpr: ["Art.32"]
+    swift_cscf: ["4.1"]
+    owasp_asvs: ["V1.6.1", "V1.14.1"]
+
+  database-no-secrets-manager:
+    cwe: ["CWE-798"]
+    pci_dss: ["2.2.7", "8.3.2"]
+    soc2: ["CC6.1", "CC6.7"]
+    soc1: ["ITGC-3"]
+    nist_800_53: ["IA-5", "SC-12", "SC-28"]
+    nist_csf: ["PR.AA-01", "PR.DS-01"]
+    nist_800_171: ["3.5.1"]
+    cmmc: ["IA.L2-3.5.1"]
+    fedramp: ["IA-5", "SC-12"]
+    disa_stig: ["SRG-DB-000004", "SRG-DB-000180"]
+    iso27001: ["A.5.17", "A.8.24"]
+    hipaa: ["164.312(a)(2)(iv)"]
+    gdpr: ["Art.32"]
+    swift_cscf: ["4.1"]
+    glba: ["314.4(c)(1)"]
+    owasp_asvs: ["V1.6.1", "V1.14.1"]
+

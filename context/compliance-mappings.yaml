@@ -5,158 +5,893 @@
 # Maps compliance frameworks to specific architecture controls that @security-reviewer
 # can validate. Each control defines what architecture properties must be present.
 #
+# Frameworks: PCI DSS v4.0, SOC 2 Type II, SOC 1/SSAE 18, NIST 800-53 Rev 5,
+# NIST CSF 2.0, NIST 800-171 Rev 2, NIST 800-37 RMF, FedRAMP, FISMA, CMMC 2.0,
+# DISA STIGs, ISO 27001:2022, ISO 27017, ISO 27018, GDPR, HIPAA, UK Cyber Essentials,
+# Australian Essential Eight, SWIFT CSCF, GLBA, OWASP ASVS 4.0
+#
 # Used by @security-reviewer for compliance validation.
 
 frameworks:
 
   - id: pci-dss
-    name: PCI DSS v4.0
-    description: Payment Card Industry Data Security Standard
+    name: "PCI DSS v4.0"
+    version: "4.0"
+    description: Payment Card Industry Data Security Standard version 4.0 — requirements for protecting cardholder data environments.
     controls:
-      - id: pci-4.1
-        name: "Req 4.1 — Encrypt cardholder data in transit"
-        description: Strong cryptography for transmitting cardholder data over open, public networks.
-        validation:
-          check: all_listeners_with_confidential_data_have_tls
-          conditions:
-            - data_classification: [confidential, restricted]
-            - tls_enabled: true
-            - tls_version_min: "1.2"
-        severity: critical
-
-      - id: pci-6.4
-        name: "Req 6.4 — Public-facing web applications protected"
-        description: Public-facing web applications must be protected against known attacks.
-        validation:
-          check: internet_routable_zones_have_waf
-          conditions:
-            - zone.internet_routable: true
-            - infrastructure_resource.resource_type: waf
-        severity: high
-
-      - id: pci-7.1
-        name: "Req 7.1 — Restrict access by business need-to-know"
-        description: Access to system components and cardholder data limited to those who require access.
-        validation:
-          check: all_listeners_have_authz
-          conditions:
-            - authz_required: true
-        severity: high
-
-      - id: pci-8.3
-        name: "Req 8.3 — Multi-factor authentication"
-        description: MFA for all non-console administrative access.
-        validation:
-          check: admin_listeners_have_mfa
-          conditions:
-            - authn_mechanism: [mfa, certificate, oauth2]
-        severity: high
-
-      - id: pci-10.1
-        name: "Req 10.1 — Audit trails established"
-        description: Implement audit trails to link all access to system components.
-        validation:
-          check: zones_have_logging_infrastructure
-          conditions:
-            - infrastructure_resource.resource_type: logging
-        severity: high
-
+        - id: pci-dss-1.1
+          name: "Req 1.1 — Network Security Controls Established and Implemented"
+          description: Network security controls must be defined, implemented, and documented to restrict inbound and outbound traffic to only what is necessary for the cardholder data environment.
+          validation:
+            check: verify_network_security_controls_established
+            conditions:
+              - segmentation_type: [vlan, micro_segmentation, vpc, dmz]
+          severity: critical
+  
+        - id: pci-dss-1.2
+          name: "Req 1.2 — Default Deny Policy on Network Security Controls"
+          description: All network security controls must implement a default-deny posture, allowing only explicitly approved communications between system components.
+          validation:
+            check: verify_default_deny_enforced
+            conditions:
+              - default_deny: true
+          severity: critical
+  
+        - id: pci-dss-1.3
+          name: "Req 1.3 — Internet-Routable Zones Restricted by Trust Boundary"
+          description: Internet-routable network zones must be protected by an enforced trust boundary with active inspection to prevent unauthorized access into the cardholder data environment.
+          validation:
+            check: verify_internet_routable_zones_have_enforced_boundary
+            conditions:
+              - internet_routable: true
+              - enforcement_mechanism: [firewall, waf, ngfw, security_group]
+              - inspection_enabled: true
+          severity: critical
+  
+        - id: pci-dss-1.4
+          name: "Req 1.4 — Egress Filtering on All Network Zones"
+          description: All zones within scope must have egress filtering enabled to restrict outbound connections to only authorized destinations and prevent data exfiltration.
+          validation:
+            check: verify_egress_filtering_enabled
+            conditions:
+              - egress_filtered: true
+          severity: high
+  
+        - id: pci-dss-2.1
+          name: "Req 2.1 — Secure Configurations Applied to All System Components"
+          description: All system components must be protected from known vulnerabilities by applying secure configuration standards; zone-level default-deny posture enforces the principle of least privilege.
+          validation:
+            check: verify_secure_configuration_baseline
+            conditions:
+              - default_deny: true
+              - segmentation_type: [vlan, micro_segmentation, vpc, dmz, dedicated_network]
+          severity: high
+  
+        - id: pci-dss-2.2
+          name: "Req 2.2 — Encryption Key Management Controls"
+          description: Components that store, process, or transmit cardholder data must reference a dedicated secrets or key management system to ensure cryptographic material is not hardcoded or left unmanaged.
+          validation:
+            check: verify_encryption_key_management_present
+            conditions:
+              - encryption_key_management: [hsm, kms, vault]
+          severity: high
+  
+        - id: pci-dss-3.1
+          name: "Req 3.1 — Cardholder Data Stored Only Where Necessary"
+          description: Data entities that carry PCI cardholder data must be explicitly identified in the architecture so that retention and protection controls can be audited and minimized.
+          validation:
+            check: verify_pci_data_entities_declared
+            conditions:
+              - contains_pci: true
+              - data_owner: required
+          severity: critical
+  
+        - id: pci-dss-3.2
+          name: "Req 3.2 — Stored Cardholder Data Protected with Encryption at Rest"
+          description: Components that store cardholder data must implement encryption at rest using strong cryptography to render the data unreadable to unauthorized parties.
+          validation:
+            check: verify_encryption_at_rest_for_pci_components
+            conditions:
+              - encryption_at_rest: [aes_256, aes_128, tde]
+              - stores_data: true
+          severity: critical
+  
+        - id: pci-dss-3.3
+          name: "Req 3.3 — Data Masking Applied to PCI Relationships"
+          description: Relationships that carry PCI-classified data must apply data masking or truncation to ensure primary account numbers and sensitive authentication data are not exposed in logs, displays, or non-production environments.
+          validation:
+            check: verify_data_masking_on_pci_relationships
+            conditions:
+              - data_entities_contain_pci: true
+              - data_masking: true
+          severity: critical
+  
+        - id: pci-dss-4.1
+          name: "Req 4.1 — TLS Enabled for All Cardholder Data Transmissions"
+          description: All data flows that cross trust boundaries or traverse public networks must use TLS to protect cardholder data in transit against interception and modification.
+          validation:
+            check: verify_tls_enabled_on_listeners
+            conditions:
+              - tls_enabled: true
+          severity: critical
+  
+        - id: pci-dss-4.2
+          name: "Req 4.2 — Minimum TLS Version 1.2 Required"
+          description: TLS configurations must specify a minimum protocol version of 1.2 or higher to eliminate known vulnerabilities in older SSL and TLS versions.
+          validation:
+            check: verify_tls_minimum_version
+            conditions:
+              - tls_version_min: ["1.2", "1.3"]
+          severity: critical
+  
+        - id: pci-dss-4.3
+          name: "Req 4.3 — Strong Cipher Suite Policy Enforced"
+          description: Listeners handling cardholder data must enforce a strong cipher suite policy that excludes weak, deprecated, or export-grade ciphers.
+          validation:
+            check: verify_strong_cipher_suite_policy
+            conditions:
+              - cipher_suite_policy: [strong, tls13_only, fips_140_2]
+          severity: high
+  
+        - id: pci-dss-4.4
+          name: "Req 4.4 — Forward Secrecy Required for Cardholder Data Transmissions"
+          description: Listeners must require forward secrecy (e.g., ECDHE key exchange) to ensure that compromise of long-term keys does not decrypt previously captured sessions.
+          validation:
+            check: verify_forward_secrecy_required
+            conditions:
+              - forward_secrecy_required: true
+          severity: high
+  
+        - id: pci-dss-5.1
+          name: "Req 5.1 — Intrusion Detection/Prevention Deployed in CDE Zones"
+          description: Zones within or adjacent to the cardholder data environment must have IDS/IPS enabled to detect and alert on malicious activity and potential malware.
+          validation:
+            check: verify_ids_ips_enabled_in_cde_zones
+            conditions:
+              - ids_ips_enabled: true
+          severity: high
+  
+        - id: pci-dss-6.1
+          name: "Req 6.1 — Input Validation on All Relationships Entering CDE"
+          description: All data flows entering the cardholder data environment must enforce input validation to prevent injection attacks and malformed data from reaching sensitive components.
+          validation:
+            check: verify_input_validation_on_cde_relationships
+            conditions:
+              - input_validation: true
+              - crosses_trust_boundary: true
+          severity: high
+  
+        - id: pci-dss-6.2
+          name: "Req 6.2 — Error Detail Not Exposed to End Users"
+          description: Application listeners must not expose internal error details, stack traces, or system information to end users, preventing reconnaissance that aids exploitation.
+          validation:
+            check: verify_error_detail_not_exposed
+            conditions:
+              - error_detail_exposure: false
+          severity: high
+  
+        - id: pci-dss-6.3
+          name: "Req 6.3 — Web Application Firewall on Internet-Facing Zones"
+          description: Internet-routable zones hosting web applications that process cardholder data must be protected by a Web Application Firewall (WAF) to defend against OWASP Top 10 attacks.
+          validation:
+            check: verify_waf_on_internet_routable_zones
+            conditions:
+              - internet_routable: true
+              - enforcement_mechanism: [waf, ngfw_with_waf]
+          severity: critical
+  
+        - id: pci-dss-7.1
+          name: "Req 7.1 — Authorization Required on All Listeners Accessing CDE"
+          description: All system component listeners must enforce authorization so that access to cardholder data and related functions is restricted to individuals and processes with a business need.
+          validation:
+            check: verify_authz_required_on_cde_listeners
+            conditions:
+              - authz_required: true
+          severity: critical
+  
+        - id: pci-dss-7.2
+          name: "Req 7.2 — Role-Based or Attribute-Based Access Control Model"
+          description: Authorization must be implemented using a formal access control model such as RBAC or ABAC to ensure least-privilege access is systematically enforced.
+          validation:
+            check: verify_formal_authz_model
+            conditions:
+              - authz_model: [rbac, abac, pbac]
+          severity: high
+  
+        - id: pci-dss-8.1
+          name: "Req 8.1 — Strong Authentication Mechanism on All Listeners"
+          description: All listeners must require a strong authentication mechanism to verify the identity of users and systems before granting access to cardholder data environment resources.
+          validation:
+            check: verify_strong_authn_mechanism
+            conditions:
+              - authn_mechanism: [oauth2, oidc, saml, mtls, jwt, kerberos]
+          severity: critical
+  
+        - id: pci-dss-8.2
+          name: "Req 8.2 — Multi-Factor Authentication on Administrative Interfaces"
+          description: Administrative interfaces into the cardholder data environment must enforce multi-factor authentication to prevent unauthorized administrative access from compromised credentials.
+          validation:
+            check: verify_mfa_on_admin_interfaces
+            conditions:
+              - admin_interface: true
+              - authn_mechanism: [mfa, totp, fido2, piv]
+          severity: critical
+  
+        - id: pci-dss-8.3
+          name: "Req 8.3 — Session Timeout Enforced on Interactive Sessions"
+          description: Interactive user sessions must time out after a defined period of inactivity (not exceeding 15 minutes per PCI DSS) to reduce the risk of unauthorized session reuse.
+          validation:
+            check: verify_session_timeout_within_limit
+            conditions:
+              - session_timeout_minutes: 15
+          severity: high
+  
+        - id: pci-dss-10.1
+          name: "Req 10.1 — Audit Logging Enabled on All CDE Components"
+          description: All components within or connected to the cardholder data environment must have audit logging enabled to capture access events, configuration changes, and security-relevant activities.
+          validation:
+            check: verify_audit_logging_enabled_on_cde_components
+            conditions:
+              - audit_logging: true
+          severity: critical
+  
+        - id: pci-dss-10.2
+          name: "Req 10.2 — Audit Logs Protected Against Tampering"
+          description: Audit log storage must be protected against unauthorized modification or deletion through tamper-evident mechanisms such as immutable storage, WORM, or log signing.
+          validation:
+            check: verify_audit_log_tamper_protection
+            conditions:
+              - audit_log_tamper_proof: true
+          severity: critical
+  
+        - id: pci-dss-10.3
+          name: "Req 10.3 — Audit Log Infrastructure Present in Logging Zones"
+          description: Zones designated for logging or monitoring must include an infrastructure resource capable of receiving, storing, and forwarding audit events from CDE components.
+          validation:
+            check: verify_logging_infrastructure_in_zones
+            conditions:
+              - infrastructure_resource.resource_type: [siem, log_aggregator, splunk, cloudwatch, elk]
+          severity: high
+  
+        - id: pci-dss-11.1
+          name: "Req 11.1 — IDS/IPS Enabled to Support Vulnerability Detection"
+          description: Intrusion detection and prevention systems must be deployed across CDE-adjacent zones to support continuous monitoring for unauthorized access attempts and known attack patterns.
+          validation:
+            check: verify_ids_ips_for_vulnerability_detection
+            conditions:
+              - ids_ips_enabled: true
+              - egress_filtered: true
+          severity: high
+  
   - id: soc2
-    name: SOC 2 Type II
-    description: Service Organization Control 2
+    name: "SOC 2 Type II"
+    version: "2017"
+    description: AICPA Trust Services Criteria for SOC 2 Type II — Security, Availability, Processing Integrity, Confidentiality, and Privacy.
     controls:
-      - id: soc2-cc6.1
-        name: "CC6.1 — Logical access security"
-        description: Logical access security software, infrastructure, and architectures are in place.
+        - id: soc2-cc6.1
+          name: "CC6.1 — Logical Access Security Measures"
+          description: The entity implements logical access security software, infrastructure, and architectures over protected information assets to protect them from security events to meet the entity's objectives.
+          validation:
+            check: verify_logical_access_controls
+            conditions:
+              - authz_required: true
+              - authn_mechanism: [oauth2, oidc, saml, mtls, jwt, mfa, kerberos]
+          severity: critical
+  
+        - id: soc2-cc6.2
+          name: "CC6.2 — Prior to Issuance of System Credentials"
+          description: Authentication mechanisms must be registered and managed through a controlled process; admin interfaces must require multi-factor authentication to reduce risk of unauthorized issuance.
+          validation:
+            check: verify_mfa_on_privileged_access
+            conditions:
+              - admin_interface: true
+              - authn_mechanism: [mfa, totp, fido2, piv]
+          severity: critical
+  
+        - id: soc2-cc6.3
+          name: "CC6.3 — Role-Based Access to Protected Information"
+          description: Access to confidential and restricted data is limited to authorized personnel through a formal access control model that enforces least privilege and separation of duties.
+          validation:
+            check: verify_rbac_or_abac_model
+            conditions:
+              - authz_model: [rbac, abac, pbac]
+              - authz_required: true
+          severity: high
+  
+        - id: soc2-cc6.6
+          name: "CC6.6 — Restriction of Access to Systems and Data via Networks"
+          description: Logical access security measures are in place to restrict access to systems and data via network boundaries, including default-deny posture and trust boundary enforcement.
+          validation:
+            check: verify_network_access_restrictions
+            conditions:
+              - default_deny: true
+              - enforcement_mechanism: [firewall, waf, ngfw, security_group, zero_trust_proxy]
+          severity: critical
+  
+        - id: soc2-cc6.7
+          name: "CC6.7 — Encryption of Data in Transit"
+          description: The entity restricts the transmission of confidential and sensitive information by encrypting data in transit; all listeners must enforce TLS with a minimum version of 1.2.
+          validation:
+            check: verify_encryption_in_transit
+            conditions:
+              - tls_enabled: true
+              - tls_version_min: ["1.2", "1.3"]
+          severity: critical
+  
+        - id: soc2-cc6.8
+          name: "CC6.8 — Prevention of Unauthorized Software"
+          description: Controls are in place to prevent unauthorized or malicious software from being deployed; components must reference a secrets manager and maintain SBOM availability to support integrity verification.
+          validation:
+            check: verify_software_integrity_controls
+            conditions:
+              - sbom_available: true
+              - secrets_manager_ref: required
+          severity: high
+  
+        - id: soc2-cc7.1
+          name: "CC7.1 — Detection of Configuration Changes"
+          description: The entity uses detection and monitoring procedures including audit logging and tamper-evident controls to identify configuration changes and potential security events.
+          validation:
+            check: verify_audit_logging_and_tamper_protection
+            conditions:
+              - audit_logging: true
+              - audit_log_tamper_proof: true
+          severity: high
+  
+        - id: soc2-cc7.2
+          name: "CC7.2 — Monitoring of Infrastructure and Software"
+          description: The entity monitors infrastructure and software for indicators of compromise; zones must have IDS/IPS enabled and a logging infrastructure component available for event correlation.
+          validation:
+            check: verify_monitoring_infrastructure_deployed
+            conditions:
+              - ids_ips_enabled: true
+              - infrastructure_resource.resource_type: [siem, log_aggregator, splunk, cloudwatch, elk, datadog]
+          severity: high
+  
+        - id: soc2-cc8.1
+          name: "CC8.1 — Change Management Process Controls"
+          description: The entity authorizes, designs, develops, acquires, and implements changes to infrastructure, data, software, and procedures through a controlled change management process; SLSA build level indicates software supply chain maturity.
+          validation:
+            check: verify_change_management_controls
+            conditions:
+              - slsa_level: [2, 3, 4]
+              - sbom_available: true
+          severity: high
+  
+        - id: soc2-cc9.1
+          name: "CC9.1 — Risk Assessment and Risk Mitigation"
+          description: The entity identifies, selects, and develops risk mitigation activities for risks arising from potential business disruptions; network segmentation and egress filtering reduce the attack surface.
+          validation:
+            check: verify_risk_mitigation_architecture
+            conditions:
+              - segmentation_type: [vlan, micro_segmentation, vpc, dmz]
+              - egress_filtered: true
+          severity: high
+  
+        - id: soc2-cc9.2
+          name: "CC9.2 — Vendor and Third-Party Risk Management"
+          description: The entity assesses and manages risks associated with vendors and business partners; multi-tenant components must enforce tenant isolation and reference a shared responsibility model.
+          validation:
+            check: verify_third_party_isolation_controls
+            conditions:
+              - multi_tenant: true
+              - tenant_isolation: [dedicated, namespace, container, vm]
+          severity: high
+  
+        - id: soc2-a1.1
+          name: "A1.1 — Availability: Current Processing Capacity"
+          description: The entity maintains, monitors, and evaluates current processing capacity and use of system components to manage capacity demand; components must declare resiliency characteristics.
+          validation:
+            check: verify_resiliency_declared
+            conditions:
+              - resiliency: [active_active, active_passive, multi_az, replicated]
+          severity: high
+  
+        - id: soc2-a1.2
+          name: "A1.2 — Availability: Recovery Objectives Defined"
+          description: The entity authorizes, designs, develops, acquires, implements, and maintains environmental protections and backup and recovery infrastructure to meet recovery time and recovery point objectives.
+          validation:
+            check: verify_rto_rpo_defined
+            conditions:
+              - rto_minutes: required
+              - rpo_minutes: required
+          severity: high
+  
+        - id: soc2-a1.3
+          name: "A1.3 — Availability: Multi-Region Deployment for Critical Services"
+          description: Environmental protections and recovery procedures must account for geographic redundancy; production deployments of critical services must use multi-region architecture to meet availability commitments.
+          validation:
+            check: verify_multi_region_for_availability
+            conditions:
+              - multi_region: true
+              - environment: [production, prod]
+          severity: medium
+  
+        - id: soc2-pi1.1
+          name: "PI1.1 — Processing Integrity: Input Validation"
+          description: The entity implements policies and procedures to ensure that inputs to the system are complete, accurate, and valid before processing; all relationships crossing trust boundaries must enforce input validation.
+          validation:
+            check: verify_input_validation_on_relationships
+            conditions:
+              - input_validation: true
+              - crosses_trust_boundary: true
+          severity: high
+  
+        - id: soc2-pi1.2
+          name: "PI1.2 — Processing Integrity: Data Masking for Sensitive Outputs"
+          description: Outputs from the system are complete, accurate, and distributed to authorized personnel; data masking must be applied to relationships carrying sensitive data to prevent unintended exposure.
+          validation:
+            check: verify_data_masking_on_sensitive_flows
+            conditions:
+              - data_masking: true
+              - data_entities_contain_pii: true
+          severity: high
+  
+        - id: soc2-c1.1
+          name: "C1.1 — Confidentiality: Classification of Confidential Information"
+          description: The entity identifies and maintains confidential information to meet the entity's objectives related to confidentiality; all relationships must carry an explicit data classification.
+          validation:
+            check: verify_data_classification_on_relationships
+            conditions:
+              - data_classification: [confidential, restricted, pii, pci, phi, sensitive]
+          severity: high
+  
+        - id: soc2-c1.2
+          name: "C1.2 — Confidentiality: Encryption at Rest for Confidential Components"
+          description: Confidential information is protected during processing and storage using strong encryption; all components that store data must have encryption at rest enabled.
+          validation:
+            check: verify_encryption_at_rest_for_data_components
+            conditions:
+              - encryption_at_rest: [aes_256, aes_128, tde, fpe]
+              - stores_data: true
+          severity: critical
+  
+        - id: soc2-c1.3
+          name: "C1.3 — Confidentiality: Encryption in Transit for Confidential Data Flows"
+          description: Confidential data in transit must be encrypted using TLS with strong ciphers; cipher suite policy and forward secrecy must be enforced to prevent interception.
+          validation:
+            check: verify_strong_tls_for_confidential_flows
+            conditions:
+              - tls_enabled: true
+              - cipher_suite_policy: [strong, tls13_only, fips_140_2]
+              - forward_secrecy_required: true
+          severity: critical
+  
+        - id: soc2-p1.1
+          name: "P1.1 — Privacy: Notice and Personal Information Identification"
+          description: The entity provides notice to data subjects about the purpose of collecting personal information; data entities containing PII must be declared with an explicit data owner and retention period.
+          validation:
+            check: verify_pii_data_entities_documented
+            conditions:
+              - contains_pii: true
+              - data_owner: required
+              - retention_days: required
+          severity: high
+  
+        - id: soc2-p1.2
+          name: "P1.2 — Privacy: Data Residency and Transfer Restrictions"
+          description: Personal information is collected, used, retained, disclosed, and disposed of in conformity with the commitments in the entity's privacy notice; deployments handling PII must declare residency requirements.
+          validation:
+            check: verify_pii_residency_requirements_declared
+            conditions:
+              - contains_pii: true
+              - residency_requirements: required
+              - data_residency_required: true
+          severity: high
+  
+  - id: soc1
+    name: "SOC 1 / SSAE 18"
+    version: "SSAE 18"
+    description: AICPA SOC 1 / SSAE 18 — IT General Controls relevant to architecture, covering change management, access controls, operations, data integrity, and segregation of duties.
+    controls:
+        - id: soc1-itgc-1
+          name: "ITGC-1 — Logical Access Controls Over Financial Systems"
+          description: Access to systems, programs, and data that support financial reporting must be restricted to authorized individuals through enforced authentication and authorization mechanisms.
+          validation:
+            check: verify_logical_access_on_financial_components
+            conditions:
+              - authz_required: true
+              - authn_mechanism: [oauth2, oidc, saml, mtls, jwt, mfa, kerberos]
+              - authz_model: [rbac, abac, pbac]
+          severity: critical
+  
+        - id: soc1-itgc-2
+          name: "ITGC-2 — Privileged Access Restricted and Multi-Factor Authenticated"
+          description: Privileged and administrative access to financial and supporting systems must require multi-factor authentication, and such access must be logged to support audit and review.
+          validation:
+            check: verify_mfa_and_logging_on_admin_access
+            conditions:
+              - admin_interface: true
+              - authn_mechanism: [mfa, totp, fido2, piv]
+              - audit_logging: true
+          severity: critical
+  
+        - id: soc1-itgc-3
+          name: "ITGC-3 — Change Management — Software Supply Chain Integrity"
+          description: Changes to programs and systems must follow a controlled process; SLSA build level and SBOM availability provide evidence of supply chain integrity and authorized change management.
+          validation:
+            check: verify_change_management_slsa
+            conditions:
+              - slsa_level: [2, 3, 4]
+              - sbom_available: true
+          severity: high
+  
+        - id: soc1-itgc-4
+          name: "ITGC-4 — Operations Monitoring and Audit Logging"
+          description: Computer operations must be monitored through audit logging and tamper-evident log storage to detect and investigate incidents that could affect the completeness and accuracy of financial processing.
+          validation:
+            check: verify_operations_monitoring_controls
+            conditions:
+              - audit_logging: true
+              - audit_log_tamper_proof: true
+              - audit_log_retention_days: required
+          severity: high
+  
+        - id: soc1-itgc-5
+          name: "ITGC-5 — Data Integrity Controls on Financial Relationships"
+          description: Data flows that carry financial or transactional data must enforce input validation and apply appropriate data masking to ensure completeness, accuracy, and protection of sensitive outputs.
+          validation:
+            check: verify_data_integrity_on_financial_flows
+            conditions:
+              - input_validation: true
+              - data_masking: true
+              - data_classification: [financial, restricted, confidential, pci]
+          severity: high
+  
+        - id: soc1-itgc-6
+          name: "ITGC-6 — Segregation of Duties via Network Segmentation"
+          description: Network architecture must enforce segregation between processing zones to reflect the separation of duties principle, preventing a single compromised component from affecting multiple financial processing functions.
+          validation:
+            check: verify_network_segregation_for_sod
+            conditions:
+              - segmentation_type: [vlan, micro_segmentation, vpc, dmz]
+              - default_deny: true
+              - enforcement_mechanism: [firewall, ngfw, security_group, zero_trust_proxy]
+          severity: high
+  
+        - id: soc1-itgc-7
+          name: "ITGC-7 — Data Backup and Recovery Objectives for Financial Systems"
+          description: Systems supporting financial reporting must have defined and tested recovery time and recovery point objectives, and must implement resiliency measures to ensure continuity of financial processing.
+          validation:
+            check: verify_rto_rpo_for_financial_systems
+            conditions:
+              - rto_minutes: required
+              - rpo_minutes: required
+              - resiliency: [active_active, active_passive, multi_az, replicated]
+          severity: high
+  
+        - id: soc1-itgc-8
+          name: "ITGC-8 — Encryption of Financial Data in Transit and at Rest"
+          description: Financial and sensitive data must be encrypted both in transit using TLS and at rest using strong encryption to prevent unauthorized access during storage and transmission.
+          validation:
+            check: verify_encryption_financial_data
+            conditions:
+              - tls_enabled: true
+              - tls_version_min: ["1.2", "1.3"]
+              - encryption_at_rest: [aes_256, aes_128, tde]
+              - stores_data: true
+          severity: critical
+
+  - id: nist-800-53
+    name: NIST SP 800-53 Rev 5
+    description: Security and Privacy Controls for Information Systems and Organizations
+    controls:
+      # AC — Access Control
+      - id: ac-2
+        name: "AC-2 — Account Management"
+        description: Manage system accounts including establishing, activating, modifying, reviewing, disabling, and removing accounts.
         validation:
           check: all_listeners_have_authn
           conditions:
             - authn_mechanism: ["!none"]
         severity: high
 
-      - id: soc2-cc6.6
-        name: "CC6.6 — Security for transmission"
-        description: Data transmitted outside the system boundary is protected.
+      - id: ac-3
+        name: "AC-3 — Access Enforcement"
+        description: Enforce approved authorizations for logical access to information and system resources.
         validation:
-          check: external_flows_encrypted
+          check: all_listeners_have_authz
           conditions:
-            - tls_enabled: true
-        severity: high
-
-      - id: soc2-cc7.2
-        name: "CC7.2 — Monitoring of system components"
-        description: The entity monitors system components for anomalies.
-        validation:
-          check: zones_have_logging_infrastructure
-          conditions:
-            - infrastructure_resource.resource_type: [logging, monitoring]
-        severity: medium
-
-  - id: gdpr
-    name: GDPR
-    description: General Data Protection Regulation (EU)
-    controls:
-      - id: gdpr-32.1
-        name: "Art 32.1 — Security of processing"
-        description: Implement appropriate technical measures including encryption.
-        validation:
-          check: all_listeners_with_pii_data_have_tls
-          conditions:
-            - data_classification: [confidential, restricted]
-            - tls_enabled: true
-        severity: high
-
-      - id: gdpr-32.2
-        name: "Art 32.2 — Confidentiality and integrity"
-        description: Ensure ongoing confidentiality, integrity, availability, and resilience.
-        validation:
-          check: components_have_resiliency
-          conditions:
-            - resiliency: ["!null"]
-        severity: medium
-
-  - id: hipaa
-    name: HIPAA
-    description: Health Insurance Portability and Accountability Act
-    controls:
-      - id: hipaa-164.312.a.1
-        name: "§164.312(a)(1) — Access control"
-        description: Implement technical policies and procedures for access to ePHI.
-        validation:
-          check: all_listeners_have_authn_and_authz
-          conditions:
-            - authn_mechanism: ["!none"]
             - authz_required: true
-        severity: critical
+            - authz_model: ["!none"]
+        severity: high
 
-      - id: hipaa-164.312.e.1
-        name: "§164.312(e)(1) — Transmission security"
-        description: Implement technical security measures to guard against unauthorized access to ePHI.
+      - id: ac-4
+        name: "AC-4 — Information Flow Enforcement"
+        description: Enforce approved authorizations for controlling the flow of information within the system and between systems.
         validation:
-          check: all_listeners_with_confidential_data_have_tls
+          check: trust_boundaries_have_enforcement
           conditions:
-            - tls_enabled: true
-            - tls_version_min: "1.2"
-        severity: critical
+            - trust_boundary.enforcement_mechanism: ["!none"]
+            - trust_boundary.inspection_enabled: true
+        severity: high
 
-      - id: hipaa-164.312.b
-        name: "§164.312(b) — Audit controls"
-        description: Implement hardware, software, and/or procedural mechanisms that record and examine activity.
+      - id: ac-6
+        name: "AC-6 — Least Privilege"
+        description: Employ the principle of least privilege, allowing only authorized accesses necessary to accomplish assigned tasks.
+        validation:
+          check: components_use_least_privilege
+          conditions:
+            - authz_model: [rbac, abac, pbac]
+            - runs_as_root: false
+        severity: high
+
+      - id: ac-7
+        name: "AC-7 — Unsuccessful Logon Attempts"
+        description: Enforce a limit of consecutive invalid logon attempts by a user and take action when the limit is exceeded.
+        validation:
+          check: internet_listeners_have_rate_limiting
+          conditions:
+            - zone.internet_routable: true
+            - rate_limiting_enabled: true
+        severity: medium
+
+      - id: ac-10
+        name: "AC-10 — Concurrent Session Control"
+        description: Limit the number of concurrent sessions for each system account.
+        validation:
+          check: listeners_have_session_management
+          conditions:
+            - session_timeout_minutes: ["!null"]
+        severity: low
+
+      - id: ac-11
+        name: "AC-11 — Session Lock"
+        description: Prevent further access to the system by initiating a session lock after a defined period of inactivity.
+        validation:
+          check: listeners_have_session_timeout
+          conditions:
+            - session_timeout_minutes: ["!null"]
+        severity: medium
+
+      - id: ac-12
+        name: "AC-12 — Session Termination"
+        description: Automatically terminate a user session after defined conditions.
+        validation:
+          check: session_timeout_within_limits
+          conditions:
+            - session_timeout_minutes: ["!null"]
+        severity: medium
+
+      - id: ac-14
+        name: "AC-14 — Permitted Actions Without Identification or Authentication"
+        description: Identify and document specific user actions that can be performed without identification or authentication.
+        validation:
+          check: unauthenticated_listeners_documented
+          conditions:
+            - authn_mechanism: none
+            - component.component_type: [health_check, metrics]
+        severity: medium
+
+      - id: ac-17
+        name: "AC-17 — Remote Access"
+        description: Establish usage restrictions and implementation guidance for remote access; authorize each type of remote access.
+        validation:
+          check: remote_access_encrypted_and_authenticated
+          conditions:
+            - zone.internet_routable: true
+            - tls_enabled: true
+            - authn_mechanism: ["!none", "!basic", "!password"]
+        severity: high
+
+      - id: ac-20
+        name: "AC-20 — Use of External Systems"
+        description: Establish terms and conditions for authorized use of external systems and assess external system security.
+        validation:
+          check: external_systems_assessed
+          conditions:
+            - external_system.vendor_security_assessed: true
+            - external_system.tls_required: true
+        severity: medium
+
+      # AU — Audit and Accountability
+      - id: au-2
+        name: "AU-2 — Event Logging"
+        description: Identify the types of events that the system is capable of logging in support of the audit function.
+        validation:
+          check: components_have_audit_logging
+          conditions:
+            - audit_logging: true
+        severity: high
+
+      - id: au-3
+        name: "AU-3 — Content of Audit Records"
+        description: Ensure audit records contain information to establish what type of event occurred, when, where, source, outcome, and identity.
+        validation:
+          check: audit_logging_has_destination
+          conditions:
+            - audit_logging: true
+            - audit_log_destination: ["!null"]
+        severity: medium
+
+      - id: au-6
+        name: "AU-6 — Audit Record Review, Analysis, and Reporting"
+        description: Review and analyze system audit records for indications of inappropriate or unusual activity and report findings.
+        validation:
+          check: zones_have_siem
+          conditions:
+            - infrastructure_resource.resource_type: [siem, logging]
+        severity: medium
+
+      - id: au-8
+        name: "AU-8 — Time Stamps"
+        description: Use internal system clocks to generate time stamps for audit records.
         validation:
           check: zones_have_logging_infrastructure
           conditions:
             - infrastructure_resource.resource_type: logging
+        severity: low
+
+      - id: au-9
+        name: "AU-9 — Protection of Audit Information"
+        description: Protect audit information and audit logging tools from unauthorized access, modification, and deletion.
+        validation:
+          check: audit_logs_tamper_proof
+          conditions:
+            - audit_log_tamper_proof: true
         severity: high
 
-  # New controls leveraging enriched schema fields
+      - id: au-12
+        name: "AU-12 — Audit Record Generation"
+        description: Provide audit record generation capability for the events defined in AU-2 at all system components.
+        validation:
+          check: sensitive_components_have_audit_logging
+          conditions:
+            - data_classification: [confidential, restricted]
+            - audit_logging: true
+        severity: high
 
-  - id: nist-csf
-    name: NIST Cybersecurity Framework 2.0
-    description: NIST CSF core functions mapped to architecture properties
-    controls:
-      - id: nist-id-am
-        name: "ID.AM — Asset Management"
-        description: All components must have CIA triad ratings and business criticality defined.
+      # CA — Assessment, Authorization, and Monitoring
+      - id: ca-7
+        name: "CA-7 — Continuous Monitoring"
+        description: Develop a system-level continuous monitoring strategy and implement continuous monitoring.
+        validation:
+          check: zones_have_monitoring
+          conditions:
+            - infrastructure_resource.resource_type: [monitoring, siem, ids_ips]
+        severity: medium
+
+      - id: ca-9
+        name: "CA-9 — Internal System Connections"
+        description: Authorize internal connections of system components and monitor the connections.
+        validation:
+          check: internal_flows_documented
+          conditions:
+            - data_classification: ["!null"]
+        severity: low
+
+      # CM — Configuration Management
+      - id: cm-2
+        name: "CM-2 — Baseline Configuration"
+        description: Develop, document, and maintain a current baseline configuration of the system.
+        validation:
+          check: components_have_defined_platform
+          conditions:
+            - platform: ["!null"]
+        severity: low
+
+      - id: cm-6
+        name: "CM-6 — Configuration Settings"
+        description: Establish and document mandatory configuration settings for IT products.
+        validation:
+          check: zones_use_default_deny
+          conditions:
+            - zone.default_deny: true
+        severity: medium
+
+      - id: cm-7
+        name: "CM-7 — Least Functionality"
+        description: Configure the system to provide only mission-essential capabilities; restrict the use of prohibited functions.
+        validation:
+          check: listeners_have_restricted_exposure
+          conditions:
+            - exposure: [internal, localhost]
+        severity: low
+
+      - id: cm-8
+        name: "CM-8 — System Component Inventory"
+        description: Develop and document an inventory of system components that is consistent with the system architecture.
+        validation:
+          check: all_components_have_relationships
+          conditions:
+            - relationship_count: ["!0"]
+        severity: low
+
+      # CP — Contingency Planning
+      - id: cp-7
+        name: "CP-7 — Alternate Processing Site"
+        description: Establish an alternate processing site that provides security measures equivalent to the primary site.
+        validation:
+          check: critical_systems_have_failover
+          conditions:
+            - availability: [critical, high]
+            - deployment.multi_region: true
+        severity: medium
+
+      - id: cp-9
+        name: "CP-9 — System Backup"
+        description: Conduct backups of user-level, system-level, and system documentation information.
+        validation:
+          check: data_stores_have_backup_strategy
+          conditions:
+            - component_type: [database, cache]
+            - resiliency: ["!null"]
+            - rpo_minutes: ["!null"]
+        severity: medium
+
+      - id: cp-10
+        name: "CP-10 — System Recovery and Reconstitution"
+        description: Provide for the recovery and reconstitution of the system to a known state.
+        validation:
+          check: critical_components_have_rto
+          conditions:
+            - availability: [critical, high]
+            - rto_minutes: ["!null"]
+        severity: medium
+
+      # IA — Identification and Authentication
+      - id: ia-2
+        name: "IA-2 — Identification and Authentication (Organizational Users)"
+        description: Uniquely identify and authenticate organizational users and associate that identification with processes.
+        validation:
+          check: all_listeners_have_authn
+          conditions:
+            - authn_mechanism: ["!none"]
+        severity: high
+
+      - id: ia-2-1
+        name: "IA-2(1) — Multi-Factor Authentication to Privileged Accounts"
+        description: Implement multi-factor authentication for access to privileged accounts.
+        validation:
+          check: admin_listeners_have_mfa
+          conditions:
+            - admin_interface: true
+            - authn_mechanism: [mfa, mtls, certificate]
+        severity: critical
+
+      - id: ia-2-2
+        name: "IA-2(2) — Multi-Factor Authentication to Non-Privileged Accounts"
+        description: Implement multi-factor authentication for access to non-privileged accounts.
+        validation:
+          check: internet_listeners_have_strong_auth
+          conditions:
+            - zone.internet_routable: true
+            - authn_mechanism: [mfa, oauth2, oidc, mtls, certificate, jwt]
+        severity: high
+
+      - id: ia-3
+        name: "IA-3 — Device Identification and Authentication"
+        description: Uniquely identify and authenticate devices before establishing connections.
+        validation:
+          check: cross_boundary_flows_use_mutual_auth
+          conditions:
+            - crosses_trust_boundary: true
+            - mutual_authentication: true
+        severity: medium
+
+      - id: ia-5
+        name: "IA-5 — Authenticator Management"
+        description: Manage system authenticators by verifying identity before distributing initial authenticator.
+        validation:
+          check: components_use_secrets_manager
+          conditions:
+            - secrets_manager_ref: ["!null"]
+        severity: medium
+
+      - id: ia-8
+        name: "IA-8 — Identification and Authentication (Non-Organizational Users)"
+        description: Uniquely identify and authenticate non-organizational users or processes acting for non-organizational users.
+        validation:
+          check: partner_facing_listeners_have_authn
+          conditions:
+            - exposure: [public, partner]
+            - authn_mechanism: ["!none"]
+        severity: high
+
+      # RA — Risk Assessment
+      - id: ra-2
+        name: "RA-2 — Security Categorization"
+        description: Categorize information and the system in accordance with applicable laws and standards.
         validation:
           check: components_have_cia_ratings
           conditions:
@@ -165,9 +900,396 @@ frameworks:
             - availability: ["!null"]
         severity: medium
 
-      - id: nist-pr-ds-1
-        name: "PR.DS-1 — Data at rest is protected"
-        description: Data-storing components with high confidentiality must have encryption at rest.
+      - id: ra-3
+        name: "RA-3 — Risk Assessment"
+        description: Conduct risk assessment considering likelihood and impact of threats.
+        validation:
+          check: all_flows_have_data_classification
+          conditions:
+            - data_classification: ["!null"]
+        severity: medium
+
+      - id: ra-5
+        name: "RA-5 — Vulnerability Monitoring and Scanning"
+        description: Monitor and scan for vulnerabilities in the system and hosted applications.
+        validation:
+          check: components_have_vulnerability_management
+          conditions:
+            - sbom_available: true
+        severity: medium
+
+      # SA — System and Services Acquisition
+      - id: sa-4
+        name: "SA-4 — Acquisition Process"
+        description: Include security and privacy requirements in the acquisition process for the system.
+        validation:
+          check: external_vendors_assessed
+          conditions:
+            - external_system.vendor_security_assessed: true
+        severity: medium
+
+      - id: sa-8
+        name: "SA-8 — Security and Privacy Engineering Principles"
+        description: Apply systems security and privacy engineering principles in the specification, design, development, implementation, and modification of the system.
+        validation:
+          check: systems_use_defense_in_depth
+          conditions:
+            - zone.segmentation_type: ["!none"]
+            - trust_boundary.enforcement_mechanism: ["!none"]
+        severity: medium
+
+      - id: sa-9
+        name: "SA-9 — External System Services"
+        description: Require external service providers to comply with organizational security requirements.
+        validation:
+          check: external_systems_have_tls
+          conditions:
+            - external_system.tls_required: true
+            - external_system.trust_level: [trusted, semi_trusted]
+        severity: high
+
+      - id: sa-11
+        name: "SA-11 — Developer Testing and Evaluation"
+        description: Require the developer of the system to create and implement a security assessment plan.
+        validation:
+          check: components_have_slsa_level
+          conditions:
+            - slsa_level: [2, 3]
+        severity: low
+
+      - id: sa-12
+        name: "SA-12 — Supply Chain Protection"
+        description: Protect against supply chain threats by employing security safeguards.
+        validation:
+          check: components_have_supply_chain_attestation
+          conditions:
+            - sbom_available: true
+            - slsa_level: [1, 2, 3]
+        severity: medium
+
+      # SC — System and Communications Protection
+      - id: sc-3
+        name: "SC-3 — Security Function Isolation"
+        description: Isolate security functions from non-security functions.
+        validation:
+          check: zones_have_segmentation
+          conditions:
+            - zone.segmentation_type: ["!none"]
+        severity: medium
+
+      - id: sc-4
+        name: "SC-4 — Information in Shared Resources"
+        description: Prevent unauthorized information transfer via shared system resources.
+        validation:
+          check: multi_tenant_has_isolation
+          conditions:
+            - multi_tenant: true
+            - deployment.tenant_isolation: [dedicated, hybrid]
+        severity: high
+
+      - id: sc-5
+        name: "SC-5 — Denial-of-Service Protection"
+        description: Protect against or limit the effects of denial-of-service attacks.
+        validation:
+          check: internet_facing_has_dos_protection
+          conditions:
+            - zone.internet_routable: true
+            - rate_limiting_enabled: true
+            - infrastructure_resource.resource_type: [ddos_protection, waf]
+        severity: medium
+
+      - id: sc-7
+        name: "SC-7 — Boundary Protection"
+        description: Monitor and control communications at the external managed interfaces and key internal boundaries.
+        validation:
+          check: boundaries_have_enforcement
+          conditions:
+            - trust_boundary.enforcement_mechanism: [firewall, api_gateway, service_mesh]
+            - zone.egress_filtered: true
+        severity: high
+
+      - id: sc-8
+        name: "SC-8 — Transmission Confidentiality and Integrity"
+        description: Protect the confidentiality and integrity of transmitted information.
+        validation:
+          check: all_listeners_have_tls
+          conditions:
+            - tls_enabled: true
+            - tls_version_min: "1.2"
+        severity: high
+
+      - id: sc-10
+        name: "SC-10 — Network Disconnect"
+        description: Terminate the network connection associated with a communications session at the end of the session or after a defined period of inactivity.
+        validation:
+          check: listeners_have_session_timeout
+          conditions:
+            - session_timeout_minutes: ["!null"]
+        severity: low
+
+      - id: sc-12
+        name: "SC-12 — Cryptographic Key Establishment and Management"
+        description: Establish and manage cryptographic keys when cryptography is employed within the system.
+        validation:
+          check: encrypted_components_have_key_management
+          conditions:
+            - encryption_at_rest: ["!none"]
+            - encryption_key_management: [customer_managed, byok, hsm, vault]
+        severity: high
+
+      - id: sc-13
+        name: "SC-13 — Cryptographic Protection"
+        description: Determine the cryptographic uses and implement the required types of cryptography.
+        validation:
+          check: listeners_use_modern_crypto
+          conditions:
+            - tls_enabled: true
+            - cipher_suite_policy: [modern, intermediate]
+        severity: high
+
+      - id: sc-23
+        name: "SC-23 — Session Authenticity"
+        description: Protect the authenticity of communications sessions.
+        validation:
+          check: authenticated_listeners_no_wildcard_cors
+          conditions:
+            - cors_policy: [none, restrictive]
+        severity: medium
+
+      - id: sc-28
+        name: "SC-28 — Protection of Information at Rest"
+        description: Protect the confidentiality and integrity of information at rest.
+        validation:
+          check: data_stores_encrypted_at_rest
+          conditions:
+            - stores_data: true
+            - encryption_at_rest: [aes-256, aes-128, envelope, platform_managed, customer_managed]
+        severity: high
+
+      # SI — System and Information Integrity
+      - id: si-2
+        name: "SI-2 — Flaw Remediation"
+        description: Identify, report, and correct system flaws in a timely manner.
+        validation:
+          check: components_have_sbom
+          conditions:
+            - sbom_available: true
+        severity: medium
+
+      - id: si-3
+        name: "SI-3 — Malicious Code Protection"
+        description: Implement malicious code protection mechanisms at system entry and exit points.
+        validation:
+          check: zones_have_malware_protection
+          conditions:
+            - zone.ids_ips_enabled: true
+        severity: medium
+
+      - id: si-4
+        name: "SI-4 — System Monitoring"
+        description: Monitor the system to detect attacks, indicators of potential attacks, unauthorized local/remote connections, and unauthorized use.
+        validation:
+          check: zones_have_ids_ips
+          conditions:
+            - zone.ids_ips_enabled: true
+            - infrastructure_resource.resource_type: [monitoring, ids_ips, siem]
+        severity: medium
+
+      - id: si-7
+        name: "SI-7 — Software, Firmware, and Information Integrity"
+        description: Employ integrity verification tools to detect unauthorized changes.
+        validation:
+          check: components_have_integrity_verification
+          conditions:
+            - slsa_level: [2, 3]
+            - sbom_available: true
+        severity: medium
+
+      - id: si-10
+        name: "SI-10 — Information Input Validation"
+        description: Check the validity of information inputs.
+        validation:
+          check: all_flows_have_input_validation
+          conditions:
+            - input_validation: [schema, allowlist, waf, custom]
+        severity: medium
+
+      # SR — Supply Chain Risk Management
+      - id: sr-3
+        name: "SR-3 — Supply Chain Controls and Processes"
+        description: Establish controls and processes to address supply chain risks.
+        validation:
+          check: components_have_supply_chain_controls
+          conditions:
+            - sbom_available: true
+            - slsa_level: [1, 2, 3]
+        severity: medium
+
+      - id: sr-4
+        name: "SR-4 — Provenance"
+        description: Document, monitor, and maintain valid provenance of systems, components, and associated data.
+        validation:
+          check: components_have_provenance
+          conditions:
+            - slsa_level: [2, 3]
+        severity: low
+
+      - id: sr-11
+        name: "SR-11 — Component Authenticity"
+        description: Develop and implement anti-counterfeit policies and procedures that include detecting counterfeit components.
+        validation:
+          check: container_images_signed
+          conditions:
+            - platform: [kubernetes, k8s, docker, ecs, gke, aks, eks]
+            - sbom_available: true
+        severity: medium
+
+  - id: nist-csf
+    name: NIST Cybersecurity Framework 2.0
+    description: NIST CSF 2.0 core functions mapped to architecture properties
+    controls:
+      # GOVERN (GV)
+      - id: gv.oc-01
+        name: "GV.OC-01 — Organizational Context"
+        description: The organizational mission is understood and informs cybersecurity risk management.
+        validation:
+          check: components_have_cia_ratings
+          conditions:
+            - confidentiality: ["!null"]
+            - integrity: ["!null"]
+            - availability: ["!null"]
+        severity: medium
+
+      - id: gv.rm-01
+        name: "GV.RM-01 — Risk Management Objectives"
+        description: Risk management objectives are established and clearly expressed as part of organizational risk strategy.
+        validation:
+          check: all_flows_have_data_classification
+          conditions:
+            - data_classification: ["!null"]
+        severity: medium
+
+      - id: gv.sc-01
+        name: "GV.SC-01 — Supply Chain Risk Management Program"
+        description: A cyber supply chain risk management program is established and agreed to by organizational stakeholders.
+        validation:
+          check: components_have_supply_chain_attestation
+          conditions:
+            - sbom_available: true
+        severity: medium
+
+      - id: gv.sc-05
+        name: "GV.SC-05 — Supply Chain Due Diligence"
+        description: Requirements to address cybersecurity risks in supply chains are included in contracts.
+        validation:
+          check: external_vendors_assessed
+          conditions:
+            - external_system.vendor_security_assessed: true
+        severity: medium
+
+      # IDENTIFY (ID)
+      - id: id.am-01
+        name: "ID.AM-01 — Inventories of Hardware"
+        description: Inventories of hardware managed by the organization are maintained.
+        validation:
+          check: all_components_documented
+          conditions:
+            - component_type: ["!null"]
+            - platform: ["!null"]
+        severity: low
+
+      - id: id.am-02
+        name: "ID.AM-02 — Inventories of Software"
+        description: Inventories of software, services, and systems managed by the organization are maintained.
+        validation:
+          check: components_have_technology_defined
+          conditions:
+            - technology: ["!null"]
+        severity: low
+
+      - id: id.am-07
+        name: "ID.AM-07 — Data Classification"
+        description: Inventories of data and corresponding metadata for designated data types are maintained.
+        validation:
+          check: data_entities_have_classification
+          conditions:
+            - data_entity.classification: ["!null"]
+        severity: medium
+
+      - id: id.am-08
+        name: "ID.AM-08 — External Systems Identified"
+        description: Systems, hardware, software, services, and data managed by external parties are identified.
+        validation:
+          check: external_systems_documented
+          conditions:
+            - external_system.category: ["!null"]
+            - external_system.trust_level: ["!null"]
+        severity: medium
+
+      - id: id.ra-01
+        name: "ID.RA-01 — Vulnerabilities Identified"
+        description: Vulnerabilities in assets are identified, validated, and recorded.
+        validation:
+          check: components_have_vulnerability_management
+          conditions:
+            - sbom_available: true
+        severity: medium
+
+      - id: id.ra-03
+        name: "ID.RA-03 — Threats Identified"
+        description: Internal and external threats to the organization are identified and recorded.
+        validation:
+          check: components_have_cia_ratings
+          conditions:
+            - confidentiality: ["!null"]
+            - integrity: ["!null"]
+            - availability: ["!null"]
+        severity: medium
+
+      # PROTECT (PR)
+      - id: pr.aa-01
+        name: "PR.AA-01 — Identities and Credentials Management"
+        description: Identities and credentials for authorized users, services, and hardware are managed by the organization.
+        validation:
+          check: all_listeners_have_authn
+          conditions:
+            - authn_mechanism: ["!none"]
+        severity: high
+
+      - id: pr.aa-02
+        name: "PR.AA-02 — Identity Proofing"
+        description: Identities are proofed and bound to credentials based on the context of interactions.
+        validation:
+          check: internet_listeners_have_strong_auth
+          conditions:
+            - zone.internet_routable: true
+            - authn_mechanism: [mfa, oauth2, oidc, mtls, certificate, jwt]
+        severity: high
+
+      - id: pr.aa-03
+        name: "PR.AA-03 — Remote Access Managed"
+        description: Users, services, and hardware are authenticated commensurate with the risk of unauthorized access.
+        validation:
+          check: remote_access_encrypted_and_authenticated
+          conditions:
+            - zone.internet_routable: true
+            - tls_enabled: true
+            - authn_mechanism: ["!none", "!basic"]
+        severity: high
+
+      - id: pr.aa-05
+        name: "PR.AA-05 — Access Permissions Managed"
+        description: Access permissions, entitlements, and authorizations are defined and managed.
+        validation:
+          check: all_listeners_have_authz
+          conditions:
+            - authz_required: true
+            - authz_model: ["!none"]
+        severity: high
+
+      - id: pr.ds-01
+        name: "PR.DS-01 — Data-at-Rest Protected"
+        description: The confidentiality, integrity, and availability of data-at-rest are protected.
         validation:
           check: data_stores_have_encryption
           conditions:
@@ -176,9 +1298,9 @@ frameworks:
             - encryption_at_rest: ["!none", "!null"]
         severity: high
 
-      - id: nist-pr-ds-2
-        name: "PR.DS-2 — Data in transit is protected"
-        description: All cross-boundary flows must use TLS with modern cipher suites.
+      - id: pr.ds-02
+        name: "PR.DS-02 — Data-in-Transit Protected"
+        description: The confidentiality, integrity, and availability of data-in-transit are protected.
         validation:
           check: cross_boundary_flows_encrypted
           conditions:
@@ -186,98 +1308,2518 @@ frameworks:
             - cipher_suite_policy: [modern, intermediate]
         severity: high
 
-      - id: nist-pr-ac-7
-        name: "PR.AC-7 — Users, devices, and other assets are authenticated"
-        description: All non-health-check listeners must have authentication.
+      - id: pr.ds-10
+        name: "PR.DS-10 — Data Integrity Ensured"
+        description: The confidentiality, integrity, and availability of data-in-use are protected.
+        validation:
+          check: high_integrity_data_has_validation
+          conditions:
+            - integrity: [critical, high]
+            - input_validation: [schema, allowlist, waf, custom]
+        severity: medium
+
+      - id: pr.ps-01
+        name: "PR.PS-01 — Configuration Management"
+        description: Configuration management practices are established and applied.
+        validation:
+          check: zones_use_default_deny
+          conditions:
+            - zone.default_deny: true
+        severity: medium
+
+      - id: pr.ps-04
+        name: "PR.PS-04 — Log Records Generated"
+        description: Log records are generated and made available for continuous monitoring.
+        validation:
+          check: components_have_audit_logging
+          conditions:
+            - audit_logging: true
+        severity: medium
+
+      - id: pr.ps-06
+        name: "PR.PS-06 — Secure Software Development"
+        description: Secure software development practices are integrated and their performance is monitored.
+        validation:
+          check: components_have_slsa_level
+          conditions:
+            - slsa_level: [2, 3]
+        severity: low
+
+      - id: pr.ir-01
+        name: "PR.IR-01 — Resilience Requirements Managed"
+        description: Recovery assets are managed to enable timely recovery and resumption of normal operations.
+        validation:
+          check: critical_components_have_resiliency
+          conditions:
+            - availability: [critical, high]
+            - resiliency: ["!null"]
+            - rto_minutes: ["!null"]
+        severity: medium
+
+      - id: pr.ir-04
+        name: "PR.IR-04 — Adequate Resource Capacity"
+        description: Adequate resource capacity to ensure availability is maintained.
+        validation:
+          check: containers_have_resource_limits
+          conditions:
+            - platform: [kubernetes, k8s, docker, ecs, gke, aks, eks]
+            - resource_limits_set: true
+        severity: medium
+
+      # DETECT (DE)
+      - id: de.cm-01
+        name: "DE.CM-01 — Networks Monitored"
+        description: Networks and network services are monitored to find potentially adverse events.
+        validation:
+          check: zones_have_ids_ips
+          conditions:
+            - zone.ids_ips_enabled: true
+            - infrastructure_resource.resource_type: [monitoring, ids_ips]
+        severity: medium
+
+      - id: de.cm-02
+        name: "DE.CM-02 — Physical Environment Monitored"
+        description: The physical environment is monitored to find potentially adverse events.
+        validation:
+          check: zones_have_monitoring
+          conditions:
+            - infrastructure_resource.resource_type: monitoring
+        severity: low
+
+      - id: de.cm-03
+        name: "DE.CM-03 — Personnel Activity Monitored"
+        description: Personnel activity and technology usage are monitored for adverse events.
+        validation:
+          check: admin_access_logged
+          conditions:
+            - admin_interface: true
+            - audit_logging: true
+        severity: medium
+
+      - id: de.cm-06
+        name: "DE.CM-06 — External Service Provider Activity Monitored"
+        description: External service provider activities and services are monitored for potentially adverse events.
+        validation:
+          check: external_system_flows_logged
+          conditions:
+            - external_system.category: [vendor, partner, saas]
+            - audit_logging: true
+        severity: medium
+
+      - id: de.cm-09
+        name: "DE.CM-09 — Computing Hardware and Software Monitored"
+        description: Computing hardware and software, runtime environments, and their data are monitored.
+        validation:
+          check: zones_have_logging_infrastructure
+          conditions:
+            - infrastructure_resource.resource_type: [logging, monitoring, siem]
+        severity: medium
+
+      - id: de.ae-02
+        name: "DE.AE-02 — Anomalous Activity Detected"
+        description: Potentially adverse events are analyzed to better understand associated activities.
+        validation:
+          check: zones_have_siem
+          conditions:
+            - infrastructure_resource.resource_type: siem
+        severity: medium
+
+      # RESPOND (RS)
+      - id: rs.ma-01
+        name: "RS.MA-01 — Incident Management Executed"
+        description: The incident response plan is executed in coordination with relevant third parties.
+        validation:
+          check: zones_have_logging_and_monitoring
+          conditions:
+            - infrastructure_resource.resource_type: [logging, monitoring, siem]
+        severity: medium
+
+      # RECOVER (RC)
+      - id: rc.rp-01
+        name: "RC.RP-01 — Recovery Plan Executed"
+        description: The recovery portion of the incident response plan is executed once initiated from the incident response process.
+        validation:
+          check: critical_systems_have_dr
+          conditions:
+            - availability: [critical, high]
+            - deployment.multi_region: true
+            - rto_minutes: ["!null"]
+            - rpo_minutes: ["!null"]
+        severity: medium
+
+  - id: nist-800-171
+    name: NIST SP 800-171 Rev 2
+    description: Protecting Controlled Unclassified Information (CUI) in Nonfederal Systems
+    controls:
+      # 3.1 — Access Control
+      - id: "3.1.1"
+        name: "3.1.1 — Limit system access to authorized users"
+        description: Limit information system access to authorized users, processes acting on behalf of authorized users, or devices.
         validation:
           check: all_listeners_have_authn
           conditions:
             - authn_mechanism: ["!none"]
         severity: high
 
-      - id: nist-de-cm
-        name: "DE.CM — Security Continuous Monitoring"
-        description: Network zones must have IDS/IPS and monitoring infrastructure.
+      - id: "3.1.2"
+        name: "3.1.2 — Limit system access to authorized transactions and functions"
+        description: Limit system access to the types of transactions and functions that authorized users are permitted to execute.
         validation:
-          check: zones_have_detection_capabilities
+          check: all_listeners_have_authz
           conditions:
-            - ids_ips_enabled: true
-            - infrastructure_resource.resource_type: [monitoring, ids_ips]
+            - authz_required: true
+            - authz_model: ["!none"]
+        severity: high
+
+      - id: "3.1.3"
+        name: "3.1.3 — Control flow of CUI"
+        description: Control the flow of CUI in accordance with approved authorizations.
+        validation:
+          check: trust_boundaries_have_enforcement
+          conditions:
+            - trust_boundary.enforcement_mechanism: ["!none"]
+        severity: high
+
+      - id: "3.1.5"
+        name: "3.1.5 — Employ least privilege"
+        description: Employ the principle of least privilege, including for specific security functions and privileged accounts.
+        validation:
+          check: components_use_least_privilege
+          conditions:
+            - authz_model: [rbac, abac, pbac]
+            - runs_as_root: false
+        severity: high
+
+      - id: "3.1.7"
+        name: "3.1.7 — Prevent non-privileged users from executing privileged functions"
+        description: Prevent non-privileged users from executing privileged functions and audit the execution of such functions.
+        validation:
+          check: admin_interfaces_have_strong_auth
+          conditions:
+            - admin_interface: true
+            - authn_mechanism: [mfa, mtls, certificate]
+        severity: high
+
+      - id: "3.1.12"
+        name: "3.1.12 — Monitor and control remote access sessions"
+        description: Monitor and control remote access sessions.
+        validation:
+          check: remote_sessions_have_timeout
+          conditions:
+            - zone.internet_routable: true
+            - session_timeout_minutes: ["!null"]
         severity: medium
 
-      - id: nist-pr-ip-12
-        name: "PR.IP-12 — Vulnerability management plan"
-        description: Components in production must have recent vulnerability scans and SBOM.
+      - id: "3.1.13"
+        name: "3.1.13 — Employ cryptographic mechanisms for remote access"
+        description: Employ cryptographic mechanisms to protect the confidentiality of remote access sessions.
+        validation:
+          check: remote_access_encrypted
+          conditions:
+            - zone.internet_routable: true
+            - tls_enabled: true
+            - tls_version_min: "1.2"
+        severity: high
+
+      # 3.3 — Audit and Accountability
+      - id: "3.3.1"
+        name: "3.3.1 — Create and retain system audit logs"
+        description: Create, protect, and retain information system audit logs and records.
+        validation:
+          check: components_have_audit_logging
+          conditions:
+            - audit_logging: true
+        severity: high
+
+      - id: "3.3.2"
+        name: "3.3.2 — Ensure actions can be traced to individual users"
+        description: Ensure that the actions of individual system users can be uniquely traced to those users.
+        validation:
+          check: sensitive_components_have_audit_logging
+          conditions:
+            - data_classification: [confidential, restricted]
+            - audit_logging: true
+            - authn_mechanism: ["!none"]
+        severity: high
+
+      - id: "3.3.4"
+        name: "3.3.4 — Alert on audit logging process failures"
+        description: Alert in the event of an audit logging process failure.
+        validation:
+          check: zones_have_monitoring
+          conditions:
+            - infrastructure_resource.resource_type: [monitoring, siem]
+        severity: medium
+
+      # 3.4 — Configuration Management
+      - id: "3.4.1"
+        name: "3.4.1 — Establish and maintain baseline configurations"
+        description: Establish and maintain baseline configurations and inventories of organizational systems.
+        validation:
+          check: components_have_defined_platform
+          conditions:
+            - platform: ["!null"]
+            - technology: ["!null"]
+        severity: low
+
+      - id: "3.4.6"
+        name: "3.4.6 — Employ least functionality"
+        description: Employ the principle of least functionality by configuring systems to provide only essential capabilities.
+        validation:
+          check: zones_use_default_deny
+          conditions:
+            - zone.default_deny: true
+            - zone.egress_filtered: true
+        severity: medium
+
+      # 3.5 — Identification and Authentication
+      - id: "3.5.1"
+        name: "3.5.1 — Identify system users and processes"
+        description: Identify information system users, processes acting on behalf of users, or devices.
+        validation:
+          check: all_listeners_have_authn
+          conditions:
+            - authn_mechanism: ["!none"]
+        severity: high
+
+      - id: "3.5.3"
+        name: "3.5.3 — Use multi-factor authentication"
+        description: Use multi-factor authentication for local and network access to privileged accounts and network access to non-privileged accounts.
+        validation:
+          check: internet_listeners_have_mfa
+          conditions:
+            - zone.internet_routable: true
+            - authn_mechanism: [mfa, mtls, certificate]
+        severity: high
+
+      # 3.8 — Media Protection
+      - id: "3.8.1"
+        name: "3.8.1 — Protect CUI on digital media"
+        description: Protect the confidentiality of CUI stored on digital media during transport outside of controlled areas.
+        validation:
+          check: data_stores_encrypted_at_rest
+          conditions:
+            - stores_data: true
+            - data_classification: [confidential, restricted]
+            - encryption_at_rest: ["!none"]
+        severity: high
+
+      # 3.11 — Risk Assessment
+      - id: "3.11.1"
+        name: "3.11.1 — Periodically assess risk"
+        description: Periodically assess the risk to organizational operations, organizational assets, and individuals.
+        validation:
+          check: components_have_cia_ratings
+          conditions:
+            - confidentiality: ["!null"]
+            - integrity: ["!null"]
+            - availability: ["!null"]
+        severity: medium
+
+      - id: "3.11.2"
+        name: "3.11.2 — Scan for vulnerabilities"
+        description: Scan for vulnerabilities in organizational systems and applications periodically and when new vulnerabilities are identified.
         validation:
           check: components_have_vulnerability_management
           conditions:
             - sbom_available: true
-            - vulnerability_scan_date: ["!null"]
         severity: medium
 
-  - id: pci-dss-extended
-    name: PCI DSS v4.0 (Extended Controls)
-    description: Additional PCI-DSS controls leveraging enriched schema fields
-    controls:
-      - id: pci-3.4
-        name: "Req 3.4 — Render PAN unreadable"
-        description: Primary Account Numbers must be masked or tokenized everywhere.
+      # 3.12 — Security Assessment
+      - id: "3.12.1"
+        name: "3.12.1 — Periodically assess security controls"
+        description: Periodically assess the security controls in organizational systems to determine if effective.
         validation:
-          check: pci_data_masked_on_flows
+          check: zones_have_monitoring
           conditions:
-            - data_entity.contains_pci: true
-            - data_masking: true
+            - infrastructure_resource.resource_type: [monitoring, siem, ids_ips]
+        severity: medium
+
+      # 3.13 — System and Communications Protection
+      - id: "3.13.1"
+        name: "3.13.1 — Monitor, control, and protect communications at boundaries"
+        description: Monitor, control, and protect organizational communications at external and key internal boundaries.
+        validation:
+          check: boundaries_have_enforcement
+          conditions:
+            - trust_boundary.enforcement_mechanism: [firewall, api_gateway, service_mesh]
+        severity: high
+
+      - id: "3.13.6"
+        name: "3.13.6 — Deny network traffic by default"
+        description: Deny network communications traffic by default and allow by exception.
+        validation:
+          check: zones_use_default_deny
+          conditions:
+            - zone.default_deny: true
+        severity: high
+
+      - id: "3.13.8"
+        name: "3.13.8 — Implement cryptographic mechanisms for CUI in transit"
+        description: Implement cryptographic mechanisms to prevent unauthorized disclosure of CUI during transmission.
+        validation:
+          check: sensitive_flows_encrypted
+          conditions:
+            - data_classification: [confidential, restricted]
+            - tls_enabled: true
+            - tls_version_min: "1.2"
         severity: critical
 
-      - id: pci-6.5
-        name: "Req 6.5 — Address common coding vulnerabilities"
-        description: All API flows must have input validation to prevent injection.
+      - id: "3.13.11"
+        name: "3.13.11 — Employ FIPS-validated cryptography"
+        description: Employ FIPS-validated cryptography when used to protect the confidentiality of CUI.
         validation:
-          check: api_flows_have_input_validation
+          check: crypto_uses_strong_algorithms
           conditions:
-            - input_validation: ["!none", "!null"]
+            - cipher_suite_policy: [modern, intermediate]
+            - encryption_at_rest: [aes-256, aes-128]
         severity: high
 
-      - id: pci-11.4
-        name: "Req 11.4 — Intrusion detection and prevention"
-        description: Network zones processing cardholder data must have IDS/IPS.
+      - id: "3.13.16"
+        name: "3.13.16 — Protect CUI at rest"
+        description: Protect the confidentiality of CUI at rest.
         validation:
-          check: pci_zones_have_ids
+          check: cui_data_encrypted_at_rest
           conditions:
-            - ids_ips_enabled: true
+            - data_classification: [confidential, restricted]
+            - stores_data: true
+            - encryption_at_rest: ["!none"]
         severity: high
 
-  - id: gdpr-extended
-    name: GDPR (Extended Controls)
-    description: Additional GDPR controls leveraging enriched schema fields
-    controls:
-      - id: gdpr-44
-        name: "Art 44 — Transfer of personal data to third countries"
-        description: PII data entities must have residency requirements matching deployment region.
+      # 3.14 — System and Information Integrity
+      - id: "3.14.1"
+        name: "3.14.1 — Identify, report, and correct system flaws"
+        description: Identify, report, and correct information and information system flaws in a timely manner.
         validation:
-          check: pii_data_residency_enforced
+          check: components_have_sbom
           conditions:
-            - data_entity.contains_pii: true
-            - data_entity.residency_requirements: ["!null"]
-            - deployment.data_residency_required: true
-        severity: high
-
-      - id: gdpr-25
-        name: "Art 25 — Data protection by design"
-        description: PII-processing components must have data masking and audit logging.
-        validation:
-          check: pii_processing_has_safeguards
-          conditions:
-            - component.processes_pii: true
-            - component.audit_logging: true
-        severity: high
-
-      - id: gdpr-5.1e
-        name: "Art 5.1(e) — Storage limitation"
-        description: PII data entities must have retention periods defined.
-        validation:
-          check: pii_data_has_retention
-          conditions:
-            - data_entity.contains_pii: true
-            - data_entity.retention_days: ["!null"]
+            - sbom_available: true
         severity: medium
+
+      - id: "3.14.6"
+        name: "3.14.6 — Monitor organizational systems"
+        description: Monitor organizational systems, including inbound and outbound communications traffic, to detect attacks and indicators of potential attacks.
+        validation:
+          check: zones_have_ids_ips
+          conditions:
+            - zone.ids_ips_enabled: true
+        severity: medium
+
+      - id: "3.14.7"
+        name: "3.14.7 — Identify unauthorized use of organizational systems"
+        description: Identify unauthorized use of organizational systems.
+        validation:
+          check: zones_have_logging_and_monitoring
+          conditions:
+            - infrastructure_resource.resource_type: [logging, monitoring, siem]
+        severity: medium
+
+  - id: nist-800-37
+    name: NIST SP 800-37 Rev 2 — Risk Management Framework
+    description: Risk Management Framework for Information Systems and Organizations
+    controls:
+      - id: rmf-prepare
+        name: "Prepare — Organization and System-Level Preparation"
+        description: Carry out essential activities at the organization and system levels to prepare for security and privacy risk management.
+        validation:
+          check: components_have_cia_ratings
+          conditions:
+            - confidentiality: ["!null"]
+            - integrity: ["!null"]
+            - availability: ["!null"]
+        severity: medium
+
+      - id: rmf-categorize
+        name: "Categorize — System and Information Categorization"
+        description: Categorize the system and the information processed, stored, and transmitted based on impact analysis.
+        validation:
+          check: all_flows_have_data_classification
+          conditions:
+            - data_classification: ["!null"]
+        severity: medium
+
+      - id: rmf-select
+        name: "Select — Control Selection"
+        description: Select, tailor, and document the controls necessary to protect the system and organization.
+        validation:
+          check: zones_have_segmentation
+          conditions:
+            - zone.segmentation_type: ["!none"]
+            - trust_boundary.enforcement_mechanism: ["!none"]
+        severity: medium
+
+      - id: rmf-implement
+        name: "Implement — Control Implementation"
+        description: Implement the controls in the security and privacy plans for the system and organization.
+        validation:
+          check: controls_implemented
+          conditions:
+            - tls_enabled: true
+            - authn_mechanism: ["!none"]
+            - authz_required: true
+        severity: high
+
+      - id: rmf-assess
+        name: "Assess — Control Assessment"
+        description: Assess the controls to determine if they are implemented correctly, operating as intended, and producing the desired outcome.
+        validation:
+          check: zones_have_monitoring
+          conditions:
+            - infrastructure_resource.resource_type: [monitoring, siem]
+        severity: medium
+
+      - id: rmf-authorize
+        name: "Authorize — System Authorization"
+        description: Authorize the system or common controls based on a determination of acceptable risk.
+        validation:
+          check: systems_have_risk_assessment
+          conditions:
+            - confidentiality: ["!null"]
+            - integrity: ["!null"]
+            - availability: ["!null"]
+            - data_classification: ["!null"]
+        severity: medium
+
+      - id: rmf-monitor
+        name: "Monitor — Continuous Monitoring"
+        description: Monitor the system and the associated controls on an ongoing basis to include assessing control effectiveness.
+        validation:
+          check: continuous_monitoring_enabled
+          conditions:
+            - infrastructure_resource.resource_type: [monitoring, siem, ids_ips]
+            - audit_logging: true
+        severity: medium
+
+  - id: fedramp
+    name: FedRAMP
+    description: Federal Risk and Authorization Management Program - standardized approach for cloud service authorization
+    controls:
+        - id: fedramp-il-001
+          name: "Impact Level Classification - Moderate Baseline"
+          description: Cloud systems processing federal data must meet FedRAMP Moderate baseline controls requiring encryption, MFA, and continuous monitoring
+          validation:
+            check: validate_fedramp_moderate_baseline
+            conditions:
+              - encryption_at_rest: true
+              - tls_enabled: true
+              - authn_mechanism: [mfa, pki, fido2]
+          severity: critical
+  
+        - id: fedramp-il-002
+          name: "Impact Level Classification - High Baseline"
+          description: Systems processing high-impact federal data must enforce stricter access controls, FIPS 140-2 validated cryptography, and enhanced audit logging
+          validation:
+            check: validate_fedramp_high_baseline
+            conditions:
+              - encryption_key_management: [hsm, fedramp-approved-kms]
+              - audit_logging: true
+              - audit_log_tamper_proof: true
+          severity: critical
+  
+        - id: fedramp-conmon-001
+          name: "Continuous Monitoring - Ongoing Authorization"
+          description: FedRAMP requires continuous monitoring with monthly vulnerability scans, annual penetration testing, and real-time security alerts
+          validation:
+            check: validate_fedramp_continuous_monitoring
+            conditions:
+              - audit_logging: true
+              - audit_log_retention_days: 365
+              - ids_ips_enabled: true
+          severity: high
+  
+        - id: fedramp-conmon-002
+          name: "Continuous Monitoring - Automated Scanning"
+          description: Automated vulnerability scanning must be conducted against all system components including containers and supporting infrastructure
+          validation:
+            check: validate_automated_vulnerability_scanning
+            conditions:
+              - slsa_level: [2, 3, 4]
+              - sbom_available: true
+          severity: high
+  
+        - id: fedramp-dr-001
+          name: "Data Residency - US-Only Data Storage"
+          description: FedRAMP requires federal data to be stored and processed within US boundaries unless explicitly approved for international operations
+          validation:
+            check: validate_us_data_residency
+            conditions:
+              - data_residency_required: us-only
+              - residency_requirements: [us, us-east, us-west, us-gov]
+          severity: critical
+  
+        - id: fedramp-dr-002
+          name: "Data Sovereignty - FedRAMP Authorized Regions"
+          description: Cloud deployments must use FedRAMP authorized data centers and regions for all federal data processing and storage
+          validation:
+            check: validate_fedramp_authorized_regions
+            conditions:
+              - environment: [fedramp-moderate, fedramp-high, govcloud]
+          severity: critical
+  
+        - id: fedramp-bp-001
+          name: "Boundary Protection - Federal Authorization Boundary"
+          description: The FedRAMP authorization boundary must be clearly defined with all components, interfaces, and data flows documented and protected
+          validation:
+            check: validate_fedramp_authorization_boundary
+            conditions:
+              - enforcement_mechanism: [hardware-firewall, ngfw, cloud-native-sg]
+              - inspection_enabled: true
+              - egress_filtered: true
+          severity: critical
+  
+        - id: fedramp-bp-002
+          name: "Boundary Protection - External Connection Controls"
+          description: All external connections crossing the FedRAMP boundary must use encrypted channels with mutual authentication and be tracked in the SSP
+          validation:
+            check: validate_fedramp_boundary_connections
+            conditions:
+              - crosses_trust_boundary: true
+              - mutual_authentication: true
+              - tls_required: true
+          severity: high
+  
+        - id: fedramp-enc-001
+          name: "Encryption - FIPS 140-2 Validated Cryptography"
+          description: All cryptographic modules protecting federal data must be FIPS 140-2 validated; TLS 1.2 minimum with FIPS-approved cipher suites required
+          validation:
+            check: validate_fips_140_2_encryption
+            conditions:
+              - tls_version_min: ["1.2", "1.3"]
+              - cipher_suite_policy: [fips, fedramp-approved]
+              - forward_secrecy_required: true
+          severity: critical
+  
+        - id: fedramp-enc-002
+          name: "Encryption - Data at Rest for Federal Information"
+          description: Federal data at rest must be encrypted using AES-256 or equivalent FIPS-approved algorithms with centralized key management
+          validation:
+            check: validate_federal_data_at_rest_encryption
+            conditions:
+              - encryption_at_rest: true
+              - encryption_key_management: [kms, hsm, fedramp-approved-kms]
+              - data_classification: [confidential, secret, federal]
+          severity: critical
+  
+        - id: fedramp-ir-001
+          name: "Incident Response - US-CERT Reporting"
+          description: Security incidents must be reported to US-CERT within one hour of detection; all incident logs must be retained for a minimum of three years
+          validation:
+            check: validate_fedramp_incident_logging
+            conditions:
+              - audit_logging: true
+              - audit_log_tamper_proof: true
+              - audit_log_retention_days: 1095
+          severity: critical
+  
+        - id: fedramp-mfa-001
+          name: "Multi-Factor Authentication - PIV/CAC Enforcement"
+          description: FedRAMP requires PIV/CAC or equivalent MFA for all privileged access; all user accounts accessing federal systems must use MFA
+          validation:
+            check: validate_fedramp_mfa_requirements
+            conditions:
+              - authn_mechanism: [piv, cac, mfa, fido2]
+              - admin_interface: true
+          severity: critical
+  
+        - id: fedramp-mfa-002
+          name: "Multi-Factor Authentication - Non-Privileged Accounts"
+          description: All non-privileged user accounts must enforce MFA; passwords alone are not acceptable for systems operating at Moderate or High impact levels
+          validation:
+            check: validate_fedramp_user_mfa
+            conditions:
+              - authn_mechanism: [mfa, pki, fido2, piv, cac]
+              - authz_required: true
+          severity: high
+  
+        - id: fedramp-cs-001
+          name: "Container Security - Hardened Container Images"
+          description: Container images deployed in FedRAMP environments must be sourced from approved registries, scanned for vulnerabilities, and signed with verified provenance
+          validation:
+            check: validate_fedramp_container_security
+            conditions:
+              - component_type: container
+              - runs_as_root: false
+              - resource_limits_set: true
+              - network_policy_enforced: true
+              - slsa_level: [2, 3, 4]
+          severity: high
+  
+        - id: fedramp-scrm-001
+          name: "Supply Chain Risk Management - Third-Party Components"
+          description: FedRAMP requires SCRM controls including SBOM generation, vendor security assessments, and provenance verification for all third-party components
+          validation:
+            check: validate_fedramp_supply_chain_risk
+            conditions:
+              - sbom_available: true
+              - vendor_security_assessed: true
+              - slsa_level: [2, 3, 4]
+          severity: high
+  
+  - id: fisma
+    name: FISMA
+    description: Federal Information Security Modernization Act - framework for protecting federal information systems
+    controls:
+        - id: fisma-sc-001
+          name: "Security Categorization - FIPS 199 Classification"
+          description: Federal information systems must be categorized using FIPS 199 based on the potential impact to confidentiality, integrity, and availability
+          validation:
+            check: validate_fips199_categorization
+            conditions:
+              - confidentiality: [low, moderate, high]
+              - integrity: [low, moderate, high]
+              - availability: [low, moderate, high]
+          severity: high
+  
+        - id: fisma-msr-001
+          name: "Minimum Security Requirements - FIPS 200 Compliance"
+          description: Federal systems must meet FIPS 200 minimum security requirements across all seventeen security control families
+          validation:
+            check: validate_fips200_minimum_requirements
+            conditions:
+              - encryption_at_rest: true
+              - audit_logging: true
+              - authn_mechanism: [mfa, pki, fido2, piv, cac]
+              - authz_required: true
+          severity: critical
+  
+        - id: fisma-rbc-001
+          name: "Risk-Based Controls Selection - NIST SP 800-53"
+          description: Security controls must be selected based on system categorization; Moderate systems implement the NIST 800-53 moderate baseline; High systems implement the high baseline
+          validation:
+            check: validate_risk_based_controls_selection
+            conditions:
+              - data_classification: [moderate, high, confidential, secret]
+              - tls_enabled: true
+              - encryption_at_rest: true
+          severity: high
+  
+        - id: fisma-cm-001
+          name: "Continuous Monitoring - ISCM Program"
+          description: Federal agencies must implement an Information Security Continuous Monitoring program with ongoing assessments, security status reporting, and risk response
+          validation:
+            check: validate_fisma_continuous_monitoring
+            conditions:
+              - ids_ips_enabled: true
+              - audit_logging: true
+              - dlp_enabled: true
+          severity: high
+  
+        - id: fisma-cm-002
+          name: "Continuous Monitoring - Automated Security Reporting"
+          description: Automated tools must collect security metrics and generate reports on system security status for submission to OMB through CyberScope or equivalent
+          validation:
+            check: validate_automated_security_reporting
+            conditions:
+              - audit_log_retention_days: 365
+              - audit_log_tamper_proof: true
+          severity: medium
+  
+        - id: fisma-ir-001
+          name: "Incident Response - Federal Reporting Requirements"
+          description: Security incidents must be reported to CISA within one hour of discovery; incident response plans must be tested annually
+          validation:
+            check: validate_fisma_incident_response
+            conditions:
+              - audit_logging: true
+              - audit_log_tamper_proof: true
+              - rto_minutes: 60
+          severity: critical
+  
+        - id: fisma-poa-001
+          name: "Plan of Action and Milestones - POA&M Tracking"
+          description: All identified security weaknesses must be documented in a POA&M with assigned resources, milestones, and completion dates; remediation timelines must be met
+          validation:
+            check: validate_poam_tracking_controls
+            conditions:
+              - audit_logging: true
+              - slsa_level: [1, 2, 3, 4]
+          severity: medium
+  
+        - id: fisma-auth-001
+          name: "Authorization to Operate - ATO Maintenance"
+          description: Federal systems must maintain a valid ATO through continuous monitoring; significant changes must trigger security impact analysis and potential re-authorization
+          validation:
+            check: validate_ato_maintenance_requirements
+            conditions:
+              - environment: [federal, fedramp-moderate, fedramp-high, govcloud]
+              - vendor_security_assessed: true
+              - sbom_available: true
+          severity: critical
+  
+  - id: cmmc
+    name: CMMC 2.0
+    description: Cybersecurity Maturity Model Certification - DoD framework for protecting CUI and FCI in the defense industrial base
+    controls:
+        - id: cmmc-l1-ac-001
+          name: "Level 1 - Access Control: Limit System Access"
+          description: FAR 52.204-21 requires limiting information system access to authorized users and processes acting on behalf of authorized users
+          validation:
+            check: validate_cmmc_l1_access_control
+            conditions:
+              - authz_required: true
+              - authz_model: [rbac, abac, dac]
+          severity: high
+  
+        - id: cmmc-l1-ac-002
+          name: "Level 1 - Access Control: Limit System Access to Authorized Transactions"
+          description: Limit information system access to the types of transactions and functions authorized users are permitted to execute
+          validation:
+            check: validate_cmmc_l1_transaction_control
+            conditions:
+              - authz_required: true
+              - authz_model: [rbac, abac]
+              - rate_limiting_enabled: true
+          severity: high
+  
+        - id: cmmc-l1-ia-001
+          name: "Level 1 - Identification and Authentication: Identify Users"
+          description: Identify information system users, processes acting on behalf of users, and devices accessing organizational systems
+          validation:
+            check: validate_cmmc_l1_identification
+            conditions:
+              - authn_mechanism: [password, mfa, pki, fido2, piv, cac]
+              - authz_required: true
+          severity: high
+  
+        - id: cmmc-l1-mp-001
+          name: "Level 1 - Media Protection: Sanitize Media"
+          description: Sanitize or destroy information system media containing Federal Contract Information before disposal or reuse
+          validation:
+            check: validate_cmmc_l1_media_protection
+            conditions:
+              - encryption_at_rest: true
+              - stores_data: true
+          severity: medium
+  
+        - id: cmmc-l1-pe-001
+          name: "Level 1 - Physical Protection: Limit Physical Access"
+          description: Limit physical access to organizational information systems, equipment, and the respective operating environments
+          validation:
+            check: validate_cmmc_l1_physical_protection
+            conditions:
+              - environment: [datacenter, on-premise, federal, govcloud]
+              - trust: [high, restricted]
+          severity: medium
+  
+        - id: cmmc-l2-ac-001
+          name: "Level 2 - Access Control: Account Management (NIST 800-171 3.1.1)"
+          description: Limit system access to authorized users, processes acting on behalf of authorized users, and devices including other systems; enforce least privilege
+          validation:
+            check: validate_cmmc_l2_account_management
+            conditions:
+              - authz_required: true
+              - authz_model: [rbac, abac]
+              - session_timeout_minutes: 15
+          severity: critical
+  
+        - id: cmmc-l2-ac-002
+          name: "Level 2 - Access Control: CUI Flow Enforcement (NIST 800-171 3.1.3)"
+          description: Control the flow of CUI in accordance with approved authorizations; enforce information flow control policies across trust boundaries
+          validation:
+            check: validate_cmmc_l2_cui_flow_control
+            conditions:
+              - data_classification: [cui, controlled, confidential]
+              - crosses_trust_boundary: true
+              - data_masking: true
+              - input_validation: true
+          severity: critical
+  
+        - id: cmmc-l2-ac-003
+          name: "Level 2 - Access Control: Separation of Duties (NIST 800-171 3.1.4)"
+          description: Separate the duties of individuals to reduce the risk of malevolent activity without collusion; implement least privilege for all accounts
+          validation:
+            check: validate_cmmc_l2_separation_of_duties
+            conditions:
+              - authz_model: [rbac, abac]
+              - multi_tenant: false
+          severity: high
+  
+        - id: cmmc-l2-enc-001
+          name: "Level 2 - System and Communications Protection: CUI Encryption in Transit (NIST 800-171 3.13.8)"
+          description: Implement cryptographic mechanisms to prevent unauthorized disclosure of CUI during transmission unless otherwise protected by alternative physical safeguards
+          validation:
+            check: validate_cmmc_l2_cui_transit_encryption
+            conditions:
+              - tls_enabled: true
+              - tls_version_min: ["1.2", "1.3"]
+              - data_classification: [cui, controlled, confidential]
+          severity: critical
+  
+        - id: cmmc-l2-enc-002
+          name: "Level 2 - System and Communications Protection: CUI Encryption at Rest (NIST 800-171 3.13.16)"
+          description: Protect the confidentiality of CUI at rest using FIPS-validated cryptographic mechanisms
+          validation:
+            check: validate_cmmc_l2_cui_rest_encryption
+            conditions:
+              - encryption_at_rest: true
+              - encryption_key_management: [kms, hsm]
+              - data_classification: [cui, controlled, confidential]
+          severity: critical
+  
+        - id: cmmc-l2-mfa-001
+          name: "Level 2 - Identification and Authentication: MFA for Privileged Accounts (NIST 800-171 3.5.3)"
+          description: Use multi-factor authentication for local and network access to privileged accounts and for network access to non-privileged accounts
+          validation:
+            check: validate_cmmc_l2_mfa_requirements
+            conditions:
+              - authn_mechanism: [mfa, pki, fido2, piv, cac]
+              - admin_interface: true
+          severity: critical
+  
+        - id: cmmc-l2-au-001
+          name: "Level 2 - Audit and Accountability: Event Logging (NIST 800-171 3.3.1)"
+          description: Create and retain system audit logs and records to the extent needed to enable the monitoring, analysis, investigation, and reporting of unlawful or unauthorized system activity
+          validation:
+            check: validate_cmmc_l2_audit_logging
+            conditions:
+              - audit_logging: true
+              - audit_log_tamper_proof: true
+              - audit_log_retention_days: 90
+          severity: high
+  
+        - id: cmmc-l2-au-002
+          name: "Level 2 - Audit and Accountability: User Activity Review (NIST 800-171 3.3.2)"
+          description: Ensure that the actions of individual system users can be uniquely traced to those users so they can be held accountable for their actions
+          validation:
+            check: validate_cmmc_l2_user_activity_tracing
+            conditions:
+              - audit_logging: true
+              - authz_required: true
+          severity: high
+  
+        - id: cmmc-l2-bp-001
+          name: "Level 2 - System and Communications Protection: Boundary Defense (NIST 800-171 3.13.1)"
+          description: Monitor, control, and protect communications at the external boundaries and key internal boundaries of organizational systems
+          validation:
+            check: validate_cmmc_l2_boundary_defense
+            conditions:
+              - default_deny: true
+              - egress_filtered: true
+              - ids_ips_enabled: true
+              - enforcement_mechanism: [hardware-firewall, ngfw, cloud-native-sg]
+          severity: critical
+  
+        - id: cmmc-l2-sm-001
+          name: "Level 2 - System and Communications Protection: Session Authenticity (NIST 800-171 3.13.9)"
+          description: Establish and manage cryptographic keys for required cryptography employed in organizational systems; protect session authenticity
+          validation:
+            check: validate_cmmc_l2_session_management
+            conditions:
+              - session_timeout_minutes: 15
+              - tls_enabled: true
+              - forward_secrecy_required: true
+          severity: high
+  
+        - id: cmmc-l2-vm-001
+          name: "Level 2 - Risk Assessment: Vulnerability Scanning (NIST 800-171 3.11.2)"
+          description: Scan for vulnerabilities in organizational systems and applications periodically and when new vulnerabilities affecting those systems are identified
+          validation:
+            check: validate_cmmc_l2_vulnerability_management
+            conditions:
+              - sbom_available: true
+              - slsa_level: [2, 3, 4]
+          severity: high
+  
+        - id: cmmc-l3-ac-001
+          name: "Level 3 - Access Control: Enhanced Privileged Access (NIST 800-172 3.1.3e)"
+          description: Employ organizationally defined automated mechanisms to enforce access control decisions; use dynamic access control for CUI protection
+          validation:
+            check: validate_cmmc_l3_enhanced_access_control
+            conditions:
+              - authz_model: [abac, pbac, zero-trust]
+              - mtls_mode: [strict, required]
+              - mutual_authentication: true
+          severity: critical
+  
+        - id: cmmc-l3-enc-001
+          name: "Level 3 - System Protection: Advanced Encryption (NIST 800-172 3.13.4e)"
+          description: Employ FIPS-validated cryptography in all system components; employ advanced encryption for protecting CUI on mobile devices and portable storage
+          validation:
+            check: validate_cmmc_l3_advanced_encryption
+            conditions:
+              - tls_version_min: "1.3"
+              - cipher_suite_policy: [fips, fedramp-approved, strong]
+              - forward_secrecy_required: true
+              - encryption_key_management: hsm
+          severity: critical
+  
+        - id: cmmc-l3-scrm-001
+          name: "Level 3 - Supply Chain Risk Management: Enhanced SCRM (NIST 800-172 3.15.1e)"
+          description: Establish a supply chain risk management strategy; employ threat intelligence to inform supply chain risk decisions; verify integrity of all components
+          validation:
+            check: validate_cmmc_l3_supply_chain_risk_management
+            conditions:
+              - sbom_available: true
+              - slsa_level: [3, 4]
+              - vendor_security_assessed: true
+          severity: high
+  
+        - id: cmmc-l3-ir-001
+          name: "Level 3 - Incident Response: Advanced Threat Response (NIST 800-172 3.6.1e)"
+          description: Establish an organizational incident response capability that addresses insider threats; coordinate incident response activities with external organizations
+          validation:
+            check: validate_cmmc_l3_incident_response
+            conditions:
+              - audit_logging: true
+              - audit_log_tamper_proof: true
+              - audit_log_retention_days: 1095
+              - rto_minutes: 60
+              - rpo_minutes: 15
+          severity: critical
+  
+  - id: disa-stig
+    name: DISA STIGs
+    description: Defense Information Systems Agency Security Technical Implementation Guides - mandatory DoD security configuration standards
+    controls:
+        - id: disa-stig-app-001
+          name: "Application Security STIG: Input Validation"
+          description: Applications must validate all input to prevent injection attacks; input from untrusted sources must be validated for type, format, length, and range before processing
+          validation:
+            check: validate_stig_input_validation
+            conditions:
+              - input_validation: true
+              - error_detail_exposure: none
+          severity: high
+  
+        - id: disa-stig-app-002
+          name: "Application Security STIG: Error Handling and Information Exposure"
+          description: Applications must not expose system information, stack traces, or internal error details to users; error messages must be generic and not reveal implementation details
+          validation:
+            check: validate_stig_error_handling
+            conditions:
+              - error_detail_exposure: none
+              - exposure: [internal, restricted]
+          severity: high
+  
+        - id: disa-stig-app-003
+          name: "Application Security STIG: Session Management"
+          description: Web applications must implement secure session management including session timeout, secure cookie attributes, and session token rotation after authentication
+          validation:
+            check: validate_stig_session_management
+            conditions:
+              - session_timeout_minutes: 15
+              - tls_enabled: true
+              - authn_mechanism: [mfa, pki, fido2, piv, cac]
+          severity: high
+  
+        - id: disa-stig-app-004
+          name: "Application Security STIG: Authentication and Authorization"
+          description: Applications must enforce authentication for all sensitive functions and implement role-based access control; privileged functions require additional authentication
+          validation:
+            check: validate_stig_application_authentication
+            conditions:
+              - authn_mechanism: [mfa, pki, fido2, piv, cac]
+              - authz_required: true
+              - authz_model: [rbac, abac]
+              - admin_interface: true
+          severity: critical
+  
+        - id: disa-stig-net-001
+          name: "Network Security STIG: Network Segmentation"
+          description: Networks must be segmented to isolate sensitive systems; trust zones must be defined with enforced boundaries between security domains
+          validation:
+            check: validate_stig_network_segmentation
+            conditions:
+              - segmentation_type: [vlan, microsegmentation, vpc, sdn]
+              - default_deny: true
+              - trust: [high, medium, low, untrusted]
+          severity: critical
+  
+        - id: disa-stig-net-002
+          name: "Network Security STIG: Boundary Protection and Encryption"
+          description: All data crossing network boundaries must be encrypted; boundary protection devices must inspect and filter traffic at all trust boundary crossing points
+          validation:
+            check: validate_stig_network_boundary_protection
+            conditions:
+              - tls_enabled: true
+              - tls_version_min: ["1.2", "1.3"]
+              - egress_filtered: true
+              - enforcement_mechanism: [hardware-firewall, ngfw, waf, cloud-native-sg]
+              - inspection_enabled: true
+          severity: critical
+  
+        - id: disa-stig-net-003
+          name: "Network Security STIG: Intrusion Detection and Prevention"
+          description: IDS/IPS must be deployed at network boundaries and key internal segments to detect and prevent unauthorized access, malware, and anomalous activity
+          validation:
+            check: validate_stig_ids_ips_deployment
+            conditions:
+              - ids_ips_enabled: true
+              - internet_routable: true
+              - boundary_type: [internet-facing, dmz, external]
+          severity: high
+  
+        - id: disa-stig-db-001
+          name: "Database Security STIG: Encryption at Rest"
+          description: Databases storing sensitive or classified data must employ FIPS-validated encryption at rest; encryption keys must be stored separately from encrypted data
+          validation:
+            check: validate_stig_database_encryption
+            conditions:
+              - component_type: [database, data-store, cache]
+              - encryption_at_rest: true
+              - encryption_key_management: [kms, hsm]
+              - stores_data: true
+          severity: critical
+  
+        - id: disa-stig-db-002
+          name: "Database Security STIG: Database Access Control and Audit Logging"
+          description: Database access must be restricted to authorized users and applications; all privileged database operations must be logged with sufficient detail for forensic analysis
+          validation:
+            check: validate_stig_database_audit
+            conditions:
+              - component_type: [database, data-store]
+              - authz_required: true
+              - audit_logging: true
+              - audit_log_tamper_proof: true
+              - audit_log_retention_days: 90
+          severity: high
+  
+        - id: disa-stig-cs-001
+          name: "Container Security STIG: Privileged Container Execution"
+          description: Containers must not run as root or with privileged capabilities unless explicitly required and documented; container processes must run with least privilege
+          validation:
+            check: validate_stig_container_privilege
+            conditions:
+              - component_type: container
+              - runs_as_root: false
+              - resource_limits_set: true
+          severity: critical
+  
+        - id: disa-stig-cs-002
+          name: "Container Security STIG: Container Network Policies and Isolation"
+          description: Containers must enforce network policies to restrict inter-container communication; only explicitly required network paths should be permitted
+          validation:
+            check: validate_stig_container_network_policy
+            conditions:
+              - component_type: container
+              - network_policy_enforced: true
+              - platform: [kubernetes, openshift, eks, aks, gke]
+          severity: high
+  
+        - id: disa-stig-cs-003
+          name: "Container Security STIG: Container Image Signing and Provenance"
+          description: Container images must be signed and verified before deployment; only images from approved registries with verified provenance may be deployed in DoD environments
+          validation:
+            check: validate_stig_container_image_signing
+            conditions:
+              - component_type: container
+              - slsa_level: [2, 3, 4]
+              - sbom_available: true
+          severity: high
+  
+        - id: disa-stig-web-001
+          name: "Web Server Security STIG: TLS Configuration and Cipher Suites"
+          description: Web servers must be configured to use TLS 1.2 or higher with DoD-approved cipher suites; SSLv2, SSLv3, TLS 1.0, and TLS 1.1 must be disabled
+          validation:
+            check: validate_stig_tls_configuration
+            conditions:
+              - tls_enabled: true
+              - tls_version_min: ["1.2", "1.3"]
+              - cipher_suite_policy: [fips, dod-approved, strong]
+              - forward_secrecy_required: true
+              - mtls_mode: [strict, required, preferred]
+          severity: critical
+
+  - id: iso27001
+    name: "ISO/IEC 27001:2022"
+    version: "2022"
+    description: Information security management system requirements with Annex A controls
+    controls:
+        - id: iso27001-A.5.1
+          name: "Policies for information security"
+          description: Information security policy and topic-specific policies must be defined, approved, and communicated.
+          validation:
+            check: check_security_policy_defined
+            conditions:
+              - data_owner: defined
+          severity: high
+  
+        - id: iso27001-A.5.2
+          name: "Information security roles and responsibilities"
+          description: Roles and responsibilities for information security must be defined and allocated.
+          validation:
+            check: check_security_roles_assigned
+            conditions:
+              - data_owner: defined
+          severity: high
+  
+        - id: iso27001-A.5.10
+          name: "Acceptable use of information and other associated assets"
+          description: Rules for acceptable use and handling of information and assets must be identified, documented, and implemented.
+          validation:
+            check: check_acceptable_use_policy
+            conditions:
+              - data_classification: [public, internal, confidential, restricted]
+          severity: medium
+  
+        - id: iso27001-A.5.15
+          name: "Access control"
+          description: Rules to control physical and logical access to information and assets must be established and implemented.
+          validation:
+            check: check_access_control_policy
+            conditions:
+              - authz_required: true
+              - authz_model: [rbac, abac, mandatory]
+          severity: critical
+  
+        - id: iso27001-A.5.17
+          name: "Authentication information"
+          description: Allocation and management of authentication information must be controlled by a management process.
+          validation:
+            check: check_authentication_management
+            conditions:
+              - authn_mechanism: [oauth2, saml, oidc, mfa, certificate]
+              - secrets_manager_ref: defined
+          severity: high
+  
+        - id: iso27001-A.5.23
+          name: "Information security for use of cloud services"
+          description: Processes for acquisition, use, management, and exit of cloud services must be established.
+          validation:
+            check: check_cloud_security_controls
+            conditions:
+              - shared_responsibility_model: defined
+              - vendor_security_assessed: true
+          severity: high
+  
+        - id: iso27001-A.5.29
+          name: "Information security during disruption"
+          description: Information security must be planned, implemented, tested, and reviewed during disruption.
+          validation:
+            check: check_business_continuity_security
+            conditions:
+              - resiliency: [high, redundant]
+              - rto_minutes: defined
+              - rpo_minutes: defined
+          severity: high
+  
+        - id: iso27001-A.5.31
+          name: "Legal, statutory, regulatory and contractual requirements"
+          description: Legal, statutory, regulatory, and contractual requirements for information security must be identified, documented, and complied with.
+          validation:
+            check: check_legal_regulatory_compliance
+            conditions:
+              - data_owner: defined
+              - retention_days: defined
+          severity: high
+  
+        - id: iso27001-A.5.34
+          name: "Privacy and protection of PII"
+          description: Requirements for the preservation of privacy and protection of PII must be identified and complied with.
+          validation:
+            check: check_pii_privacy_controls
+            conditions:
+              - processes_pii: true
+              - data_entities_contain_pii: true
+              - masking_required: true
+          severity: critical
+  
+        - id: iso27001-A.8.1
+          name: "User endpoint devices"
+          description: Information stored on, processed by, or accessible via user endpoint devices must be protected.
+          validation:
+            check: check_endpoint_device_protection
+            conditions:
+              - encryption_at_rest: true
+              - network_policy_enforced: true
+          severity: high
+  
+        - id: iso27001-A.8.2
+          name: "Privileged access rights"
+          description: Allocation and use of privileged access rights must be restricted and managed.
+          validation:
+            check: check_privileged_access_management
+            conditions:
+              - admin_interface: true
+              - authn_mechanism: [mfa, certificate]
+              - authz_model: [rbac, abac]
+          severity: critical
+  
+        - id: iso27001-A.8.3
+          name: "Information access restriction"
+          description: Access to information and application system functions must be restricted in accordance with the access control policy.
+          validation:
+            check: check_information_access_restriction
+            conditions:
+              - authz_required: true
+              - data_classification: [confidential, restricted]
+          severity: high
+  
+        - id: iso27001-A.8.4
+          name: "Access to source code"
+          description: Read and write access to source code, development tools, and software libraries must be appropriately managed.
+          validation:
+            check: check_source_code_access_control
+            conditions:
+              - authz_required: true
+              - slsa_level: [2, 3, 4]
+          severity: high
+  
+        - id: iso27001-A.8.5
+          name: "Secure authentication"
+          description: Secure authentication technologies and procedures must be implemented based on information access restrictions.
+          validation:
+            check: check_secure_authentication
+            conditions:
+              - authn_mechanism: [oauth2, saml, oidc, mfa, certificate, mtls]
+              - tls_enabled: true
+          severity: critical
+  
+        - id: iso27001-A.8.6
+          name: "Capacity management"
+          description: The use of resources must be monitored and adjusted in line with current and expected capacity requirements.
+          validation:
+            check: check_capacity_management
+            conditions:
+              - resource_limits_set: true
+              - availability: [high, critical]
+          severity: medium
+  
+        - id: iso27001-A.8.7
+          name: "Protection against malware"
+          description: Protection against malware must be implemented and supported by appropriate user awareness.
+          validation:
+            check: check_malware_protection
+            conditions:
+              - ids_ips_enabled: true
+          severity: high
+  
+        - id: iso27001-A.8.9
+          name: "Configuration management"
+          description: Configurations of hardware, software, services, and networks must be established, documented, implemented, monitored, and reviewed.
+          validation:
+            check: check_configuration_management
+            conditions:
+              - encryption_key_management: defined
+              - network_policy_enforced: true
+          severity: high
+  
+        - id: iso27001-A.8.10
+          name: "Information deletion"
+          description: Information stored in information systems, devices, or other storage media must be deleted when no longer required.
+          validation:
+            check: check_information_deletion_policy
+            conditions:
+              - retention_days: defined
+          severity: medium
+  
+        - id: iso27001-A.8.11
+          name: "Data masking"
+          description: Data masking must be used in accordance with the organisation's topic-specific policy on access control and other related policies, and business requirements.
+          validation:
+            check: check_data_masking_applied
+            conditions:
+              - data_masking: true
+              - masking_required: true
+          severity: high
+  
+        - id: iso27001-A.8.12
+          name: "Data leakage prevention"
+          description: Data leakage prevention measures must be applied to systems, networks, and devices that process, store, or transmit sensitive information.
+          validation:
+            check: check_data_leakage_prevention
+            conditions:
+              - dlp_enabled: true
+              - egress_filtered: true
+          severity: high
+  
+        - id: iso27001-A.8.13
+          name: "Information backup"
+          description: Backup copies of information, software, and systems must be maintained and regularly tested.
+          validation:
+            check: check_information_backup
+            conditions:
+              - resiliency: [high, redundant]
+              - rpo_minutes: defined
+          severity: high
+  
+        - id: iso27001-A.8.14
+          name: "Redundancy of information processing facilities"
+          description: Information processing facilities must be implemented with redundancy to meet availability requirements.
+          validation:
+            check: check_processing_redundancy
+            conditions:
+              - resiliency: [high, redundant]
+              - rto_minutes: defined
+              - multi_region: true
+          severity: high
+  
+        - id: iso27001-A.8.15
+          name: "Logging"
+          description: Logs that record activities, exceptions, faults, and other relevant events must be produced, stored, protected, and analysed.
+          validation:
+            check: check_logging_controls
+            conditions:
+              - audit_logging: true
+              - audit_log_tamper_proof: true
+              - audit_log_retention_days: defined
+          severity: high
+  
+        - id: iso27001-A.8.16
+          name: "Monitoring activities"
+          description: Networks, systems, and applications must be monitored for anomalous behaviour and appropriate actions taken.
+          validation:
+            check: check_monitoring_activities
+            conditions:
+              - ids_ips_enabled: true
+              - audit_logging: true
+          severity: high
+  
+        - id: iso27001-A.8.20
+          name: "Networks security"
+          description: Networks and network devices must be secured, managed, and controlled to protect information in systems and applications.
+          validation:
+            check: check_network_security
+            conditions:
+              - segmentation_type: defined
+              - default_deny: true
+              - egress_filtered: true
+          severity: high
+  
+        - id: iso27001-A.8.22
+          name: "Segregation of networks"
+          description: Groups of information services, users, and information systems must be segregated in the organisation's networks.
+          validation:
+            check: check_network_segregation
+            conditions:
+              - segmentation_type: [vlan, micro, zero_trust]
+              - trust: defined
+              - crosses_trust_boundary: true
+          severity: high
+  
+        - id: iso27001-A.8.24
+          name: "Use of cryptography"
+          description: Rules for the effective use of cryptography, including cryptographic key management, must be defined and implemented.
+          validation:
+            check: check_cryptography_usage
+            conditions:
+              - tls_enabled: true
+              - tls_version_min: [TLSv1.2, TLSv1.3]
+              - encryption_at_rest: true
+              - encryption_key_management: defined
+          severity: critical
+  
+        - id: iso27001-A.8.25
+          name: "Secure development life cycle"
+          description: Rules for the secure development of software and systems must be established and applied.
+          validation:
+            check: check_secure_development_lifecycle
+            conditions:
+              - slsa_level: [2, 3, 4]
+              - sbom_available: true
+          severity: high
+  
+        - id: iso27001-A.8.26
+          name: "Application security requirements"
+          description: Requirements for information security must be identified, specified, and approved when developing or acquiring applications.
+          validation:
+            check: check_application_security_requirements
+            conditions:
+              - input_validation: true
+              - tls_enabled: true
+              - authz_required: true
+          severity: high
+  
+        - id: iso27001-A.8.28
+          name: "Secure coding"
+          description: Secure coding principles must be applied to software development.
+          validation:
+            check: check_secure_coding_practices
+            conditions:
+              - input_validation: true
+              - error_detail_exposure: false
+              - slsa_level: [2, 3, 4]
+          severity: high
+  
+  - id: iso27017
+    name: "ISO/IEC 27017:2015"
+    version: "2015"
+    description: Code of practice for information security controls based on ISO/IEC 27002 for cloud services
+    controls:
+        - id: iso27017-CLD.6.3
+          name: "Shared roles and responsibilities within a cloud computing environment"
+          description: Roles and responsibilities of cloud service customer and cloud service provider must be documented and shared.
+          validation:
+            check: check_cloud_shared_responsibilities
+            conditions:
+              - shared_responsibility_model: defined
+              - vendor_security_assessed: true
+          severity: high
+  
+        - id: iso27017-CLD.8.1
+          name: "Virtual machine hardening"
+          description: Virtual machines must be hardened in accordance with business and security requirements.
+          validation:
+            check: check_virtual_machine_hardening
+            conditions:
+              - runs_as_root: false
+              - resource_limits_set: true
+              - network_policy_enforced: true
+              - encryption_at_rest: true
+          severity: high
+  
+        - id: iso27017-CLD.9.5.1
+          name: "Segregation in virtual computing environments"
+          description: Virtual computing environments must be managed so that they provide segregation between different customers.
+          validation:
+            check: check_virtual_network_segregation
+            conditions:
+              - tenant_isolation: true
+              - segmentation_type: [vlan, micro, zero_trust]
+              - network_policy_enforced: true
+          severity: critical
+  
+        - id: iso27017-CLD.9.5.2
+          name: "Virtual machine hardening — network isolation"
+          description: Virtual machines must be hardened and network-isolated to prevent lateral movement between tenants.
+          validation:
+            check: check_vm_network_isolation
+            conditions:
+              - multi_tenant: true
+              - tenant_isolation: true
+              - default_deny: true
+          severity: critical
+  
+        - id: iso27017-CLD.12.1
+          name: "Administrative operations and procedures — cloud"
+          description: Procedures for administration of cloud infrastructure must be documented and logged.
+          validation:
+            check: check_admin_operations_logging
+            conditions:
+              - audit_logging: true
+              - audit_log_tamper_proof: true
+              - admin_interface: true
+          severity: high
+  
+        - id: iso27017-CLD.12.4
+          name: "Clock synchronisation in cloud environments"
+          description: Clocks of all cloud information processing systems must be synchronised to an agreed reference time source.
+          validation:
+            check: check_clock_synchronization
+            conditions:
+              - environment: [cloud, hybrid]
+              - audit_logging: true
+          severity: medium
+  
+        - id: iso27017-CLD.13.1
+          name: "Network segregation in cloud environments"
+          description: Cloud networks must be segregated from other networks including other customer environments.
+          validation:
+            check: check_cloud_network_segregation
+            conditions:
+              - segmentation_type: [vlan, micro, zero_trust]
+              - default_deny: true
+              - egress_filtered: true
+          severity: high
+  
+        - id: iso27017-CLD.13.1.4
+          name: "Tenant isolation in multi-tenant cloud deployments"
+          description: In multi-tenant cloud deployments data and resources must be isolated between tenants to prevent information leakage.
+          validation:
+            check: check_tenant_isolation
+            conditions:
+              - tenant_isolation: true
+              - multi_tenant: true
+              - data_masking: true
+          severity: critical
+  
+        - id: iso27017-CLD.13.1.5
+          name: "Shared responsibility model documentation"
+          description: The cloud service provider and customer must agree on and document their respective security responsibilities.
+          validation:
+            check: check_shared_responsibility_documented
+            conditions:
+              - shared_responsibility_model: defined
+              - vendor_security_assessed: true
+              - trust_level: [trusted, conditional]
+          severity: high
+  
+        - id: iso27017-CLD.16.1
+          name: "Notification of cloud security incidents"
+          description: Cloud service providers must notify customers of security incidents that may impact their data or services.
+          validation:
+            check: check_cloud_incident_notification
+            conditions:
+              - audit_logging: true
+              - ids_ips_enabled: true
+              - audit_log_tamper_proof: true
+          severity: high
+  
+  - id: iso27018
+    name: "ISO/IEC 27018:2019"
+    version: "2019"
+    description: Code of practice for protection of personally identifiable information (PII) in public clouds
+    controls:
+        - id: iso27018-A.1
+          name: "Consent and choice for PII processing"
+          description: PII must not be processed unless the data subject has given consent or processing is permitted by applicable law.
+          validation:
+            check: check_pii_consent_mechanism
+            conditions:
+              - contains_pii: true
+              - purpose_limitation: defined
+              - data_owner: defined
+          severity: critical
+  
+        - id: iso27018-A.2
+          name: "Purpose limitation for PII"
+          description: PII must be collected only for specified, explicit, and legitimate purposes and not processed in a manner incompatible with those purposes.
+          validation:
+            check: check_pii_purpose_limitation
+            conditions:
+              - purpose_limitation: defined
+              - contains_pii: true
+              - data_classification: [confidential, restricted]
+          severity: high
+  
+        - id: iso27018-A.5
+          name: "PII transfer controls"
+          description: PII transferred to or from a cloud service must be protected in transit using appropriate encryption.
+          validation:
+            check: check_pii_transfer_controls
+            conditions:
+              - tls_enabled: true
+              - tls_version_min: [TLSv1.2, TLSv1.3]
+              - data_entities_contain_pii: true
+              - mutual_authentication: true
+          severity: critical
+  
+        - id: iso27018-A.10
+          name: "Encryption of PII at rest and in transit"
+          description: PII stored in cloud systems must be encrypted at rest and in transit to protect against unauthorised disclosure.
+          validation:
+            check: check_pii_encryption
+            conditions:
+              - encryption_at_rest: true
+              - tls_enabled: true
+              - processes_pii: true
+          severity: critical
+  
+        - id: iso27018-A.11
+          name: "PII sub-processor obligations"
+          description: Cloud service providers using sub-processors to handle PII must ensure they comply with the same data protection obligations.
+          validation:
+            check: check_pii_sub_processor_controls
+            conditions:
+              - vendor_security_assessed: true
+              - data_entities_contain_pii: true
+              - tls_required: true
+          severity: high
+  
+        - id: iso27018-A.12
+          name: "PII geographic location and residency"
+          description: Cloud service providers must disclose and restrict the locations in which PII is stored, processed, or transferred.
+          validation:
+            check: check_pii_geographic_location
+            conditions:
+              - residency_requirements: defined
+              - data_residency_required: true
+              - contains_pii: true
+          severity: high
+  
+        - id: iso27018-A.14
+          name: "PII access logging and audit"
+          description: Accesses to PII in cloud environments must be logged and audit records protected from tampering.
+          validation:
+            check: check_pii_access_logging
+            conditions:
+              - audit_logging: true
+              - audit_log_tamper_proof: true
+              - processes_pii: true
+          severity: high
+  
+        - id: iso27018-A.17
+          name: "PII disclosure notification"
+          description: Cloud service providers must notify customers of requests from third parties for disclosure of PII.
+          validation:
+            check: check_pii_disclosure_notification
+            conditions:
+              - audit_logging: true
+              - audit_log_retention_days: defined
+              - data_owner: defined
+          severity: high
+  
+  - id: gdpr
+    name: "General Data Protection Regulation (EU) 2016/679"
+    version: "2018"
+    description: EU regulation on data protection and privacy for all individuals within the EU and EEA
+    controls:
+        - id: gdpr-art5-1a
+          name: "Article 5(1)(a) — Lawfulness of processing"
+          description: Personal data must be processed lawfully, fairly, and transparently. Architecture must identify a data owner responsible for lawful basis.
+          validation:
+            check: check_lawful_basis_defined
+            conditions:
+              - data_owner: defined
+              - contains_pii: true
+          severity: critical
+  
+        - id: gdpr-art5-1b
+          name: "Article 5(1)(b) — Purpose limitation"
+          description: Personal data must be collected for specified, explicit, and legitimate purposes and not further processed in a manner incompatible with those purposes.
+          validation:
+            check: check_purpose_limitation_defined
+            conditions:
+              - purpose_limitation: defined
+              - contains_pii: true
+          severity: high
+  
+        - id: gdpr-art5-1c
+          name: "Article 5(1)(c) — Data minimisation"
+          description: Personal data must be adequate, relevant, and limited to what is necessary for the purposes for which they are processed.
+          validation:
+            check: check_data_minimisation
+            conditions:
+              - data_classification: defined
+              - contains_pii: true
+          severity: high
+  
+        - id: gdpr-art5-1e
+          name: "Article 5(1)(e) — Storage limitation"
+          description: Personal data must be kept in a form permitting identification of data subjects for no longer than necessary.
+          validation:
+            check: check_storage_limitation
+            conditions:
+              - retention_days: defined
+              - contains_pii: true
+          severity: high
+  
+        - id: gdpr-art5-1f
+          name: "Article 5(1)(f) — Integrity and confidentiality"
+          description: Personal data must be processed in a manner ensuring appropriate security, including protection against unauthorised processing and accidental loss.
+          validation:
+            check: check_integrity_confidentiality_controls
+            conditions:
+              - encryption_at_rest: true
+              - authz_required: true
+              - tls_enabled: true
+          severity: critical
+  
+        - id: gdpr-art25
+          name: "Article 25 — Data protection by design and by default"
+          description: Technical and organisational measures for data protection must be integrated into processing activities by design and by default.
+          validation:
+            check: check_data_protection_by_design
+            conditions:
+              - encryption_at_rest: true
+              - data_masking: true
+              - audit_logging: true
+              - processes_pii: true
+          severity: critical
+  
+        - id: gdpr-art32-1
+          name: "Article 32(1) — Security of processing"
+          description: Appropriate technical measures must be implemented to ensure a level of security appropriate to the risk, including encryption and resilience.
+          validation:
+            check: check_security_of_processing
+            conditions:
+              - tls_enabled: true
+              - tls_version_min: [TLSv1.2, TLSv1.3]
+              - encryption_at_rest: true
+              - resiliency: [high, redundant]
+          severity: critical
+  
+        - id: gdpr-art32-2
+          name: "Article 32(2) — Confidentiality, integrity, availability, and resilience"
+          description: Processing systems and services must ensure ongoing confidentiality, integrity, availability, and resilience.
+          validation:
+            check: check_cia_ratings_defined
+            conditions:
+              - confidentiality: defined
+              - integrity: defined
+              - availability: defined
+          severity: high
+  
+        - id: gdpr-art33
+          name: "Article 33 — Notification of personal data breach"
+          description: Logging and monitoring must be in place to enable detection and notification of personal data breaches within 72 hours.
+          validation:
+            check: check_breach_detection_capability
+            conditions:
+              - audit_logging: true
+              - ids_ips_enabled: true
+              - audit_log_tamper_proof: true
+          severity: critical
+  
+        - id: gdpr-art35
+          name: "Article 35 — Data Protection Impact Assessment"
+          description: High-risk processing of personal data requires a DPIA. Architecture must identify high-risk processing activities for assessment.
+          validation:
+            check: check_dpia_risk_categorization
+            conditions:
+              - contains_pii: true
+              - data_classification: [restricted]
+              - multi_tenant: true
+          severity: high
+  
+        - id: gdpr-art44
+          name: "Article 44 — General principle for international transfers"
+          description: Personal data must not be transferred to a third country unless adequate protection is ensured. Architecture must enforce data residency requirements.
+          validation:
+            check: check_international_transfer_controls
+            conditions:
+              - residency_requirements: defined
+              - data_residency_required: true
+              - contains_pii: true
+          severity: critical
+  
+        - id: gdpr-art46
+          name: "Article 46 — Transfers subject to appropriate safeguards"
+          description: Where personal data crosses borders, appropriate safeguards including contractual clauses and encryption must be in place.
+          validation:
+            check: check_cross_border_transfer_safeguards
+            conditions:
+              - cross_border_transfer: true
+              - tls_required: true
+              - tls_enabled: true
+              - vendor_security_assessed: true
+          severity: critical
+  
+  - id: uk-ce
+    name: "UK Cyber Essentials"
+    version: "2023"
+    description: UK Government-backed scheme to protect organisations against common cyber attacks across five technical controls
+    controls:
+        - id: uk-ce-CE1
+          name: "CE-1 Firewalls — Boundary protection"
+          description: All devices and networks must be protected by properly configured firewalls or equivalent network devices. Default deny rules and segmentation must be enforced.
+          validation:
+            check: check_firewall_boundary_protection
+            conditions:
+              - default_deny: true
+              - egress_filtered: true
+              - segmentation_type: defined
+              - internet_routable: true
+          severity: critical
+  
+        - id: uk-ce-CE2
+          name: "CE-2 Secure Configuration"
+          description: Computers and network devices must be configured using industry-standard secure baseline settings, including secure key management and removal of default credentials.
+          validation:
+            check: check_secure_configuration
+            conditions:
+              - encryption_key_management: defined
+              - default_deny: true
+              - runs_as_root: false
+              - resource_limits_set: true
+          severity: high
+  
+        - id: uk-ce-CE3
+          name: "CE-3 User Access Control"
+          description: User accounts must be managed so that users only have the access they need. Administrative accounts must use multi-factor authentication.
+          validation:
+            check: check_user_access_control
+            conditions:
+              - authn_mechanism: [oauth2, saml, oidc, mfa, certificate]
+              - authz_required: true
+              - admin_interface: true
+          severity: critical
+  
+        - id: uk-ce-CE4
+          name: "CE-4 Malware Protection"
+          description: Devices must be protected against malware. Where applicable, intrusion detection and prevention systems and web application firewalls must be deployed.
+          validation:
+            check: check_malware_protection_controls
+            conditions:
+              - ids_ips_enabled: true
+          severity: high
+  
+        - id: uk-ce-CE5
+          name: "CE-5 Security Update Management"
+          description: All software must be kept up to date. A software bill of materials must be available and vulnerability scanning must be performed.
+          validation:
+            check: check_security_update_management
+            conditions:
+              - sbom_available: true
+              - slsa_level: [2, 3, 4]
+          severity: high
+  
+  - id: au-e8
+    name: "Australian Cyber Security Centre Essential Eight"
+    version: "2023"
+    description: Prioritised mitigation strategies to protect against cyber threats, mandated for Australian Government systems
+    controls:
+        - id: au-e8-E8-1
+          name: "E8-1 Application Control"
+          description: Only approved and permitted applications may execute on systems. Input validation and allowlisting must be enforced to prevent execution of malicious code.
+          validation:
+            check: check_application_control
+            conditions:
+              - input_validation: true
+              - network_policy_enforced: true
+          severity: critical
+  
+        - id: au-e8-E8-2
+          name: "E8-2 Patch Applications"
+          description: Applications must be patched or mitigated within a defined timeframe. SBOM must be available and supply chain integrity must be verified.
+          validation:
+            check: check_patch_applications
+            conditions:
+              - sbom_available: true
+              - slsa_level: [2, 3, 4]
+          severity: high
+  
+        - id: au-e8-E8-4
+          name: "E8-4 User Application Hardening"
+          description: Applications must be hardened to prevent exploitation. Error details must not be exposed to users, and CORS policies must be defined and enforced.
+          validation:
+            check: check_user_application_hardening
+            conditions:
+              - error_detail_exposure: false
+              - cors_policy: defined
+              - input_validation: true
+          severity: high
+  
+        - id: au-e8-E8-5
+          name: "E8-5 Restrict Administrative Privileges"
+          description: Administrative privileges must be minimised and controlled. Admin interfaces must enforce multi-factor authentication and use appropriate authorisation models.
+          validation:
+            check: check_restrict_admin_privileges
+            conditions:
+              - authz_model: [rbac, abac, mandatory]
+              - admin_interface: true
+              - authn_mechanism: [mfa, certificate]
+          severity: critical
+  
+        - id: au-e8-E8-6
+          name: "E8-6 Patch Operating Systems"
+          description: Operating systems must be patched or mitigated within a defined timeframe. Vulnerability scanning must be performed against the deployment platform.
+          validation:
+            check: check_patch_operating_systems
+            conditions:
+              - sbom_available: true
+              - environment: [cloud, on-premise, hybrid]
+              - slsa_level: [2, 3, 4]
+          severity: high
+  
+        - id: au-e8-E8-7
+          name: "E8-7 Multi-factor Authentication"
+          description: Multi-factor authentication must be used for all remote access to systems and for all internet-facing services and administrative interfaces.
+          validation:
+            check: check_mfa_enforcement
+            conditions:
+              - authn_mechanism: [mfa, certificate]
+              - exposure: [internet, public]
+          severity: critical
+  
+        - id: au-e8-E8-8
+          name: "E8-8 Regular Backups"
+          description: Backups of important data, applications, and configuration must be performed and tested. Multi-region resilience and documented RTO/RPO targets are required.
+          validation:
+            check: check_regular_backups
+            conditions:
+              - resiliency: [high, redundant]
+              - rto_minutes: defined
+              - rpo_minutes: defined
+              - multi_region: true
+          severity: high
+
+  - id: hipaa
+    name: "HIPAA Security Rule"
+    description: Health Insurance Portability and Accountability Act Security Rule requirements for protecting electronic Protected Health Information (ePHI)
+    controls:
+        - id: hipaa-164.308-a1-risk-analysis
+          name: "Risk Analysis (§164.308(a)(1)(ii)(A))"
+          description: Conduct an accurate and thorough assessment of the potential risks and vulnerabilities to the confidentiality, integrity, and availability of ePHI held by the covered entity
+          validation:
+            check: verify_risk_analysis_controls
+            conditions:
+              - confidentiality: high
+              - integrity: high
+              - availability: high
+          severity: critical
+  
+        - id: hipaa-164.308-a1-risk-management
+          name: "Risk Management (§164.308(a)(1)(ii)(B))"
+          description: Implement security measures sufficient to reduce risks and vulnerabilities to a reasonable and appropriate level
+          validation:
+            check: verify_risk_management_controls
+            conditions:
+              - network_policy_enforced: true
+              - secrets_manager_ref: required
+              - resource_limits_set: true
+          severity: critical
+  
+        - id: hipaa-164.308-a3-access-authorization
+          name: "Access Authorization (§164.308(a)(3)(ii)(A))"
+          description: Implement policies and procedures for granting access to ePHI — for example, through access to a workstation, transaction, program, process, or other mechanism
+          validation:
+            check: verify_workforce_access_authorization
+            conditions:
+              - authz_required: true
+              - authz_model: [rbac, abac]
+          severity: high
+  
+        - id: hipaa-164.308-a3-workforce-clearance
+          name: "Workforce Clearance Procedure (§164.308(a)(3)(ii)(B))"
+          description: Implement procedures to determine that the access of a workforce member to ePHI is appropriate
+          validation:
+            check: verify_workforce_clearance_procedure
+            conditions:
+              - authn_mechanism: [mfa, certificate, oauth2]
+              - authz_required: true
+          severity: high
+  
+        - id: hipaa-164.308-a4-access-establishment
+          name: "Access Establishment and Modification (§164.308(a)(4)(ii)(B))"
+          description: Implement policies and procedures that, based on the entity's access authorization policies, establish, document, review, and modify a user's right of access to a workstation, transaction, program, or process
+          validation:
+            check: verify_access_establishment_controls
+            conditions:
+              - authz_model: [rbac, abac]
+              - audit_logging: true
+          severity: high
+  
+        - id: hipaa-164.308-a5-security-reminders
+          name: "Security Reminders (§164.308(a)(5)(ii)(A))"
+          description: Periodic security updates and reminders for workforce members who access ePHI systems
+          validation:
+            check: verify_security_awareness_controls
+            conditions:
+              - audit_logging: true
+              - audit_log_retention_days: 365
+          severity: medium
+  
+        - id: hipaa-164.308-a5-malware-protection
+          name: "Malicious Software Protection (§164.308(a)(5)(ii)(B))"
+          description: Implement procedures for guarding against, detecting, and reporting malicious software in systems containing ePHI
+          validation:
+            check: verify_malware_protection_controls
+            conditions:
+              - ids_ips_enabled: true
+              - sbom_available: true
+          severity: high
+  
+        - id: hipaa-164.308-a6-incident-response
+          name: "Security Incident Response and Reporting (§164.308(a)(6))"
+          description: Implement policies and procedures to address security incidents, including identifying and responding to suspected or known security incidents, mitigating harmful effects, and documenting incidents and outcomes
+          validation:
+            check: verify_incident_response_controls
+            conditions:
+              - audit_logging: true
+              - audit_log_tamper_proof: true
+              - ids_ips_enabled: true
+          severity: critical
+  
+        - id: hipaa-164.308-a7-data-backup
+          name: "Data Backup Plan (§164.308(a)(7)(ii)(A))"
+          description: Establish and implement procedures to create and maintain retrievable exact copies of ePHI
+          validation:
+            check: verify_data_backup_controls
+            conditions:
+              - rpo_minutes: 240
+              - availability: high
+              - stores_data: true
+          severity: high
+  
+        - id: hipaa-164.308-a7-disaster-recovery
+          name: "Disaster Recovery Plan (§164.308(a)(7)(ii)(B))"
+          description: Establish and implement procedures to restore any loss of data for systems containing ePHI
+          validation:
+            check: verify_disaster_recovery_controls
+            conditions:
+              - rto_minutes: 480
+              - resiliency: high
+              - availability: high
+          severity: high
+  
+        - id: hipaa-164.308-a7-emergency-mode
+          name: "Emergency Mode Operation Plan (§164.308(a)(7)(ii)(C))"
+          description: Establish and implement procedures to enable continuation of critical business processes for protection of the security of ePHI while operating in emergency mode
+          validation:
+            check: verify_emergency_mode_operation
+            conditions:
+              - resiliency: high
+              - rto_minutes: 480
+              - availability: [high, critical]
+          severity: high
+  
+        - id: hipaa-164.308-a8-evaluation
+          name: "Periodic Evaluation (§164.308(a)(8))"
+          description: Perform a periodic technical and nontechnical evaluation, based initially upon the standards implemented under this rule, and subsequently in response to environmental or operations changes affecting the security of ePHI
+          validation:
+            check: verify_periodic_security_evaluation
+            conditions:
+              - audit_logging: true
+              - audit_log_retention_days: 365
+              - sbom_available: true
+          severity: medium
+  
+        - id: hipaa-164.312-a1-access-control
+          name: "Access Control (§164.312(a)(1))"
+          description: Implement technical policies and procedures for electronic information systems that maintain ePHI to allow access only to those persons or software programs that have been granted access rights
+          validation:
+            check: verify_technical_access_control
+            conditions:
+              - authn_mechanism: [mfa, certificate, oauth2, saml]
+              - authz_required: true
+              - authz_model: [rbac, abac]
+          severity: critical
+  
+        - id: hipaa-164.312-a2i-unique-user-id
+          name: "Unique User Identification (§164.312(a)(2)(i))"
+          description: Assign a unique name and/or number for identifying and tracking user identity in systems that access ePHI
+          validation:
+            check: verify_unique_user_identification
+            conditions:
+              - authn_mechanism: [mfa, certificate, oauth2, saml, oidc]
+          severity: high
+  
+        - id: hipaa-164.312-a2iv-encryption-decryption
+          name: "Encryption and Decryption (§164.312(a)(2)(iv))"
+          description: Implement a mechanism to encrypt and decrypt ePHI at rest on systems that store ePHI
+          validation:
+            check: verify_ephi_encryption_at_rest
+            conditions:
+              - encryption_at_rest: true
+              - encryption_key_management: [kms, hsm, vault]
+              - stores_data: true
+          severity: critical
+  
+        - id: hipaa-164.312-b-audit-controls
+          name: "Audit Controls (§164.312(b))"
+          description: Implement hardware, software, and/or procedural mechanisms that record and examine activity in information systems that contain or use ePHI
+          validation:
+            check: verify_audit_controls
+            conditions:
+              - audit_logging: true
+              - audit_log_tamper_proof: true
+              - audit_log_retention_days: 365
+          severity: critical
+  
+        - id: hipaa-164.312-c1-integrity
+          name: "Integrity (§164.312(c)(1))"
+          description: Implement policies and procedures to protect ePHI from improper alteration or destruction
+          validation:
+            check: verify_ephi_integrity_controls
+            conditions:
+              - integrity: high
+              - audit_log_tamper_proof: true
+              - mutual_authentication: true
+          severity: high
+  
+        - id: hipaa-164.312-c2-authenticate-ephi
+          name: "Mechanism to Authenticate ePHI (§164.312(c)(2))"
+          description: Implement electronic mechanisms to corroborate that ePHI has not been altered or destroyed in an unauthorized manner
+          validation:
+            check: verify_ephi_authentication_mechanism
+            conditions:
+              - integrity: high
+              - input_validation: true
+              - data_masking: true
+          severity: high
+  
+        - id: hipaa-164.312-d-person-authentication
+          name: "Person or Entity Authentication (§164.312(d))"
+          description: Implement procedures to verify that a person or entity seeking access to ePHI is the one claimed
+          validation:
+            check: verify_person_entity_authentication
+            conditions:
+              - authn_mechanism: [mfa, certificate, oauth2, saml, oidc]
+              - mtls_mode: [required, strict]
+          severity: critical
+  
+        - id: hipaa-164.312-e1-transmission-security
+          name: "Transmission Security (§164.312(e)(1))"
+          description: Implement technical security measures to guard against unauthorized access to ePHI that is being transmitted over an electronic communications network
+          validation:
+            check: verify_ephi_transmission_security
+            conditions:
+              - tls_enabled: true
+              - tls_version_min: "1.2"
+              - crosses_trust_boundary: true
+          severity: critical
+  
+        - id: hipaa-164.312-e2i-integrity-controls
+          name: "Integrity Controls (§164.312(e)(2)(i))"
+          description: Implement security measures to ensure that electronically transmitted ePHI is not improperly modified without detection until disposed of
+          validation:
+            check: verify_transmission_integrity_controls
+            conditions:
+              - mutual_authentication: true
+              - tls_enabled: true
+              - input_validation: true
+          severity: high
+  
+        - id: hipaa-164.312-e2ii-encryption
+          name: "Encryption (§164.312(e)(2)(ii))"
+          description: Implement a mechanism to encrypt ePHI whenever deemed appropriate
+          validation:
+            check: verify_ephi_transmission_encryption
+            conditions:
+              - tls_enabled: true
+              - cipher_suite_policy: [strong, fips]
+              - forward_secrecy_required: true
+          severity: critical
+  
+  - id: swift-cscf
+    name: "SWIFT Customer Security Controls Framework (CSCF)"
+    description: SWIFT's Customer Security Programme mandatory and advisory controls for securing SWIFT-connected infrastructure and financial messaging environments
+    controls:
+        - id: swift-cscf-1.1-environment-protection
+          name: "SWIFT Environment Protection (Control 1.1)"
+          description: Ensure the protection of the user's local SWIFT infrastructure from potentially compromised elements of the general IT environment by maintaining a secure zone that contains SWIFT-related components, enforcing zone segmentation and boundary controls
+          validation:
+            check: verify_swift_environment_zone_segmentation
+            conditions:
+              - segmentation_type: [physical, logical, vlan, micro-segmentation]
+              - default_deny: true
+              - egress_filtered: true
+              - trust: [restricted, high]
+          severity: critical
+  
+        - id: swift-cscf-1.2-privileged-account-control
+          name: "Operating System Privileged Account Control (Control 1.2)"
+          description: Restrict and control the allocation and usage of administrator-level operating system accounts for SWIFT components, prohibiting unnecessary privileged access and use of shared admin credentials
+          validation:
+            check: verify_privileged_account_control
+            conditions:
+              - runs_as_root: false
+              - authn_mechanism: [mfa, certificate]
+              - authz_model: [rbac, abac]
+          severity: critical
+  
+        - id: swift-cscf-2.1-internal-data-flow-security
+          name: "Internal Data Flow Security (Control 2.1)"
+          description: Ensure the confidentiality and integrity of data flows between SWIFT-related components and across the local SWIFT infrastructure by encrypting all cross-boundary data in transit
+          validation:
+            check: verify_internal_data_flow_encryption
+            conditions:
+              - tls_enabled: true
+              - crosses_trust_boundary: true
+              - mutual_authentication: true
+          severity: critical
+  
+        - id: swift-cscf-2.2-security-updates
+          name: "Security Updates (Control 2.2)"
+          description: Minimise the occurrence of known technical vulnerabilities on operator PCs and on SWIFT-related components by ensuring vendor support, applying mandatory security updates, and maintaining a software bill of materials
+          validation:
+            check: verify_security_update_controls
+            conditions:
+              - sbom_available: true
+              - slsa_level: [2, 3, 4]
+          severity: high
+  
+        - id: swift-cscf-2.3-system-hardening
+          name: "System Hardening (Control 2.3)"
+          description: Reduce the cyberattack surface of SWIFT-related components by applying system hardening practices, enforcing default-deny network posture, and eliminating unnecessary services and default accounts
+          validation:
+            check: verify_system_hardening
+            conditions:
+              - default_deny: true
+              - network_policy_enforced: true
+              - runs_as_root: false
+              - resource_limits_set: true
+          severity: high
+  
+        - id: swift-cscf-4.1-password-policy
+          name: "Password Policy (Control 4.1)"
+          description: Ensure passwords for SWIFT-related components and operator accounts meet minimum length, complexity, and rotation requirements, prohibiting weak or default authentication mechanisms
+          validation:
+            check: verify_password_policy_strength
+            conditions:
+              - authn_mechanism: [mfa, certificate, oauth2, saml, oidc]
+          severity: high
+  
+        - id: swift-cscf-4.2-mfa
+          name: "Multi-Factor Authentication (Control 4.2)"
+          description: Prevent the compromise of operator accounts by requiring multi-factor authentication for all interactive operator sessions and privileged access to SWIFT infrastructure components
+          validation:
+            check: verify_mfa_enforcement
+            conditions:
+              - authn_mechanism: mfa
+              - admin_interface: true
+          severity: critical
+  
+        - id: swift-cscf-5.1-logical-access-control
+          name: "Logical Access Control (Control 5.1)"
+          description: Enforce the principles of need-to-know and least privilege for all access to SWIFT-related components, requiring documented authorisation and role-based access models
+          validation:
+            check: verify_logical_access_control
+            conditions:
+              - authz_required: true
+              - authz_model: [rbac, abac]
+          severity: critical
+  
+        - id: swift-cscf-5.2-token-management
+          name: "Token Management (Control 5.2)"
+          description: Ensure secure management of operator session tokens, enforcing session timeouts and preventing token reuse or hijacking in SWIFT-connected environments
+          validation:
+            check: verify_token_session_management
+            conditions:
+              - session_timeout_minutes: 15
+              - authn_mechanism: [mfa, certificate, oauth2, saml, oidc]
+          severity: high
+  
+        - id: swift-cscf-6.1-malware-protection
+          name: "Malware Protection (Control 6.1)"
+          description: Ensure that all SWIFT-related infrastructure and operator workstations are protected against malware through intrusion detection/prevention systems and web application firewalls
+          validation:
+            check: verify_malware_protection_infrastructure
+            conditions:
+              - ids_ips_enabled: true
+          severity: high
+  
+        - id: swift-cscf-6.2-software-integrity
+          name: "Software Integrity (Control 6.2)"
+          description: Ensure software running on SWIFT-related infrastructure has not been tampered with by verifying image signatures, maintaining supply chain provenance, and achieving appropriate SLSA levels
+          validation:
+            check: verify_software_integrity_controls
+            conditions:
+              - slsa_level: [2, 3, 4]
+              - sbom_available: true
+          severity: high
+  
+        - id: swift-cscf-6.4-logging-monitoring
+          name: "Logging and Monitoring (Control 6.4)"
+          description: Detect anomalous activity and support forensic investigations by maintaining tamper-proof audit logs with sufficient retention for all SWIFT-related component access and transaction activity
+          validation:
+            check: verify_logging_monitoring_controls
+            conditions:
+              - audit_logging: true
+              - audit_log_tamper_proof: true
+              - audit_log_retention_days: 365
+          severity: critical
+  
+  - id: glba
+    name: "GLBA Safeguards Rule"
+    description: Gramm-Leach-Bliley Act Safeguards Rule requirements for financial institutions to protect the security and confidentiality of nonpublic personal financial information
+    controls:
+        - id: glba-safeguards-access-control
+          name: "Access Controls for Customer Financial Information"
+          description: Implement technical and physical access controls to limit access to customer financial information only to employees and service providers who have a legitimate business need for that information, enforcing role-based authorisation and strong authentication
+          validation:
+            check: verify_financial_data_access_controls
+            conditions:
+              - authz_required: true
+              - authz_model: [rbac, abac]
+              - authn_mechanism: [mfa, certificate, oauth2, saml, oidc]
+              - data_entities_contain_pci: true
+          severity: critical
+  
+        - id: glba-safeguards-encryption
+          name: "Encryption of Customer Financial Data"
+          description: Encrypt customer financial information both in transit over networks and at rest in storage systems, using approved cipher suites and key management practices that meet current industry standards
+          validation:
+            check: verify_financial_data_encryption
+            conditions:
+              - encryption_at_rest: true
+              - encryption_key_management: [kms, hsm, vault]
+              - tls_enabled: true
+              - tls_version_min: "1.2"
+              - cipher_suite_policy: [strong, fips]
+          severity: critical
+  
+        - id: glba-safeguards-audit-logging
+          name: "Audit Logging for Financial Record Access"
+          description: Maintain comprehensive, tamper-proof audit logs capturing all access to customer financial records with sufficient retention to support regulatory review, fraud investigation, and incident response activities
+          validation:
+            check: verify_financial_audit_logging
+            conditions:
+              - audit_logging: true
+              - audit_log_tamper_proof: true
+              - audit_log_retention_days: 730
+          severity: high
+  
+        - id: glba-safeguards-vendor-oversight
+          name: "Service Provider Oversight"
+          description: Select and retain service providers that maintain appropriate safeguards for customer financial information, and require service providers by contract to implement and maintain appropriate safeguards, including security assessments
+          validation:
+            check: verify_vendor_security_oversight
+            conditions:
+              - vendor_security_assessed: true
+              - tls_required: true
+              - trust_level: [low, medium]
+          severity: high
+  
+        - id: glba-safeguards-mfa
+          name: "Multi-Factor Authentication"
+          description: Implement multi-factor authentication for any individual accessing customer financial information systems, particularly for remote access and privileged administrative access to systems containing nonpublic personal information
+          validation:
+            check: verify_glba_mfa_enforcement
+            conditions:
+              - authn_mechanism: mfa
+              - authz_required: true
+          severity: critical
+  
+        - id: glba-safeguards-incident-detection
+          name: "Incident Detection and Response"
+          description: Implement continuous monitoring and incident response capabilities to detect, respond to, and recover from unauthorised access to or disclosure of customer financial information, including intrusion detection and structured response procedures
+          validation:
+            check: verify_glba_incident_detection_response
+            conditions:
+              - ids_ips_enabled: true
+              - audit_logging: true
+              - audit_log_tamper_proof: true
+          severity: high
+  
+  - id: owasp-asvs
+    name: "OWASP Application Security Verification Standard (ASVS) 4.0"
+    description: OWASP ASVS 4.0 architecture-level security verification requirements for designing and building secure applications and services
+    controls:
+        - id: owasp-asvs-v1.1-secure-sdlc
+          name: "V1.1 Secure Software Development Lifecycle"
+          description: Verify that the application uses a secure software development lifecycle including security by design principles, a software bill of materials, and supply chain provenance controls at an appropriate SLSA maturity level
+          validation:
+            check: verify_secure_sdlc_controls
+            conditions:
+              - slsa_level: [2, 3, 4]
+              - sbom_available: true
+          severity: high
+  
+        - id: owasp-asvs-v1.2-authn-architecture
+          name: "V1.2 Authentication Architecture"
+          description: Verify that all application listener endpoints enforce a consistent and sufficiently strong authentication mechanism, prohibiting weak or missing authentication on any service boundary
+          validation:
+            check: verify_authn_architecture
+            conditions:
+              - authn_mechanism: [mfa, certificate, oauth2, saml, oidc]
+              - authz_required: true
+          severity: critical
+  
+        - id: owasp-asvs-v1.4-access-control-architecture
+          name: "V1.4 Access Control Architecture"
+          description: Verify that trusted enforcement points such as access control gateways, servers, and serverless functions enforce access controls using an explicit authorisation model, ensuring all endpoints require authorisation
+          validation:
+            check: verify_access_control_architecture
+            conditions:
+              - authz_required: true
+              - authz_model: [rbac, abac, policy-based]
+          severity: critical
+  
+        - id: owasp-asvs-v1.5-input-output-architecture
+          name: "V1.5 Input and Output Architecture"
+          description: Verify that input validation is enforced on all service relationships and trust boundaries, and that output encoding and escaping controls prevent injection and data leakage at all integration points
+          validation:
+            check: verify_input_output_architecture
+            conditions:
+              - input_validation: true
+              - crosses_trust_boundary: true
+          severity: high
+  
+        - id: owasp-asvs-v1.6-cryptographic-architecture
+          name: "V1.6 Cryptographic Architecture"
+          description: Verify that all cryptographic controls use approved algorithms and key lengths, TLS is enabled with a strong cipher suite policy, data at rest is encrypted, and encryption keys are managed through a dedicated secrets or key management service
+          validation:
+            check: verify_cryptographic_architecture
+            conditions:
+              - tls_enabled: true
+              - cipher_suite_policy: [strong, fips, modern]
+              - encryption_at_rest: true
+              - encryption_key_management: [kms, hsm, vault]
+          severity: critical
+  
+        - id: owasp-asvs-v1.7-error-logging-architecture
+          name: "V1.7 Error Handling and Logging Architecture"
+          description: Verify that a consistent logging architecture is implemented across all components, that audit logs are produced for all significant security events, and that error responses do not expose implementation details or sensitive information to users
+          validation:
+            check: verify_error_logging_architecture
+            conditions:
+              - audit_logging: true
+              - error_detail_exposure: false
+          severity: high
+  
+        - id: owasp-asvs-v1.8-data-protection-architecture
+          name: "V1.8 Data Protection and Privacy Architecture"
+          description: Verify that all sensitive and personal data is identified and classified, that data masking is applied to sensitive fields in non-production contexts and API responses, and that PII processing is explicitly documented and controlled
+          validation:
+            check: verify_data_protection_architecture
+            conditions:
+              - data_classification: [restricted, confidential, sensitive]
+              - data_masking: true
+              - data_entities_contain_pii: true
+          severity: high
+  
+        - id: owasp-asvs-v1.9-communication-architecture
+          name: "V1.9 Communication Architecture"
+          description: Verify that all internal and external application communications use TLS at minimum version 1.2, that mutual TLS is enforced on sensitive service-to-service channels crossing trust boundaries, and that forward secrecy cipher suites are preferred
+          validation:
+            check: verify_communication_architecture
+            conditions:
+              - tls_version_min: "1.2"
+              - mtls_mode: [required, strict]
+              - forward_secrecy_required: true
+          severity: critical
+  
+        - id: owasp-asvs-v1.11-business-logic-architecture
+          name: "V1.11 Business Logic Architecture"
+          description: Verify that business logic flows implement rate limiting to prevent abuse and denial of service, and that session management controls enforce appropriate timeouts to reduce the window of opportunity for session hijacking
+          validation:
+            check: verify_business_logic_architecture
+            conditions:
+              - rate_limiting_enabled: true
+              - session_timeout_minutes: 30
+          severity: medium
+  
+        - id: owasp-asvs-v1.14-configuration-architecture
+          name: "V1.14 Configuration Architecture"
+          description: Verify that all secrets, credentials, and sensitive configuration values are stored in and retrieved from a dedicated secrets management system rather than hardcoded in application code or configuration files, and that a default-deny network posture is enforced
+          validation:
+            check: verify_configuration_architecture
+            conditions:
+              - secrets_manager_ref: required
+              - default_deny: true
+          severity: high
+  
+        - id: owasp-asvs-v2.1-password-security
+          name: "V2.1 Password Security"
+          description: Verify that user-facing authentication does not rely on basic or plain-password mechanisms, and that all password-based flows enforce minimum complexity, breach-password checking, and secure storage using adaptive hashing algorithms
+          validation:
+            check: verify_password_security_controls
+            conditions:
+              - authn_mechanism: [mfa, certificate, oauth2, saml, oidc]
+          severity: high
+  
+        - id: owasp-asvs-v2.2-general-authenticator
+          name: "V2.2 General Authenticator Requirements"
+          description: Verify that multi-factor authentication is enforced for all internet-facing listener endpoints and administrative interfaces, preventing account compromise through phishing or credential stuffing attacks
+          validation:
+            check: verify_mfa_internet_facing
+            conditions:
+              - authn_mechanism: mfa
+              - exposure: internet
+          severity: critical
+  
+        - id: owasp-asvs-v4.1-general-access-control
+          name: "V4.1 General Access Control Design"
+          description: Verify that access control is enforced server-side on all non-health-check listener endpoints, that deny-by-default policies are implemented, and that access control failures are logged for audit and anomaly detection purposes
+          validation:
+            check: verify_general_access_control
+            conditions:
+              - authz_required: true
+              - authz_model: [rbac, abac, policy-based]
+              - audit_logging: true
+          severity: critical
+  
+        - id: owasp-asvs-v9.1-client-communication
+          name: "V9.1 Client Communication Security"
+          description: Verify that all external client-facing communications are protected using TLS 1.2 or higher, with strong cipher suites, and that connections using insecure protocols are rejected rather than downgraded
+          validation:
+            check: verify_client_communication_tls
+            conditions:
+              - tls_enabled: true
+              - tls_version_min: "1.2"
+              - exposure: [internet, external]
+              - cipher_suite_policy: [strong, fips, modern]
+          severity: critical
+  
+        - id: owasp-asvs-v13.4-api-security
+          name: "V13.4 GraphQL and API Security"
+          description: Verify that all API endpoints implement rate limiting to prevent abuse, enforce a CORS policy restricting origins to trusted domains, and apply input validation on all incoming request parameters and request bodies
+          validation:
+            check: verify_api_security_controls
+            conditions:
+              - rate_limiting_enabled: true
+              - cors_policy: [strict, allowlist]
+              - input_validation: true
+          severity: high
+  
+        - id: owasp-asvs-v14.5-http-security
+          name: "V14.5 HTTP Security Headers"
+          description: Verify that all HTTP responses include a restrictive CORS policy, and that error responses do not expose stack traces, internal paths, component versions, or other implementation details that could aid an attacker
+          validation:
+            check: verify_http_security_controls
+            conditions:
+              - cors_policy: [strict, allowlist]
+              - error_detail_exposure: false
+          severity: medium
