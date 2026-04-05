@@ -102,7 +102,29 @@ The `rules/` directory contains standards and conventions that define WHAT to do
 
 ## Skills (On-Demand Knowledge)
 
-The `.github/skills/` directory contains task-specific guidance loaded when relevant. Skills tell agents HOW to do things:
+The `.github/skills/` directory contains task-specific guidance loaded when relevant. Skills tell agents HOW to do things.
+
+### Process Skills (Check FIRST — these determine HOW to approach work)
+- **brainstorming** — Design-first workflow; no implementation before design approval
+- **writing-plans** — Break work into bite-sized tasks with exact steps and verification
+- **systematic-debugging** — Root-cause-first debugging; 3 failed fixes = question architecture
+
+### Execution Skills (Use AFTER process skills)
+- **executing-plans** — Load and execute a written plan with review checkpoints
+- **subagent-driven-development** — Fresh agent per task with two-stage review (spec + quality)
+- **test-driven-development** — Red-Green-Refactor; no production code without failing test first
+
+### Quality Skills (Use during and after implementation)
+- **verification-before-completion** — Evidence-based completion; never claim done without proof
+- **requesting-code-review** — Structured review dispatch with scope and commit refs
+- **receiving-code-review** — Technical evaluation, not performative agreement
+
+### Completion Skills
+- **finishing-a-development-branch** — Verify tests → 4 options (merge/PR/keep/discard)
+- **git-worktrees** — Isolated workspace creation with safety verification
+- **parallel-agent-dispatching** — One agent per independent problem domain
+
+### Domain Skills (Architecture-specific)
 - **validate-yaml** — Deterministic validation commands and output interpretation
 - **threat-analysis** — STRIDE threat evaluation and compliance mapping
 - **confidence-scoring** — Provenance confidence assessment framework
@@ -115,6 +137,10 @@ The `.github/skills/` directory contains task-specific guidance loaded when rele
 - **deployment-mapping** — Zone placement and derived link computation
 - **documentation-generation** — HLDD template and Confluence format
 - **handoff-protocol** — Standardized agent-to-agent handoff format
+
+### Skill Usage Rule
+
+**Invoke relevant skills BEFORE any response or action.** If there is even a 1% chance a skill applies, invoke it. Process skills (brainstorming, debugging) take priority over implementation skills.
 
 ## Shell Configuration
 

@@ -44,3 +44,12 @@ If an agent attempts to modify files outside its scope, it should:
 1. Stop immediately
 2. Report the attempted modification to the user
 3. Suggest which agent should make the change instead
+
+## Red Flags — You Are Rationalizing If You Think:
+
+| Thought | Reality |
+|---------|---------|
+| "I'll just fix this one file outside my scope" | That's another agent's responsibility. Hand off. |
+| "It's faster if I do it myself" | Faster now, broken architecture later. |
+| "The other agent won't know what to change" | Write a clear handoff. That's what handoff-protocol is for. |
+| "This is just a minor formatting fix" | Scope rules apply to ALL changes, not just major ones. |

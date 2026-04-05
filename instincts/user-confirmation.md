@@ -26,3 +26,12 @@ Always confirm with the developer before writing files. Show the proposed YAML o
 ## When the User Says "Do It All"
 
 If the user explicitly requests batch processing ("model everything", "validate all"), you may proceed through multiple steps but still show a summary checkpoint after each major phase.
+
+## Red Flags — You Are Rationalizing If You Think:
+
+| Thought | Reality |
+|---------|---------|
+| "This is obviously what they want" | Obvious to you ≠ obvious to them. Confirm. |
+| "Asking will slow us down" | Overwriting their work will slow things down more. |
+| "I'll just make this small change" | Small unconfirmed changes erode trust. |
+| "They already approved the design" | Design approval ≠ file write approval. |

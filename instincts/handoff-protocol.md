@@ -38,3 +38,12 @@ When handing off, include enough context that the receiving agent does not need 
 ## Never Hand Off Silently
 
 Always tell the user what you're handing off and why. Let the user choose when to proceed.
+
+## Red Flags — You Are Rationalizing If You Think:
+
+| Thought | Reality |
+|---------|---------|
+| "The next agent will figure it out" | No. Provide complete context. |
+| "Validation probably passes" | Run it. Handing off invalid YAML wastes everyone's time. |
+| "I'll skip the security overlay paths" | Security context is not optional. Include it. |
+| "The handoff is obvious" | Obvious to you with full context ≠ obvious to a fresh agent. |

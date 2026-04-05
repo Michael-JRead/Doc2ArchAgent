@@ -42,3 +42,12 @@ After surfacing an error, always suggest at least one concrete fix. Never leave 
 - If a validation check fails, report it — do not skip to the next check
 - If a file is missing, say so — do not proceed without it
 - If a referenced entity doesn't exist, show valid options — do not silently drop the reference
+
+## Red Flags — You Are Rationalizing If You Think:
+
+| Thought | Reality |
+|---------|---------|
+| "This error is probably a false positive" | Investigate before dismissing. Show it to the user. |
+| "I can work around this" | Workarounds hide bugs. Surface the error. |
+| "The user doesn't need to see this warning" | The user decides what matters. Show everything. |
+| "I'll fix it quietly" | Silent fixes are invisible fixes. Report what you changed. |

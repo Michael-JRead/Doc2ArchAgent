@@ -41,6 +41,17 @@ For EVERY element E in output YAML:
 - "I'll assume this is TLS 1.3" — ASSUMPTION without source
 - Silently picking one value over another when sources conflict — present BOTH and ask
 
+## Red Flags — You Are Rationalizing If You Think:
+
+| Thought | Reality |
+|---------|---------|
+| "This is standard architecture, I can fill it in" | Standard for whom? Extract what's stated. |
+| "The doc implies this exists" | Implication ≠ explicit statement. Mark NOT_STATED. |
+| "I'll add it now and verify later" | Later never comes. Unverified = hallucinated. |
+| "The user will catch any mistakes" | You are the first line of defense. Don't outsource accuracy. |
+| "It's just a small assumption" | Small assumptions compound into wrong threat models. |
+| "Every system has a load balancer" | If the document doesn't say it, it doesn't exist. |
+
 ## What "100% Accuracy" Means
 
 - Every element in the output exists in a source document (zero fabrication)

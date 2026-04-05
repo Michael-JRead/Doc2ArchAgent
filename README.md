@@ -10,6 +10,8 @@
 
 A multi-agent architecture modeling system for VS Code, powered by GitHub Copilot custom agents. Walk through a structured, conversational workflow to transform your software architecture knowledge into well-formed C4 model YAML, deployment maps, security analyses, and auto-generated diagrams — all without leaving your editor.
 
+> **CLAUDE.md available** — If you use Claude Code, the root `CLAUDE.md` provides a complete entry point with skill references, anti-rationalization checks, and build commands.
+
 ---
 
 ## Table of Contents
@@ -2336,7 +2338,43 @@ Doc2ArchAgent's key differentiator is the **zero-hallucination pipeline**: every
 
 ## Skills System
 
-Doc2ArchAgent includes **12 skills** — reusable knowledge modules that agents load on demand. Skills are defined in `.github/skills/*/SKILL.md` and provide deep reference material for specific tasks.
+Doc2ArchAgent includes **24 skills** — reusable knowledge modules that agents load on demand. Skills are defined in `.github/skills/*/SKILL.md` and provide deep reference material for specific tasks.
+
+### Process Skills (Check FIRST)
+
+These skills determine HOW to approach work. Invoke before any implementation.
+
+| Skill | Purpose | Trigger |
+|-------|---------|---------|
+| **brainstorming** | Design-first workflow; no implementation before design approval | Starting new architecture task |
+| **writing-plans** | Break work into bite-sized tasks with exact steps and verification | After design approval |
+| **systematic-debugging** | Root-cause-first debugging; 3 failed fixes = question architecture | Any unexpected error |
+
+### Execution Skills
+
+| Skill | Purpose | Trigger |
+|-------|---------|---------|
+| **executing-plans** | Load and execute a written plan with review checkpoints | Have a plan to execute |
+| **subagent-driven-development** | Fresh agent per task with two-stage review (spec + quality) | Multi-task plan execution |
+| **test-driven-development** | Red-Green-Refactor; no production code without failing test | Any new tool or feature |
+
+### Quality Skills
+
+| Skill | Purpose | Trigger |
+|-------|---------|---------|
+| **verification-before-completion** | Evidence-based completion; never claim done without proof | Before claiming any task is done |
+| **requesting-code-review** | Structured review dispatch with scope and commit refs | After completing a task |
+| **receiving-code-review** | Technical evaluation, not performative agreement | When review feedback arrives |
+
+### Completion & Utility Skills
+
+| Skill | Purpose | Trigger |
+|-------|---------|---------|
+| **finishing-a-development-branch** | Verify tests → 4 options (merge/PR/keep/discard) | Implementation complete |
+| **git-worktrees** | Isolated workspace creation with safety verification | Starting isolated feature work |
+| **parallel-agent-dispatching** | One agent per independent problem domain | 2+ independent tasks |
+
+### Domain Skills (Architecture-Specific)
 
 | Skill | Purpose | Used By |
 |-------|---------|---------|
@@ -2354,6 +2392,20 @@ Doc2ArchAgent includes **12 skills** — reusable knowledge modules that agents 
 | **yaml-schema-guide** | Schema structure, required fields, and enum reference | All agents |
 
 Skills differ from **instincts** (always-active behavioral patterns) and **rules** (standards/conventions) in that they are deep HOW-TO reference material loaded only when needed.
+
+### Anti-Rationalization Framework
+
+All discipline-enforcing skills include **red flag tables** — common thoughts that indicate the agent is rationalizing its way out of following the skill. Examples:
+
+| Thought | Reality |
+|---------|---------|
+| "This is just a simple change" | Simple changes break things. Check skills. |
+| "I'll skip validation this once" | Self-validation is mandatory. Always. |
+| "The tests probably pass" | Run them. "Probably" is not evidence. |
+| "I'll add tests later" | No production code without a failing test first. |
+| "Skip TDD just this once" | Stop. That's rationalization. |
+
+Instincts also include anti-rationalization tables to prevent scope creep, silent error swallowing, hallucination, and confirmation skipping.
 
 ---
 
@@ -2373,7 +2425,7 @@ The `instincts/` directory contains **9 behavioral patterns** that apply across 
 | **provenance-awareness** | Track information sources with confidence levels |
 | **session-memory** | Accumulate knowledge across sessions in `agent-memory/` directories |
 
-Every agent references its relevant instincts in a `## INSTINCTS (Always Active)` section.
+Every agent references its relevant instincts in a `## INSTINCTS (Always Active)` section. Each instinct includes an **anti-rationalization table** — red-flag thoughts that indicate the agent is about to skip the instinct, with reality checks to prevent it.
 
 ---
 
