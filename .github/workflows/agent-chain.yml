@@ -1,0 +1,53 @@
+# Copyright (c) 2026 Michael J. Read. All rights reserved.
+# SPDX-License-Identifier: BUSL-1.1
+#
+# Agent Pipeline Chain — enables headless multi-agent execution
+# via GitHub Issues triggering Copilot coding agent.
+#
+# Pattern: Agent A creates Issue → Copilot picks up → Agent executes → PR created
+# On PR merge, next Issue can be created for the next pipeline phase.
+
+name: Agent Pipeline Chain
+
+on:
+  issues:
+    types: [labeled]
+
+jobs:
+  validate-task:
+    if: contains(github.event.label.name, 'agent-pipeline')
+    runs-on: ubuntu-latest
+    outputs:
+      agent: ${{ steps.parse.outputs.agent }}
+      system_id: ${{ steps.parse.outputs.system_id }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Parse agent task from issue
+        id: parse
+        run: |
+          # Extract agent name from issue body
+          BODY="${{ github.event.issue.body }}"
+          AGENT=$(echo "$BODY" | grep -oP '@\w[\w-]*' | head -1 || echo "unknown")
+          SYSTEM_ID=$(echo "$BODY" | grep -iP 'system.?id.*?:\s*(\S+)' | grep -oP ':\s*\K\S+' | head -1 || echo "unknown")
+          echo "agent=$AGENT" >> "$GITHUB_OUTPUT"
+          echo "system_id=$SYSTEM_ID" >> "$GITHUB_OUTPUT"
+          echo "Detected agent: $AGENT, system: $SYSTEM_ID"
+
+      - name: Validate prerequisites
+        run: |
+          # Check that required files exist for the task
+          SYSTEM_ID="${{ steps.parse.outputs.system_id }}"
+          if [ "$SYSTEM_ID" != "unknown" ] && [ -d "architecture/$SYSTEM_ID" ]; then
+            echo "Found architecture directory for $SYSTEM_ID"
+            ls -la "architecture/$SYSTEM_ID/"
+          else
+            echo "No existing architecture found for $SYSTEM_ID — starting fresh"
+          fi
+
+      - name: Add acknowledgment comment
+        run: |
+          gh issue comment ${{ github.event.issue.number }} \
+            --body "Pipeline task acknowledged. Agent: **${{ steps.parse.outputs.agent }}**, System: **${{ steps.parse.outputs.system_id }}**. Copilot coding agent will pick this up."
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

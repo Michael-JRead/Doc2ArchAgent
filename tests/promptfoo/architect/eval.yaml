@@ -1,0 +1,102 @@
+# Copyright (c) 2026 Michael J. Read. All rights reserved.
+# SPDX-License-Identifier: BUSL-1.1
+#
+# @architect agent evaluation — validates C4 modeling output
+# Run: npx promptfoo@latest eval -c tests/promptfoo/architect/eval.yaml
+#
+# yaml-language-server: $schema=https://promptfoo.dev/config-schema.json
+
+description: "@architect agent evaluation — validates C4 modeling output"
+
+prompts:
+  - file://../../../.github/agents/architect.agent.md
+
+providers:
+  - id: openai:gpt-4o
+    config:
+      temperature: 0
+
+defaultTest:
+  assert:
+    - type: cost
+      threshold: 0.05
+    - type: latency
+      threshold: 30000
+
+tests:
+  # ── STRUCTURAL VALIDITY ──
+  - description: "Produces valid YAML with required metadata fields"
+    vars:
+      input: "Model a simple web application with a frontend, API, and database"
+    assert:
+      - type: contains
+        value: "metadata"
+      - type: contains
+        value: "contexts:"
+      - type: llm-rubric
+        value: |
+          The response should ask for system metadata (name, description,
+          owner) before proceeding to containers or components.
+
+  # ── NAMING CONVENTIONS ──
+  - description: "Uses kebab-case for entity IDs"
+    vars:
+      input: "Model a Payment Processing Platform with an API Gateway and PostgreSQL Database"
+    assert:
+      - type: javascript
+        value: |
+          const ids = output.match(/id:\s*([^\n]+)/g) || [];
+          if (ids.length === 0) return true;  // No YAML yet is okay
+          const kebabRegex = /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/;
+          return ids.every(id => {
+            const val = id.replace('id:', '').trim();
+            return kebabRegex.test(val);
+          });
+
+  # ── ZERO-HALLUCINATION ──
+  - description: "Does not add components not mentioned by user"
+    vars:
+      input: "Model a system with only a web frontend and a PostgreSQL database. Nothing else."
+    assert:
+      - type: not-contains
+        value: "redis"
+      - type: not-contains
+        value: "cache"
+      - type: not-contains
+        value: "kafka"
+      - type: not-contains
+        value: "elasticsearch"
+
+  # ── LAYER ORDERING ──
+  - description: "Follows layer-by-layer progression starting with contexts"
+    vars:
+      input: "Start modeling a CRM system"
+    assert:
+      - type: llm-rubric
+        value: |
+          The response should start with Layer 1 (Contexts) and ask about
+          system metadata (name, description, owner) before proceeding to
+          containers or components. It should NOT jump to component-level
+          details before establishing contexts.
+
+  # ── HANDOFF COMPLETENESS ──
+  - description: "Offers handoffs after modeling is complete"
+    vars:
+      input: "That's everything. We're done modeling."
+    assert:
+      - type: llm-rubric
+        value: |
+          The response should offer to hand off to other agents such as
+          @deployer, @security-reviewer, @diagram-generator, or @validator.
+
+  # ── START MODE OPTIONS ──
+  - description: "Offers three start modes"
+    vars:
+      input: "I want to model my system architecture"
+    assert:
+      - type: llm-rubric
+        value: |
+          The response should offer at least two of these options:
+          1. Ingest from documents
+          2. Start fresh (interactive modeling)
+          3. Load existing architecture

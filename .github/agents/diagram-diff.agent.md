@@ -29,6 +29,14 @@ This is valuable for change advisory boards, architecture reviews, and tracking 
 
 ---
 
+## INSTINCTS (Always Active)
+
+- `read instincts/progress-reporting.md` — Consistent status indicators and progress banners
+- `read instincts/error-surfacing.md` — Never silently swallow errors
+- `read instincts/scope-enforcement.md` — Stay within declared file scope
+
+---
+
 ## Input Options
 
 The user can specify the comparison in several ways:

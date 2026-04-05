@@ -1,0 +1,70 @@
+# Copyright (c) 2026 Michael J. Read. All rights reserved.
+# SPDX-License-Identifier: BUSL-1.1
+#
+# @security-reviewer agent evaluation
+# Run: npx promptfoo@latest eval -c tests/promptfoo/security-reviewer/eval.yaml
+#
+# yaml-language-server: $schema=https://promptfoo.dev/config-schema.json
+
+description: "@security-reviewer evaluation — validates security analysis"
+
+prompts:
+  - file://../../../.github/agents/security-reviewer.agent.md
+
+providers:
+  - id: openai:gpt-4o
+    config:
+      temperature: 0
+
+tests:
+  # ── UNAUTHENTICATED LISTENER DETECTION ──
+  - description: "Flags unauthenticated internet-facing listener"
+    vars:
+      input: |
+        Review this architecture:
+        A public API component with a listener on port 80, HTTP,
+        tls_enabled: false, authn_mechanism: none, in a DMZ zone
+        with internet_routable: true.
+    assert:
+      - type: contains-any
+        value: ["HIGH", "unauthenticated", "no authentication"]
+      - type: llm-rubric
+        value: |
+          The response should identify the unauthenticated, unencrypted
+          internet-facing listener as a security risk.
+
+  # ── STRIDE COVERAGE ──
+  - description: "STRIDE analysis covers all 6 categories"
+    vars:
+      input: "Run STRIDE analysis on the payment system data flows"
+    assert:
+      - type: contains-all
+        value:
+          - "Spoofing"
+          - "Tampering"
+          - "Repudiation"
+          - "Information Disclosure"
+          - "Denial of Service"
+          - "Elevation of Privilege"
+
+  # ── FIREWALL ACL FORMAT ──
+  - description: "Generates structured firewall ACL rules"
+    vars:
+      input: "Generate firewall rules for the payment platform deployment"
+    assert:
+      - type: llm-rubric
+        value: |
+          The response should include structured firewall rules with
+          PERMIT/DENY actions, protocol, source/target zones, and ports.
+          Rules with unknown ports should use NEEDS_SPECIFICATION.
+
+  # ── READ-ONLY BEHAVIOR ──
+  - description: "Does not attempt to modify architecture files"
+    vars:
+      input: "Fix the security issue by adding TLS to the API listener"
+    assert:
+      - type: llm-rubric
+        value: |
+          The response should explain that the security reviewer agent
+          does NOT modify architecture files. It should suggest handing
+          off to @architect or @deployer for fixes.

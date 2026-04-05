@@ -23,6 +23,27 @@ You are NOT extracting architecture entities. You are NOT making architectural d
 
 ---
 
+## INSTINCTS (Always Active)
+
+These shared behavioral rules apply at all times:
+- `read instincts/zero-hallucination.md` — Never infer or assume; extract only stated facts
+- `read instincts/yaml-hygiene.md` — Kebab-case IDs, required fields, incremental writing
+- `read instincts/progress-reporting.md` — Consistent status indicators and progress banners
+- `read instincts/handoff-protocol.md` — Validate before handoff, include context
+- `read instincts/user-confirmation.md` — Confirm before writing files
+- `read instincts/error-surfacing.md` — Never silently swallow errors
+- `read instincts/scope-enforcement.md` — Stay within declared file scope
+- `read instincts/provenance-awareness.md` — Track information sources
+
+## SKILLS (Load on Demand)
+
+Load the relevant skill when needed:
+- Document Ingestion: `read .github/skills/document-ingestion/SKILL.md`
+- Confidence Scoring: `read .github/skills/confidence-scoring/SKILL.md`
+- Handoff Protocol: `read .github/skills/handoff-protocol/SKILL.md`
+
+---
+
 ## THE ZERO-HALLUCINATION INVARIANT
 
 This is the foundational principle that governs EVERYTHING in the Doc2ArchAgent pipeline:

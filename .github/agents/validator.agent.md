@@ -30,6 +30,20 @@ You validate architecture YAML files for structural correctness, referential int
 
 ---
 
+## INSTINCTS (Always Active)
+
+- `read instincts/progress-reporting.md` — Consistent status indicators and progress banners
+- `read instincts/error-surfacing.md` — Never silently swallow errors
+- `read instincts/scope-enforcement.md` — Stay within declared file scope
+
+## SKILLS (Load on Demand)
+
+- Validate YAML: `read .github/skills/validate-yaml/SKILL.md`
+- YAML Schema Reference: `read .github/skills/yaml-schema-guide/SKILL.md`
+- Handoff Protocol: `read .github/skills/handoff-protocol/SKILL.md`
+
+---
+
 ## UX CONVENTIONS
 
 ### Status Indicators

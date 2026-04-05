@@ -1,0 +1,46 @@
+# Copyright (c) 2026 Michael J. Read. All rights reserved.
+# SPDX-License-Identifier: BUSL-1.1
+#
+# Security constraint policies for Data Flow Constraint Analysis.
+# Used by: python tools/dfa_constraints.py <system.yaml> --policies architecture/policies/security-constraints.yaml
+
+constraints:
+  - id: no-pii-to-untrusted
+    description: "Confidential/restricted data must not flow to untrusted zones"
+    severity: CRITICAL
+    enabled: true
+
+  - id: tls-at-boundary
+    description: "TLS required at all trust boundary crossings"
+    severity: HIGH
+    enabled: true
+
+  - id: auth-at-entry
+    description: "Authentication required on all internet-facing listeners"
+    severity: HIGH
+    enabled: true
+
+  - id: no-direct-db-from-dmz
+    description: "DMZ components must not directly access data tier"
+    severity: HIGH
+    enabled: true
+
+  - id: authz-on-sensitive-data
+    description: "Authorization required on listeners serving sensitive data"
+    severity: HIGH
+    enabled: true
+
+  - id: no-plaintext-credentials
+    description: "Credential-bearing flows must use TLS"
+    severity: CRITICAL
+    enabled: true
+
+  - id: zone-isolation
+    description: "Management zone should not be directly accessible from DMZ"
+    severity: MEDIUM
+    enabled: true
+
+  - id: least-privilege-ports
+    description: "No admin ports (22, 3389) exposed in DMZ"
+    severity: MEDIUM
+    enabled: true

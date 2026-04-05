@@ -32,6 +32,25 @@ You do NOT make architectural changes yourself. You identify issues and hand off
 
 ---
 
+## INSTINCTS (Always Active)
+
+These shared behavioral rules apply at all times:
+- `read instincts/zero-hallucination.md` — Never infer or assume; extract only stated facts
+- `read instincts/progress-reporting.md` — Consistent status indicators and progress banners
+- `read instincts/handoff-protocol.md` — Validate before handoff, include context
+- `read instincts/error-surfacing.md` — Never silently swallow errors
+- `read instincts/scope-enforcement.md` — Stay within declared file scope
+
+## SKILLS (Load on Demand)
+
+Load the relevant skill when needed:
+- Security Analysis (STRIDE, ACLs, Blast Radius): `read .github/skills/security-analysis/SKILL.md`
+- Threat Analysis: `read .github/skills/threat-analysis/SKILL.md`
+- YAML Schema Reference: `read .github/skills/yaml-schema-guide/SKILL.md`
+- Handoff Protocol: `read .github/skills/handoff-protocol/SKILL.md`
+
+---
+
 ## UX CONVENTIONS
 
 ### Status Indicators

@@ -36,6 +36,15 @@ A multi-agent architecture modeling system for VS Code, powered by GitHub Copilo
 - [Persona-Specific Diagram Views](#persona-specific-diagram-views)
 - [How This Compares](#how-this-compares)
 - [Skills System](#skills-system)
+- [Instincts & Shared Behaviors](#instincts--shared-behaviors)
+- [Rules System](#rules-system)
+- [Orchestrator & Pipeline Coordination](#orchestrator--pipeline-coordination)
+- [Data Flow Constraint Analysis](#data-flow-constraint-analysis)
+- [Agent Security Scanning](#agent-security-scanning)
+- [Hierarchical Context Management](#hierarchical-context-management)
+- [Agent Evaluation (promptfoo)](#agent-evaluation-promptfoo)
+- [Headless Agent Chaining](#headless-agent-chaining)
+- [Session Memory](#session-memory)
 - [Agent Handoff Graph](#agent-handoff-graph)
 - [Diagram Syntax Validation Pipeline](#diagram-syntax-validation-pipeline)
 - [Ingest Tools (Reverse Engineering Existing Infrastructure)](#ingest-tools-reverse-engineering-existing-infrastructure)
@@ -136,7 +145,9 @@ Select `@architect` from the dropdown and type your system description. That's i
 
 ## How It Works — The Agent System
 
-The system is composed of **15 specialized agents**, each owning a specific concern. They communicate through **handoffs** — when one agent finishes its work, it offers to hand off to the next logical agent. Each handoff includes a descriptive prompt visible in the Copilot UI.
+The system is composed of **16 specialized agents**, each owning a specific concern. They communicate through **handoffs** — when one agent finishes its work, it offers to hand off to the next logical agent. Each handoff includes a descriptive prompt visible in the Copilot UI.
+
+All agents share behavioral patterns via **instincts** (`instincts/`), follow standardized conventions via **rules** (`rules/`), and load deep reference material via **skills** (`.github/skills/`).
 
 ### Agent Overview
 
@@ -151,6 +162,7 @@ The system is composed of **15 specialized agents**, each owning a specific conc
 | **@security-reviewer** | Reads all YAML and produces security findings, STRIDE threat analysis per data flow, and firewall ACL rules. Checks for unauthenticated listeners, unencrypted flows, trust boundary gaps, and more. | After deployments are defined, or anytime you want a security audit. |
 | **@validator** | Dual-pass validation: deterministic Python script for structural/referential checks, then LLM semantic review for business logic. Reports errors, warnings, and info. | Anytime. Run it after making changes to catch issues early. |
 | **@pattern-manager** | Manages reusable network topology and product/service patterns. Save, load, swap, version, and browse patterns organized in hierarchy trees (by geography for networks, by capability for products). | When you want to reuse a standard network layout or product stack across systems. Pop-and-swap between configurations. |
+| **@orchestrator** | Pipeline mission control: coordinates the full workflow, tracks progress via `pipeline-status.yaml`, detects drift, manages parallel phase execution. | When you want to run the full pipeline end-to-end, or check progress on a multi-phase modeling session. |
 
 #### Diagram Agents (Phased Pipeline)
 
@@ -2324,19 +2336,228 @@ Doc2ArchAgent's key differentiator is the **zero-hallucination pipeline**: every
 
 ## Skills System
 
-Doc2ArchAgent includes **7 skills** — reusable, parameterized workflows that orchestrate multi-agent sequences through a single command. Skills are defined in `.github/skills/*/SKILL.md` and are invoked by Copilot agents during complex operations.
+Doc2ArchAgent includes **12 skills** — reusable knowledge modules that agents load on demand. Skills are defined in `.github/skills/*/SKILL.md` and provide deep reference material for specific tasks.
 
-| Skill | Purpose | Agents Involved |
-|-------|---------|----------------|
-| **diagram-workflow** | End-to-end diagram generation: reads YAML, builds layout plan, dispatches to all 5 renderers, validates syntax | `@diagram-generator` → all renderer agents → `@validator` |
-| **extract-architecture** | Full document-to-YAML pipeline: collect docs, extract entities, resolve conflicts, write YAML, validate | `@doc-collector` → `@doc-extractor` → `@validator` |
-| **security-review** | Comprehensive security analysis: STRIDE per relationship, blast radius, firewall ACLs, compliance mapping | `@security-reviewer` → `@validator` |
-| **validate-architecture** | Dual-pass validation: deterministic Python script (Pass 1) + semantic LLM review (Pass 2) | `@validator` |
-| **deploy-system** | Guided deployment: place containers in zones, compute derived links, flag crossings | `@deployer` → `@validator` → `@security-reviewer` |
-| **compose-deployment** | Pattern-based deployment: select patterns, compose manifest, generate combined output | `@pattern-manager` → `@validator` |
-| **generate-docs** | Documentation generation: HLDD, executive summary, stakeholder briefs in Confluence/Markdown | `@doc-writer` |
+| Skill | Purpose | Used By |
+|-------|---------|---------|
+| **c4-modeling** | 6-layer C4 modeling process (contexts → containers → components → networks → external → review) | `@architect` |
+| **confidence-scoring** | Deterministic confidence scoring framework for extraction provenance | `@doc-collector`, `@doc-extractor` |
+| **deployment-mapping** | Zone placement logic, derived link computation | `@deployer` |
+| **diagram-workflow** | End-to-end diagram generation pipeline across all 5 renderers | `@diagram-generator` |
+| **document-ingestion** | Document collection, conversion, and extraction pipeline | `@doc-collector`, `@doc-extractor` |
+| **documentation-generation** | HLDD template, Confluence format, executive summaries | `@doc-writer` |
+| **handoff-protocol** | Standardized agent-to-agent handoff format with context preservation | All agents |
+| **pattern-composition** | Pattern library management and deployment composition | `@pattern-manager` |
+| **security-analysis** | STRIDE methodology, ACL generation, blast radius, trust boundaries | `@security-reviewer` |
+| **threat-analysis** | STRIDE threat evaluation and compliance mapping | `@security-reviewer` |
+| **validate-yaml** | Deterministic validation commands and output interpretation | `@validator` |
+| **yaml-schema-guide** | Schema structure, required fields, and enum reference | All agents |
 
-Skills differ from individual agent invocations in that they encode the **recommended sequence** of agent interactions, pass context between agents automatically, and include built-in validation checkpoints.
+Skills differ from **instincts** (always-active behavioral patterns) and **rules** (standards/conventions) in that they are deep HOW-TO reference material loaded only when needed.
+
+---
+
+## Instincts & Shared Behaviors
+
+The `instincts/` directory contains **9 behavioral patterns** that apply across ALL agents at ALL times. Instincts eliminate duplicated rules and ensure consistent behavior.
+
+| Instinct | Purpose |
+|----------|---------|
+| **zero-hallucination** | Never infer or assume; extract only stated facts with citations |
+| **yaml-hygiene** | Kebab-case IDs, required fields, incremental writing, schema conformance |
+| **progress-reporting** | Consistent status indicators (✓►⚠✗❓) and progress banners |
+| **handoff-protocol** | Validate before handoff, include context summary and file paths |
+| **user-confirmation** | Confirm with user before writing files; show proposed YAML first |
+| **error-surfacing** | Never silently swallow errors; show severity, context, and fix guidance |
+| **scope-enforcement** | Agents stay within declared file scope; protected directories never modified |
+| **provenance-awareness** | Track information sources with confidence levels |
+| **session-memory** | Accumulate knowledge across sessions in `agent-memory/` directories |
+
+Every agent references its relevant instincts in a `## INSTINCTS (Always Active)` section.
+
+---
+
+## Rules System
+
+The `rules/` directory contains **standards and conventions** that define WHAT agents must do (vs. skills which define HOW).
+
+```
+rules/
+├── common/                    ← Language-agnostic rules
+│   ├── yaml-formatting.md     ← Indentation, quoting, key ordering
+│   ├── naming-conventions.md  ← Kebab-case IDs, file naming patterns
+│   ├── file-organization.md   ← Directory structure, protected paths
+│   ├── git-workflow.md        ← Commit format, branch naming, PR guidelines
+│   ├── security.md            ← Agent security, architecture security, prompt injection defense
+│   └── testing.md             ← Validation layers, test fixtures, pre-handoff checks
+├── yaml/                      ← Schema-specific rules
+│   ├── system-yaml-rules.md   ← Metadata, entity, relationship rules
+│   ├── networks-yaml-rules.md ← Zone types, trust levels, infrastructure
+│   └── deployment-yaml-rules.md ← Placement rules, derived links, multi-network
+└── diagrams/                  ← Diagram format rules
+    ├── mermaid-rules.md       ← Flowchart syntax, classDef styling, subgraphs
+    ├── plantuml-rules.md      ← C4 stdlib, alias conventions, Creole escaping
+    └── drawio-rules.md        ← XML structure, coordinate system, Lucidchart compat
+```
+
+---
+
+## Orchestrator & Pipeline Coordination
+
+The `@orchestrator` agent (`orchestrator.agent.md`) coordinates the full Doc2ArchAgent pipeline:
+
+**Pipeline Phases:**
+1. **Architecture Modeling** (sequential) — `@architect` OR `@doc-collector` → `@doc-extractor`
+2. **Parallel Analysis** — `@deployer` + `@security-reviewer` + `@validator` (run simultaneously)
+3. **Diagram Generation** — `@diagram-generator` → 5 renderers (requires Phase 2a)
+4. **Documentation** — `@doc-writer` (requires all above)
+
+**Features:**
+- Pipeline status tracking via `pipeline-status.yaml`
+- Drift detection: verifies agents don't modify files outside their scope
+- Dependency-aware phase sequencing
+- Resume from last completed phase for interrupted sessions
+
+```bash
+# Pipeline status is tracked in:
+architecture/<system-id>/pipeline-status.yaml
+```
+
+---
+
+## Data Flow Constraint Analysis
+
+A new deterministic security tool (`tools/dfa_constraints.py`) applies formal, policy-based constraints to architecture data flows, complementing the LLM-based STRIDE analysis.
+
+```bash
+# Run constraint analysis
+python tools/dfa_constraints.py architecture/<system-id>/system.yaml --format table
+
+# With custom policies
+python tools/dfa_constraints.py architecture/<system-id>/system.yaml \
+  --policies architecture/policies/security-constraints.yaml
+
+# JSON output for CI
+python tools/dfa_constraints.py architecture/<system-id>/system.yaml --format json
+```
+
+**Built-in Constraints:**
+
+| Constraint | Severity | Description |
+|-----------|----------|-------------|
+| `no-pii-to-untrusted` | CRITICAL | Confidential/restricted data must not flow to untrusted zones |
+| `tls-at-boundary` | HIGH | TLS required at all trust boundary crossings |
+| `auth-at-entry` | HIGH | Authentication required on internet-facing listeners |
+| `no-direct-db-from-dmz` | HIGH | DMZ components must not directly access databases |
+| `authz-on-sensitive-data` | HIGH | Authorization required on sensitive data listeners |
+| `zone-isolation` | MEDIUM | Management zone not directly accessible from DMZ |
+| `least-privilege-ports` | MEDIUM | No admin ports (22, 3389) exposed in DMZ |
+
+Custom policies can be defined in `architecture/policies/security-constraints.yaml`.
+
+---
+
+## Agent Security Scanning
+
+A security scanner (`tools/agent_security_scan.py`) checks agent definitions, skills, and rules for configuration security issues:
+
+```bash
+# Run security scan
+python tools/agent_security_scan.py
+
+# JSON output for CI
+python tools/agent_security_scan.py --format json
+
+# Strict mode (LOW findings fail)
+python tools/agent_security_scan.py --strict
+```
+
+**Checks performed:**
+- Missing scope boundaries on agent definitions
+- Missing tool permissions in frontmatter
+- Missing error recovery instructions
+- Missing hallucination guards on extraction agents
+- Missing instinct references
+- Hardcoded secrets or API keys in markdown files
+- Missing pre-handoff validation
+
+Output includes a letter grade (A-F) based on finding severity.
+
+---
+
+## Hierarchical Context Management
+
+For large architectures (10+ containers, 50+ components), a hierarchical index reduces context consumption:
+
+```bash
+# Generate L0/L1 index from system.yaml
+python tools/generate_index.py architecture/<system-id>/system.yaml
+```
+
+**Three-tier loading (inspired by OpenViking):**
+- **L0** — One-sentence summary: "Payment Platform: 3 contexts, 5 containers, 8 components"
+- **L1** — Overview: context/container index, counts, key relationships (for planning)
+- **L2** — Full `system.yaml` content (loaded only for deep component work)
+
+The generated `index.yaml` enables agents to understand the architecture scope without loading the full system.yaml.
+
+---
+
+## Agent Evaluation (promptfoo)
+
+Automated agent evaluation using [promptfoo](https://github.com/promptfoo/promptfoo) for quality assurance:
+
+```bash
+# Run architect evaluation
+npx promptfoo@latest eval -c tests/promptfoo/architect/eval.yaml
+
+# Run security reviewer evaluation
+npx promptfoo@latest eval -c tests/promptfoo/security-reviewer/eval.yaml
+
+# Run red team (adversarial) tests
+npx promptfoo@latest eval -c tests/promptfoo/red-team/eval.yaml
+```
+
+**Test categories:**
+- **Structural validity** — Correct YAML structure, required fields
+- **Naming conventions** — Kebab-case enforcement
+- **Zero-hallucination** — No fabricated components
+- **Layer ordering** — Correct progression through modeling layers
+- **STRIDE coverage** — All 6 threat categories analyzed
+- **Red team** — Prompt injection resistance, scope escape prevention, hallucination bait
+
+CI/CD integration via `.github/workflows/agent-eval.yml`.
+
+---
+
+## Headless Agent Chaining
+
+Trigger agents headlessly via GitHub Issues for CI/CD pipelines:
+
+1. Create an Issue using the **Agent Pipeline Task** template
+2. Label it `agent-pipeline`
+3. Copilot coding agent picks up the Issue
+4. Agent executes and creates a PR with results
+
+Issue template: `.github/ISSUE_TEMPLATE/agent-pipeline.yml`
+Workflow: `.github/workflows/agent-chain.yml`
+
+---
+
+## Session Memory
+
+Agents can accumulate knowledge across sessions via markdown files:
+
+```
+architecture/<system-id>/agent-memory/
+  modeling-decisions.md     — Architecture decisions made during modeling
+  user-preferences.md       — User's preferred naming, formatting, detail level
+  extraction-learnings.md   — What worked/failed during doc ingestion
+```
+
+**Safety rules:** No secrets, no PII, user-readable markdown, users can edit/delete.
+
+See `instincts/session-memory.md` for the full convention.
 
 ---
 
@@ -2554,6 +2775,9 @@ All 26 Python tools can be invoked standalone. Here is the complete reference or
 |------|-----|---------|
 | `agent-bridge.py` | `python tools/agent-bridge.py <command> [args]` | Unified CLI bridge. Subcommands: `validate`, `threat`, `confidence`, `compose`, `check-handoff`, `diagram validate`. |
 | `agent_supervisor.py` | `python tools/agent_supervisor.py <input> [--output <dir>] [--stages <list>] [--threshold N]` | CI/CD pipeline orchestrator. Stages: convert → layout → classify → extract → resolve → validate → threat → confidence. |
+| `dfa_constraints.py` | `python tools/dfa_constraints.py <system.yaml> [--networks <path>] [--policies <path>] [--format json\|table]` | Data flow constraint analysis. 8 formal security constraints. Exit 0=clean, 1=violations, 2=critical. |
+| `agent_security_scan.py` | `python tools/agent_security_scan.py [--format text\|json] [--strict]` | Agent config security scanner. Checks scope, tools, secrets, hallucination guards. Letter grade A-F. |
+| `generate_index.py` | `python tools/generate_index.py <system.yaml>` | Generates L0/L1 index.yaml for hierarchical context loading. Reduces agent context consumption. |
 
 ---
 

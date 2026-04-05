@@ -1,0 +1,66 @@
+# Copyright (c) 2026 Michael J. Read. All rights reserved.
+# SPDX-License-Identifier: BUSL-1.1
+
+name: Agent Pipeline Task
+description: Trigger a Doc2ArchAgent pipeline task for headless execution via Copilot coding agent
+labels: ["agent-pipeline"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Agent Pipeline Task
+        Use this template to trigger a specific agent in the Doc2ArchAgent pipeline.
+        The Copilot coding agent will pick up this issue and execute the task.
+
+  - type: dropdown
+    id: agent
+    attributes:
+      label: Agent
+      description: Which agent should handle this task?
+      options:
+        - "@orchestrator — Full pipeline coordination"
+        - "@architect — Interactive C4 modeling"
+        - "@doc-collector — Collect and convert documents"
+        - "@doc-extractor — Extract architecture from documents"
+        - "@deployer — Deploy to network zones"
+        - "@security-reviewer — Security analysis"
+        - "@diagram-generator — Generate diagrams"
+        - "@validator — Validate architecture YAML"
+        - "@doc-writer — Generate documentation"
+        - "@pattern-manager — Manage patterns"
+    validations:
+      required: true
+
+  - type: input
+    id: system
+    attributes:
+      label: System ID
+      description: The system identifier (kebab-case)
+      placeholder: "payment-platform"
+    validations:
+      required: true
+
+  - type: textarea
+    id: instructions
+    attributes:
+      label: Task Instructions
+      description: Detailed instructions for the agent
+      placeholder: |
+        Example instructions:
+        - "Deploy payment-platform to production US-East using the standard-3tier network pattern"
+        - "Run full security review on payment-platform including STRIDE analysis"
+        - "Generate all diagram formats for payment-platform"
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional Context
+      description: Any additional files, patterns, or constraints
+      placeholder: |
+        - Network pattern: patterns/networks/usa/standard-3tier/
+        - Compliance requirements: PCI-DSS, SOC2
+        - Specific files to read: architecture/payment-platform/system.yaml
+    validations:
+      required: false

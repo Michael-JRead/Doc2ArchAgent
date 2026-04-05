@@ -1,0 +1,48 @@
+index:
+  system_id: payment-processing-platform-(example)
+  l0_summary: 'Payment Processing Platform (EXAMPLE): 2 context(s), 3 container(s),
+    2 component(s), 1 external system(s)'
+  metadata:
+    name: Payment Processing Platform (EXAMPLE)
+    owner: Platform Security Team
+    status: example
+    compliance_frameworks: []
+  counts:
+    contexts: 2
+    containers: 3
+    components: 2
+    component_relationships: 1
+    external_systems: 1
+    data_entities: 0
+    trust_boundaries: 0
+  contexts:
+  - id: payment-platform
+    name: Payment Platform
+    internal: true
+    container_count: 3
+    description: Core payment processing system
+  - id: card-network
+    name: Visa / Mastercard Network
+    internal: false
+    container_count: 0
+    description: External card network for transaction authorization
+  containers:
+  - id: api-tier
+    context_id: payment-platform
+    name: API Tier
+    component_count: 0
+    technology: Kong Gateway
+  - id: app-core
+    context_id: payment-platform
+    name: Application Core
+    component_count: 1
+    technology: Java / Spring Boot
+  - id: data-tier
+    context_id: payment-platform
+    name: Data Tier
+    component_count: 1
+    technology: PostgreSQL 15
+  key_relationships:
+  - source: payment-api
+    target: payment-db
+    protocol: PostgreSQL/5432

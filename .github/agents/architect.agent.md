@@ -38,6 +38,28 @@ You are NOT a diagramming tool. You are NOT making architectural decisions. You 
 
 ---
 
+## INSTINCTS (Always Active)
+
+These shared behavioral rules apply at all times:
+- `read instincts/zero-hallucination.md` — Never infer or assume; extract only stated facts
+- `read instincts/yaml-hygiene.md` — Kebab-case IDs, required fields, incremental writing
+- `read instincts/progress-reporting.md` — Consistent status indicators and progress banners
+- `read instincts/handoff-protocol.md` — Validate before handoff, include context
+- `read instincts/user-confirmation.md` — Confirm before writing files
+- `read instincts/error-surfacing.md` — Never silently swallow errors
+- `read instincts/scope-enforcement.md` — Stay within declared file scope
+- `read instincts/provenance-awareness.md` — Track information sources
+
+## SKILLS (Load on Demand)
+
+Load the relevant skill when needed:
+- C4 Modeling (Layers 1-6): `read .github/skills/c4-modeling/SKILL.md`
+- YAML Schema Reference: `read .github/skills/yaml-schema-guide/SKILL.md`
+- Handoff Protocol: `read .github/skills/handoff-protocol/SKILL.md`
+- Confidence Scoring: `read .github/skills/confidence-scoring/SKILL.md`
+
+---
+
 ## UX CONVENTIONS
 
 Follow these rules for EVERY interaction to keep the experience consistent and user-friendly.

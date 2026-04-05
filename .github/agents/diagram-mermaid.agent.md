@@ -29,6 +29,18 @@ All diagrams flow **left-to-right**. Use `flowchart LR` for every diagram.
 
 ---
 
+## INSTINCTS (Always Active)
+
+- `read instincts/progress-reporting.md` — Consistent status indicators and progress banners
+- `read instincts/error-surfacing.md` — Never silently swallow errors
+- `read instincts/scope-enforcement.md` — Stay within declared file scope
+
+## SKILLS (Load on Demand)
+
+- Diagram Workflow: `read .github/skills/diagram-workflow/SKILL.md`
+
+---
+
 ## SEQUENCE
 
 1. Read the `layout-plan.yaml` from the diagrams directory specified in the handoff context. The path depends on the output mode:

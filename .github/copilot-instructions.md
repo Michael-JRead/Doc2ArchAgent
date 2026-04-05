@@ -81,9 +81,28 @@ These files and directories are protected — agents must never modify them:
 - Custom diagrams in any `diagrams/custom/` directory — hand-crafted, never overwritten
 - License files: `LICENSE`, `LICENSE-COMMERCIAL.md`, `CLA.md`, `NOTICE`
 
-## Skills
+## Instincts (Shared Behavioral Patterns)
 
-The `.github/skills/` directory contains task-specific guidance loaded automatically when relevant:
+The `instincts/` directory contains behavioral rules that apply across ALL agents at ALL times:
+- **zero-hallucination** — Never infer or assume; extract only stated facts
+- **yaml-hygiene** — Kebab-case IDs, required fields, incremental writing
+- **progress-reporting** — Consistent status indicators and progress banners
+- **handoff-protocol** — Validate before handoff, include context
+- **user-confirmation** — Confirm before writing files
+- **error-surfacing** — Never silently swallow errors
+- **scope-enforcement** — Stay within declared file scope
+- **provenance-awareness** — Track information sources
+
+## Rules (Standards & Conventions)
+
+The `rules/` directory contains standards and conventions that define WHAT to do:
+- `rules/common/` — Language-agnostic rules: YAML formatting, naming conventions, file organization, git workflow, security, testing
+- `rules/yaml/` — Schema-specific rules: system.yaml, networks.yaml, deployment.yaml
+- `rules/diagrams/` — Diagram format rules: Mermaid, PlantUML, Draw.io
+
+## Skills (On-Demand Knowledge)
+
+The `.github/skills/` directory contains task-specific guidance loaded when relevant. Skills tell agents HOW to do things:
 - **validate-yaml** — Deterministic validation commands and output interpretation
 - **threat-analysis** — STRIDE threat evaluation and compliance mapping
 - **confidence-scoring** — Provenance confidence assessment framework
@@ -91,6 +110,11 @@ The `.github/skills/` directory contains task-specific guidance loaded automatic
 - **yaml-schema-guide** — Schema structure, required fields, and enum reference
 - **document-ingestion** — Document collection and extraction pipeline
 - **pattern-composition** — Deployment composition from patterns
+- **c4-modeling** — 6-layer C4 modeling process (contexts → review)
+- **security-analysis** — STRIDE methodology, ACL generation, blast radius, trust boundaries
+- **deployment-mapping** — Zone placement and derived link computation
+- **documentation-generation** — HLDD template and Confluence format
+- **handoff-protocol** — Standardized agent-to-agent handoff format
 
 ## Shell Configuration
 

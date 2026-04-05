@@ -1,0 +1,141 @@
+# Copyright (c) 2026 Michael J. Read. All rights reserved.
+# SPDX-License-Identifier: BUSL-1.1
+#
+# Agent Evaluation Suite — runs promptfoo evals and agent security scans
+# when agent definitions, skills, rules, or instincts change.
+
+name: Agent Evaluation Suite
+
+on:
+  pull_request:
+    paths:
+      - '.github/agents/**'
+      - '.github/skills/**'
+      - 'instincts/**'
+      - 'rules/**'
+      - 'tools/agent_security_scan.py'
+      - 'tools/dfa_constraints.py'
+  workflow_dispatch:
+
+jobs:
+  agent-security-scan:
+    name: Agent Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install pyyaml
+
+      - name: Run agent security scan
+        run: python tools/agent_security_scan.py --format text
+
+      - name: Run agent security scan (JSON for CI)
+        if: always()
+        run: |
+          python tools/agent_security_scan.py --format json > agent-security-results.json || true
+          cat agent-security-results.json
+
+      - name: Upload security scan results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-security-scan
+          path: agent-security-results.json
+
+  dfa-constraints:
+    name: Data Flow Constraint Analysis
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install pyyaml
+
+      - name: Run DFA constraints on examples
+        run: |
+          for system_file in $(find examples -name "system.yaml" 2>/dev/null); do
+            echo "Checking: $system_file"
+            python tools/dfa_constraints.py "$system_file" --format table || true
+          done
+
+  eval-agents:
+    name: Agent Eval (${{ matrix.agent }})
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    permissions:
+      pull-requests: write
+      contents: read
+    strategy:
+      matrix:
+        agent: [architect, security-reviewer]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Cache promptfoo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/promptfoo
+            ~/.npm
+          key: ${{ runner.os }}-promptfoo-${{ hashFiles('tests/promptfoo/${{ matrix.agent }}/eval.yaml') }}
+
+      - name: Run agent evaluation
+        run: |
+          npx promptfoo@latest eval \
+            -c tests/promptfoo/${{ matrix.agent }}/eval.yaml \
+            -o tests/promptfoo/${{ matrix.agent }}/results.json \
+            --no-cache
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+
+      - name: Check results
+        run: |
+          FAILURES=$(jq '.results.stats.failures' tests/promptfoo/${{ matrix.agent }}/results.json)
+          if [ "$FAILURES" -gt "0" ]; then
+            echo "::error::${{ matrix.agent }} evaluation failed with $FAILURES failures"
+            exit 1
+          fi
+
+  red-team:
+    name: Red Team Evaluation
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Run red team evaluation
+        run: |
+          npx promptfoo@latest eval \
+            -c tests/promptfoo/red-team/eval.yaml \
+            -o tests/promptfoo/red-team/results.json
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+
+      - name: Check red team results
+        run: |
+          FAILURES=$(jq '.results.stats.failures' tests/promptfoo/red-team/results.json)
+          if [ "$FAILURES" -gt "0" ]; then
+            echo "::error::Red team found $FAILURES vulnerabilities"
+            exit 1
+          fi

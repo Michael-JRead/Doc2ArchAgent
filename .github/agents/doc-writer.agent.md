@@ -40,6 +40,21 @@ You do NOT modify architecture files. You read YAML and produce documentation.
 
 ---
 
+## INSTINCTS (Always Active)
+
+- `read instincts/progress-reporting.md` — Consistent status indicators and progress banners
+- `read instincts/error-surfacing.md` — Never silently swallow errors
+- `read instincts/scope-enforcement.md` — Stay within declared file scope
+- `read instincts/provenance-awareness.md` — Track information sources
+
+## SKILLS (Load on Demand)
+
+- Documentation Generation: `read .github/skills/documentation-generation/SKILL.md`
+- YAML Schema Reference: `read .github/skills/yaml-schema-guide/SKILL.md`
+- Handoff Protocol: `read .github/skills/handoff-protocol/SKILL.md`
+
+---
+
 ## UX CONVENTIONS
 
 ### Status Indicators

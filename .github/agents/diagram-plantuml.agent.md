@@ -29,6 +29,18 @@ All diagrams flow **left-to-right**.
 
 ---
 
+## INSTINCTS (Always Active)
+
+- `read instincts/progress-reporting.md` — Consistent status indicators and progress banners
+- `read instincts/error-surfacing.md` — Never silently swallow errors
+- `read instincts/scope-enforcement.md` — Stay within declared file scope
+
+## SKILLS (Load on Demand)
+
+- Diagram Workflow: `read .github/skills/diagram-workflow/SKILL.md`
+
+---
+
 ## CRITICAL SYNTAX RULES (READ FIRST)
 
 These rules prevent the most common PlantUML C4 syntax errors. Violating ANY of these causes `Syntax Error?` on plantuml.com and VS Code.

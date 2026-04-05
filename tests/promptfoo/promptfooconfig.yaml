@@ -1,0 +1,32 @@
+# Copyright (c) 2026 Michael J. Read. All rights reserved.
+# SPDX-License-Identifier: BUSL-1.1
+#
+# Master promptfoo configuration for Doc2ArchAgent agent evaluation.
+# Run: npx promptfoo@latest eval -c tests/promptfoo/promptfooconfig.yaml
+#
+# yaml-language-server: $schema=https://promptfoo.dev/config-schema.json
+
+description: "Doc2ArchAgent — Master Agent Evaluation Suite"
+
+# Import individual agent eval configs
+prompts:
+  - file://../../.github/agents/architect.agent.md
+  - file://../../.github/agents/security-reviewer.agent.md
+
+providers:
+  - id: openai:gpt-4o
+    config:
+      temperature: 0
+
+defaultTest:
+  assert:
+    - type: cost
+      threshold: 0.10
+    - type: latency
+      threshold: 60000
+
+# Individual test suites are in subdirectories.
+# Run them separately for faster iteration:
+#   npx promptfoo@latest eval -c tests/promptfoo/architect/eval.yaml
+#   npx promptfoo@latest eval -c tests/promptfoo/security-reviewer/eval.yaml
+#   npx promptfoo@latest eval -c tests/promptfoo/red-team/eval.yaml
